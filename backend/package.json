@@ -13,9 +13,6 @@
   "license": "ISC",
   "description": "",
   "type": "module",
-  "prisma": {
-    "schema": "db/schema.prisma"
-  },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.1.0",
