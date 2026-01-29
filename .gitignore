@@ -3,3 +3,11 @@ node_modules/
 .env
 .env.local
 *cookies.txt
+
+# Prisma generated client
+backend/src/generated/
+**/generated/prisma/
+
+# macOS system and ide files
+.DS_Store
+.vscode/

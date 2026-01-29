@@ -1,0 +1,94 @@
+// SafeConfig - Minimal Schema
+// Solo le 5 entità core per configuration management
+
+generator client {
+  provider = "prisma-client-js"
+  engineType = "client"
+  output = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// CORE ENTITIES
+// ============================================
+
+model Organization {
+  id   BigInt @id @default(autoincrement())
+  name String @db.VarChar(255)
+
+  // Relations
+  apps         App[]
+  environments Environment[]
+
+  @@map("organizations")
+}
+
+model App {
+  id       BigInt  @id @default(autoincrement())
+  orgId    BigInt  @map("org_id")
+  parentId BigInt? @map("parent_id")
+  name     String  @db.VarChar(255)
+
+  // Hierarchy optimization (materializzazione del path)
+  ancestors BigInt[] @default([]) // [root_id, ..., parent_id] - esclude se stesso
+  depth     Int      @default(0)  // 0=root, 1=child, etc. (utile per query e validazione)
+
+  // Relations
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  parent       App?         @relation("AppHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children     App[]        @relation("AppHierarchy") // Relazione inversa (opzionale ma comoda)
+  parameters   Parameter[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@index([parentId])
+  @@index([ancestors], type: Gin) // Per query veloci su gerarchia
+  @@map("apps")
+}
+
+model Environment {
+  id    BigInt @id @default(autoincrement())
+  orgId BigInt @map("org_id")
+  name  String @db.VarChar(100)
+
+  // Relations
+  organization    Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  parameterValues ParameterValue[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@map("environments")
+}
+
+model Parameter {
+  id    BigInt @id @default(autoincrement())
+  appId BigInt @map("app_id")
+  key   String @db.VarChar(255)
+
+  // Relations
+  app    App              @relation(fields: [appId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  values ParameterValue[]
+
+  @@unique([appId, key])
+  @@index([appId])
+  @@map("parameters")
+}
+
+model ParameterValue {
+  id            BigInt @id @default(autoincrement())
+  parameterId   BigInt @map("parameter_id")
+  environmentId BigInt @map("environment_id")
+  value         String @db.Text // Plain text (encryption opzionale dopo)
+
+  // Relations
+  parameter   Parameter   @relation(fields: [parameterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  environment Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([parameterId, environmentId])
+  @@index([parameterId])
+  @@index([environmentId])
+  @@map("parameter_values")
+}
