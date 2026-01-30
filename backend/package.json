@@ -4,8 +4,8 @@
   "main": "server.js",
   "scripts": {
     "test": "node --experimental-vm-modules --env-file=.env node_modules/jest/bin/jest --runInBand",
-    "dev": "nodemon node src/server.js",
-    "start": "node src/server.js",
+    "dev": "node --watch --env-file=.env src/server.js",
+    "start": "node --env-file=.env src/server.js",
     "supabase:start": "cd .. && npx supabase start",
     "supabase:stop": "cd .. && npx supabase stop",
     "supabase:status": "cd .. && npx supabase status",
@@ -48,7 +48,6 @@
     "@types/jest": "^30.0.0",
     "@types/supertest": "^6.0.3",
     "jest": "^30.0.5",
-    "nodemon": "^3.1.10",
     "pino-pretty": "^13.1.1",
     "supabase": "^2.72.0",
     "supertest": "^7.1.4",
