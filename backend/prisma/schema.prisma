@@ -1,5 +1,5 @@
 // SafeConfig - Minimal Schema
-// Solo le 5 entità core per configuration management
+// Only the 5 core entities for configuration management
 
 generator client {
   provider = "prisma-client-js"
@@ -32,20 +32,20 @@ model App {
   parentId BigInt? @map("parent_id")
   name     String  @db.VarChar(255)
 
-  // Hierarchy optimization (materializzazione del path)
-  ancestors BigInt[] @default([]) // [root_id, ..., parent_id] - esclude se stesso
-  depth     Int      @default(0)  // 0=root, 1=child, etc. (utile per query e validazione)
+  // Hierarchy optimization (path materialization)
+  ancestors BigInt[] @default([]) // [root_id, ..., parent_id] - excludes itself
+  depth     Int      @default(0)  // 0=root, 1=child, etc. (useful for queries and validation)
 
   // Relations
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   parent       App?         @relation("AppHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  children     App[]        @relation("AppHierarchy") // Relazione inversa (opzionale ma comoda)
+  children     App[]        @relation("AppHierarchy") // Inverse relation (optional but convenient)
   parameters   Parameter[]
 
   @@unique([orgId, name])
   @@index([orgId])
   @@index([parentId])
-  @@index([ancestors], type: Gin) // Per query veloci su gerarchia
+  @@index([ancestors], type: Gin) // For fast hierarchy queries
   @@map("apps")
 }
 
@@ -81,7 +81,7 @@ model ParameterValue {
   id            BigInt @id @default(autoincrement())
   parameterId   BigInt @map("parameter_id")
   environmentId BigInt @map("environment_id")
-  value         String @db.Text // Plain text (encryption opzionale dopo)
+  value         String @db.Text // Plain text (encryption optional for later)
 
   // Relations
   parameter   Parameter   @relation(fields: [parameterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
