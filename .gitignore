@@ -8,6 +8,9 @@ node_modules/
 backend/src/generated/
 **/generated/prisma/
 
+# Supabase local files (config is in backend/prisma/)
+supabase/
+
 # macOS system and ide files
 .DS_Store
 .vscode/
