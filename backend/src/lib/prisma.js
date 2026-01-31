@@ -6,9 +6,15 @@ let prisma;
 export function getPrisma() {
   if (!prisma) {
     const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+
+    // Configure Prisma logging: exclude 'error' in test mode to avoid noise from expected errors
+    const logLevels = process.env.LOG_LEVEL === 'debug'
+      ? ['query', 'info', 'warn', 'error']
+      : ['warn'];
+
     prisma = new PrismaClient({
       adapter,
-      log: process.env.LOG_LEVEL === 'debug' ? ['query', 'info', 'warn', 'error'] : ['warn', 'error']
+      log: logLevels
     });
   }
   return prisma;
