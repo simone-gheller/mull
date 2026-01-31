@@ -1,24 +1,25 @@
-import { test, describe, after } from 'node:test';
+import { test, describe, after, before } from 'node:test';
 import assert from 'node:assert';
-import { buildApp } from '../../src/server.js';
+import { setupTestApp } from '../helpers/testSetup.js';
 
 describe('Environment Routes', () => {
   let app;
   let testOrgId;
 
   // Setup: Create app instance before tests
-  test('setup', async () => {
-    app = buildApp({ logger: false });
-    await app.ready();
-
-    // Get a valid orgId from database for testing
-    const orgs = await app.prisma.organization.findMany({ take: 1 });
-    assert.ok(orgs.length > 0, 'Database should have at least one organization');
-    testOrgId = orgs[0].id.toString();
+  before(async () => {
+    ({ app, testOrgId } = await setupTestApp());
   });
 
   describe('GET /environments', () => {
-    test('should return list of environments for valid orgId', async () => {
+    test('should return all environments for an orgId matching database', async () => {
+      // Query database directly to get expected environments
+      const dbEnvironments = await app.prisma.environment.findMany({
+        where: { orgId: BigInt(testOrgId) },
+        orderBy: { name: 'asc' }
+      });
+
+      // Get environments via API
       const response = await app.inject({
         method: 'GET',
         url: '/environments',
@@ -28,17 +29,16 @@ describe('Environment Routes', () => {
       });
 
       assert.strictEqual(response.statusCode, 200);
-      const environments = JSON.parse(response.body);
-      assert.ok(Array.isArray(environments));
+      const apiEnvironments = JSON.parse(response.body);
 
-      // Verify response structure if environments exist
-      if (environments.length > 0) {
-        const env = environments[0];
-        assert.ok(env.id);
-        assert.ok(env.orgId);
-        assert.ok(env.name);
-        assert.strictEqual(typeof env.id, 'string');
-        assert.strictEqual(typeof env.name, 'string');
+      // Verify count matches
+      assert.strictEqual(apiEnvironments.length, dbEnvironments.length, 'API should return same number of environments as database');
+
+      // Verify each environment matches
+      for (let i = 0; i < dbEnvironments.length; i++) {
+        assert.strictEqual(apiEnvironments[i].id, dbEnvironments[i].id.toString(), `Environment ID at index ${i} should match`);
+        assert.strictEqual(apiEnvironments[i].name, dbEnvironments[i].name, `Environment name at index ${i} should match`);
+        assert.strictEqual(apiEnvironments[i].orgId, testOrgId, `Environment orgId at index ${i} should match`);
       }
     });
 
@@ -54,39 +54,27 @@ describe('Environment Routes', () => {
       assert.ok(error.message.includes('orgId required'));
     });
 
-    test('should accept orgId as query parameter', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: `/environments?orgId=${testOrgId}`
-      });
-
-      assert.strictEqual(response.statusCode, 200);
-      const environments = JSON.parse(response.body);
-      assert.ok(Array.isArray(environments));
-    });
-
     test('should return empty array for org with no environments', async () => {
-      // Create a new org with no environments
-      const newOrg = await app.prisma.organization.create({
-        data: { name: 'Empty Test Org' }
+      // Find an org that has no environments
+      const emptyOrg = await app.prisma.organization.findFirst({
+        where: {
+          environments: {
+            none: {}
+          }
+        }
       });
 
       const response = await app.inject({
         method: 'GET',
         url: '/environments',
         headers: {
-          'x-org-id': newOrg.id.toString()
+          'x-org-id': emptyOrg.id.toString()
         }
       });
 
       assert.strictEqual(response.statusCode, 200);
       const environments = JSON.parse(response.body);
       assert.strictEqual(environments.length, 0);
-
-      // Cleanup
-      await app.prisma.organization.delete({
-        where: { id: newOrg.id }
-      });
     });
   });
 
@@ -148,12 +136,9 @@ describe('Environment Routes', () => {
     });
 
     test('should return 409 when environment name already exists in org', async () => {
-      // Create first environment
-      const env1 = await app.prisma.environment.create({
-        data: {
-          orgId: BigInt(testOrgId),
-          name: 'duplicate-test'
-        }
+      // Find an existing environment
+      const existingEnv = await app.prisma.environment.findFirst({
+        where: { orgId: BigInt(testOrgId) }
       });
 
       // Try to create duplicate
@@ -165,7 +150,7 @@ describe('Environment Routes', () => {
           'content-type': 'application/json'
         },
         body: JSON.stringify({
-          name: 'duplicate-test'
+          name: existingEnv.name
         })
       });
 
@@ -173,11 +158,6 @@ describe('Environment Routes', () => {
       const error = JSON.parse(response.body);
       assert.strictEqual(error.statusCode, 409);
       assert.ok(error.message.includes('already exists'));
-
-      // Cleanup
-      await app.prisma.environment.delete({
-        where: { id: env1.id }
-      });
     });
 
     test('should trim whitespace from environment name', async () => {

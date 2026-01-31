@@ -1,20 +1,14 @@
-import { test, describe, after } from 'node:test';
+import { test, describe, after, before } from 'node:test';
 import assert from 'node:assert';
-import { buildApp } from '../../src/server.js';
+import { setupTestApp } from '../helpers/testSetup.js';
 
 describe('App Routes', () => {
   let app;
   let testOrgId;
 
   // Setup: Create app instance before tests
-  test('setup', async () => {
-    app = buildApp({ logger: false });
-    await app.ready();
-
-    // Get a valid orgId from database for testing
-    const orgs = await app.prisma.organization.findMany({ take: 1 });
-    assert.ok(orgs.length > 0, 'Database should have at least one organization');
-    testOrgId = orgs[0].id.toString();
+  before(async () => {
+    ({ app, testOrgId } = await setupTestApp());
   });
 
   describe('GET /apps', () => {
@@ -31,39 +25,26 @@ describe('App Routes', () => {
       const apps = JSON.parse(response.body);
       assert.ok(Array.isArray(apps));
 
-      // Verify response structure if apps exist
-      if (apps.length > 0) {
-        const appItem = apps[0];
-        assert.ok(appItem.id);
-        assert.ok(appItem.orgId);
-        assert.ok(appItem.name);
-        assert.ok(Array.isArray(appItem.ancestors));
-        assert.strictEqual(typeof appItem.depth, 'number');
-      }
+      // Verify response structure
+      const appItem = apps[0];
+      assert.ok(appItem.id);
+      assert.ok(appItem.orgId);
+      assert.ok(appItem.name);
+      assert.ok(Array.isArray(appItem.ancestors));
+      assert.strictEqual(typeof appItem.depth, 'number');
     });
 
-    test('should return apps ordered by depth then name', async () => {
-      // Create parent app
-      const parent = await app.prisma.app.create({
-        data: {
-          orgId: BigInt(testOrgId),
-          name: 'parent-app',
-          ancestors: [],
-          depth: 0
-        }
+    test('should return all apps for an orgId', async () => {
+      // Query database directly to get expected apps
+      const dbApps = await app.prisma.app.findMany({
+        where: { orgId: BigInt(testOrgId) },
+        orderBy: [
+          { depth: 'asc' },
+          { name: 'asc' }
+        ]
       });
 
-      // Create child app
-      const child = await app.prisma.app.create({
-        data: {
-          orgId: BigInt(testOrgId),
-          name: 'child-app',
-          parentId: parent.id,
-          ancestors: [parent.id],
-          depth: 1
-        }
-      });
-
+      // Get apps via API
       const response = await app.inject({
         method: 'GET',
         url: '/apps',
@@ -72,16 +53,18 @@ describe('App Routes', () => {
         }
       });
 
-      const apps = JSON.parse(response.body);
-      const parentIndex = apps.findIndex(a => a.id === parent.id.toString());
-      const childIndex = apps.findIndex(a => a.id === child.id.toString());
+      assert.strictEqual(response.statusCode, 200);
+      const apiApps = JSON.parse(response.body);
 
-      // Parent should come before child (depth 0 < depth 1)
-      assert.ok(parentIndex < childIndex, 'Parent should be ordered before child');
+      // Verify count matches
+      assert.strictEqual(apiApps.length, dbApps.length, 'API should return same number of apps as database');
 
-      // Cleanup
-      await app.prisma.app.delete({ where: { id: child.id } });
-      await app.prisma.app.delete({ where: { id: parent.id } });
+      // Verify each app matches (compare IDs)
+      for (let i = 0; i < dbApps.length; i++) {
+        assert.strictEqual(apiApps[i].id, dbApps[i].id.toString(), `App at index ${i} should match`);
+        assert.strictEqual(apiApps[i].name, dbApps[i].name, `App name at index ${i} should match`);
+        assert.strictEqual(apiApps[i].depth, dbApps[i].depth, `App depth at index ${i} should match`);
+      }
     });
 
     test('should return 400 when orgId is missing', async () => {
