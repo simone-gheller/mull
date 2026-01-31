@@ -2,10 +2,13 @@ import Fastify from 'fastify';
 import dotenv from 'dotenv';
 import { getPrisma, disconnectPrisma } from './lib/prisma.js';
 import configRoutes from './routes/config.js';
+import environmentRoutes from './routes/environments.js';
+import appRoutes from './routes/apps.js';
 
 dotenv.config();
 
 const fastify = Fastify({
+  ignoreTrailingSlash: true,
   logger: {
     level: process.env.LOG_LEVEL || 'info',
     transport: {
@@ -30,6 +33,8 @@ fastify.get('/health', async () => {
 
 // Register routes
 fastify.register(configRoutes);
+fastify.register(environmentRoutes);
+fastify.register(appRoutes);
 
 // Global error handler
 fastify.setErrorHandler((error, _request, reply) => {
