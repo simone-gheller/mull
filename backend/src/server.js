@@ -1,6 +1,10 @@
 import Fastify from 'fastify';
 import dotenv from 'dotenv';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { getPrisma, disconnectPrisma } from './lib/prisma.js';
+import { swaggerConfig, swaggerUiConfig } from './openapi/config.js';
+import { healthCheckSchema } from './openapi/health.js';
 import configRoutes from './routes/config.js';
 import environmentRoutes from './routes/environments.js';
 import appRoutes from './routes/apps.js';
@@ -38,8 +42,14 @@ export function buildApp(options = {}) {
   const prisma = getPrisma();
   fastify.decorate('prisma', prisma);
 
+  // Register Swagger documentation
+  fastify.register(swagger, swaggerConfig);
+
+  // Register Swagger UI
+  fastify.register(swaggerUi, swaggerUiConfig);
+
   // Health check
-  fastify.get('/health', async () => {
+  fastify.get('/health', { schema: healthCheckSchema }, async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 

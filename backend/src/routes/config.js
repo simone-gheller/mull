@@ -3,10 +3,12 @@
  * GET /config/:appId/:envId
  * Returns flat key-value configuration with hierarchical inheritance
  */
+import { getConfigSchema } from '../openapi/configRoutes.js';
+
 export default async function configRoutes(fastify, _options) {
   const prisma = fastify.prisma;
 
-  fastify.get('/config/:appId/:envId', async (request, reply) => {
+  fastify.get('/config/:appId/:envId', { schema: getConfigSchema }, async (request, reply) => {
     const { appId, envId } = request.params;
     const orgId = request.headers['x-org-id'] || request.query.orgId;
 

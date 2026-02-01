@@ -3,26 +3,8 @@
  * GET /environments - List all environments for an organization
  * POST /environments - Create new environment
  */
-import { orgIdSchema, orgIdQuerySchema } from '../schemas/common.js';
+import { listEnvironmentsSchema, createEnvironmentSchema } from '../openapi/environmentRoutes.js';
 import { syncEnvironmentParameterValues } from '../lib/syncParameterValues.js';
-
-// Validation schemas
-const listEnvironmentsSchema = {
-  headers: orgIdSchema,
-  querystring: orgIdQuerySchema
-};
-
-const createEnvironmentSchema = {
-  body: {
-    type: 'object',
-    required: ['name'],
-    properties: {
-      name: { type: 'string', minLength: 1 }
-    }
-  },
-  headers: orgIdSchema,
-  querystring: orgIdQuerySchema
-};
 
 export default async function environmentRoutes(fastify, _options) {
   const prisma = fastify.prisma;

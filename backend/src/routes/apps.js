@@ -3,26 +3,7 @@
  * GET /apps - List all apps for an organization
  * POST /apps - Create new app
  */
-import { orgIdSchema, orgIdQuerySchema } from '../schemas/common.js';
-
-// Validation schemas
-const listAppsSchema = {
-  headers: orgIdSchema,
-  querystring: orgIdQuerySchema
-};
-
-const createAppSchema = {
-  body: {
-    type: 'object',
-    required: ['name'],
-    properties: {
-      name: { type: 'string', minLength: 1 },
-      parentId: { type: 'string', pattern: '^[0-9]+$' }
-    }
-  },
-  headers: orgIdSchema,
-  querystring: orgIdQuerySchema
-};
+import { listAppsSchema, createAppSchema } from '../openapi/appRoutes.js';
 
 export default async function appRoutes(fastify, _options) {
   const prisma = fastify.prisma;

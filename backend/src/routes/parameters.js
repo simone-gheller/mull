@@ -3,38 +3,8 @@
  * GET /parameters - List all parameters for an app
  * POST /parameters - Create new parameter (creates empty ParameterValue for all environments)
  */
-import { orgIdSchema, orgIdQuerySchema } from '../schemas/common.js';
+import { listParametersSchema, createParameterSchema } from '../openapi/parameterRoutes.js';
 import { syncParameterEnvironmentValues } from '../lib/syncParameterValues.js';
-
-// Validation schemas
-const listParametersSchema = {
-  headers: orgIdSchema,
-  querystring: {
-    allOf: [
-      orgIdQuerySchema,
-      {
-        type: 'object',
-        required: ['appId'],
-        properties: {
-          appId: { type: 'string', pattern: '^[0-9]+$' }
-        }
-      }
-    ]
-  }
-};
-
-const createParameterSchema = {
-  body: {
-    type: 'object',
-    required: ['appId', 'key'],
-    properties: {
-      appId: { type: 'string', pattern: '^[0-9]+$' },
-      key: { type: 'string', minLength: 1 }
-    }
-  },
-  headers: orgIdSchema,
-  querystring: orgIdQuerySchema
-};
 
 export default async function parameterRoutes(fastify, _options) {
   const prisma = fastify.prisma;
