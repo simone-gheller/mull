@@ -4,6 +4,7 @@
  * POST /environments - Create new environment
  */
 import { orgIdSchema, orgIdQuerySchema } from '../schemas/common.js';
+import { syncEnvironmentParameterValues } from '../lib/syncParameterValues.js';
 
 // Validation schemas
 const listEnvironmentsSchema = {
@@ -97,11 +98,15 @@ export default async function environmentRoutes(fastify, _options) {
         }
       });
 
+      // Sync parameter values for this new environment
+      const syncedCount = await syncEnvironmentParameterValues(environment.id, orgId);
+
       fastify.log.info({
         environmentId: environment.id.toString(),
         orgId: environment.orgId.toString(),
-        name: environment.name
-      }, 'Environment created');
+        name: environment.name,
+        syncedParameterValues: syncedCount
+      }, 'Environment created and parameter values synced');
 
       return reply.code(201).send({
         id: environment.id.toString(),

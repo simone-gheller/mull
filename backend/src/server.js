@@ -4,6 +4,7 @@ import { getPrisma, disconnectPrisma } from './lib/prisma.js';
 import configRoutes from './routes/config.js';
 import environmentRoutes from './routes/environments.js';
 import appRoutes from './routes/apps.js';
+import parameterRoutes from './routes/parameters.js';
 
 dotenv.config();
 
@@ -46,6 +47,7 @@ export function buildApp(options = {}) {
   fastify.register(configRoutes);
   fastify.register(environmentRoutes);
   fastify.register(appRoutes);
+  fastify.register(parameterRoutes);
 
   // Global error handler
   fastify.setErrorHandler((error, _request, reply) => {
