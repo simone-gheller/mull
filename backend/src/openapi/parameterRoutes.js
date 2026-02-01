@@ -2,7 +2,7 @@
  * OpenAPI schemas for parameter routes
  */
 import { errorResponse } from './common.js';
-import { orgIdSchema, orgIdQuerySchema } from '../schemas/common.js';
+import { orgIdSchema, orgIdQuerySchema, UUID_V7_PATTERN } from '../schemas/common.js';
 
 export const listParametersSchema = {
   tags: ['parameters'],
@@ -18,8 +18,9 @@ export const listParametersSchema = {
         properties: {
           appId: {
             type: 'string',
-            pattern: '^[0-9]+$',
-            description: 'Application ID'
+            pattern: UUID_V7_PATTERN,
+            format: 'uuid',
+            description: 'Application UUID v7'
           }
         }
       }
@@ -55,8 +56,9 @@ export const createParameterSchema = {
     properties: {
       appId: {
         type: 'string',
-        pattern: '^[0-9]+$',
-        description: 'Application ID'
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Application UUID v7'
       },
       key: {
         type: 'string',

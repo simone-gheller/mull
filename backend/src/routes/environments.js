@@ -3,6 +3,7 @@
  * GET /environments - List all environments for an organization
  * POST /environments - Create new environment
  */
+import { uuidv7 } from 'uuidv7';
 import { listEnvironmentsSchema, createEnvironmentSchema } from '../openapi/environmentRoutes.js';
 import { syncEnvironmentParameterValues } from '../lib/syncParameterValues.js';
 
@@ -24,7 +25,7 @@ export default async function environmentRoutes(fastify, _options) {
 
     try {
       const environments = await prisma.environment.findMany({
-        where: { orgId: BigInt(orgId) },
+        where: { orgId: orgId },
         select: {
           id: true,
           orgId: true,
@@ -33,14 +34,7 @@ export default async function environmentRoutes(fastify, _options) {
         orderBy: { name: 'asc' }
       });
 
-      // Convert BigInt to string for JSON serialization
-      const serializedEnvironments = environments.map(env => ({
-        id: env.id.toString(),
-        orgId: env.orgId.toString(),
-        name: env.name
-      }));
-
-      return reply.send(serializedEnvironments);
+      return reply.send(environments);
 
     } catch (err) {
       fastify.log.error(err, 'Failed to list environments');
@@ -70,7 +64,8 @@ export default async function environmentRoutes(fastify, _options) {
       // Create environment (foreign key constraint will validate orgId)
       const environment = await prisma.environment.create({
         data: {
-          orgId: BigInt(orgId),
+          id: uuidv7(),
+          orgId: orgId,
           name: name.trim()
         },
         select: {
@@ -84,17 +79,13 @@ export default async function environmentRoutes(fastify, _options) {
       const syncedCount = await syncEnvironmentParameterValues(environment.id, orgId);
 
       fastify.log.info({
-        environmentId: environment.id.toString(),
-        orgId: environment.orgId.toString(),
+        environmentId: environment.id,
+        orgId: environment.orgId,
         name: environment.name,
         syncedParameterValues: syncedCount
       }, 'Environment created and parameter values synced');
 
-      return reply.code(201).send({
-        id: environment.id.toString(),
-        orgId: environment.orgId.toString(),
-        name: environment.name
-      });
+      return reply.code(201).send(environment);
 
     } catch (err) {
       // Handle unique constraint violation (duplicate name in same org)

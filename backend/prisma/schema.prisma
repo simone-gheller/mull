@@ -16,7 +16,7 @@ datasource db {
 // ============================================
 
 model Organization {
-  id   BigInt @id @default(autoincrement())
+  id   String @id @db.Uuid
   name String @db.VarChar(255)
 
   // Relations
@@ -27,13 +27,13 @@ model Organization {
 }
 
 model App {
-  id       BigInt  @id @default(autoincrement())
-  orgId    BigInt  @map("org_id")
-  parentId BigInt? @map("parent_id")
+  id       String  @id @db.Uuid
+  orgId    String  @map("org_id") @db.Uuid
+  parentId String? @map("parent_id") @db.Uuid
   name     String  @db.VarChar(255)
 
   // Hierarchy optimization (path materialization)
-  ancestors BigInt[] @default([]) // [root_id, ..., parent_id] - excludes itself
+  ancestors String[] @default([]) @db.Uuid // [root_id, ..., parent_id] - excludes itself
   depth     Int      @default(0)  // 0=root, 1=child, etc. (useful for queries and validation)
 
   // Relations
@@ -50,8 +50,8 @@ model App {
 }
 
 model Environment {
-  id    BigInt @id @default(autoincrement())
-  orgId BigInt @map("org_id")
+  id    String @id @db.Uuid
+  orgId String @map("org_id") @db.Uuid
   name  String @db.VarChar(100)
 
   // Relations
@@ -64,8 +64,8 @@ model Environment {
 }
 
 model Parameter {
-  id    BigInt @id @default(autoincrement())
-  appId BigInt @map("app_id")
+  id    String @id @db.Uuid
+  appId String @map("app_id") @db.Uuid
   key   String @db.VarChar(255)
 
   // Relations
@@ -78,9 +78,9 @@ model Parameter {
 }
 
 model ParameterValue {
-  id            BigInt @id @default(autoincrement())
-  parameterId   BigInt @map("parameter_id")
-  environmentId BigInt @map("environment_id")
+  id            String @id @db.Uuid
+  parameterId   String @map("parameter_id") @db.Uuid
+  environmentId String @map("environment_id") @db.Uuid
   value         String @db.Text // Plain text (encryption optional for later)
 
   // Relations

@@ -1,7 +1,4 @@
--- CreateView: config_inheritance
--- Resolves configuration parameters with hierarchical inheritance
--- Child parameter values override parent values based on priority (higher = more specific)
-
+-- CreateView: config_inheritance with UUID support
 CREATE VIEW config_inheritance AS
 WITH app_hierarchy_expanded AS (
   SELECT

@@ -23,7 +23,7 @@ describe('Parameter Routes', () => {
 
       // Query database directly
       const dbParameters = await ctx.prisma.parameter.findMany({
-        where: { appId: BigInt(app.id) },
+        where: { appId: app.id },
         orderBy: { key: 'asc' }
       });
 
@@ -40,8 +40,8 @@ describe('Parameter Routes', () => {
       assert.strictEqual(apiParameters.length, dbParameters.length);
 
       for (let i = 0; i < dbParameters.length; i++) {
-        assert.strictEqual(apiParameters[i].id, dbParameters[i].id.toString());
-        assert.strictEqual(apiParameters[i].appId, dbParameters[i].appId.toString());
+        assert.strictEqual(apiParameters[i].id, dbParameters[i].id);
+        assert.strictEqual(apiParameters[i].appId, dbParameters[i].appId);
         assert.strictEqual(apiParameters[i].key, dbParameters[i].key);
       }
     });
@@ -68,7 +68,7 @@ describe('Parameter Routes', () => {
       // Act
       const response = await ctx.fastify.inject({
         method: 'GET',
-        url: '/parameters?appId=999999999',
+        url: '/parameters?appId=01900000-0000-7000-8000-000000000000',
         headers: { 'x-org-id': org.id }
       });
 
@@ -131,13 +131,13 @@ describe('Parameter Routes', () => {
 
       // Verify ParameterValues exist for both environments
       const values = await ctx.prisma.parameterValue.findMany({
-        where: { parameterId: BigInt(parameter.id) }
+        where: { parameterId: parameter.id }
       });
       assert.strictEqual(values.length, 2);
       values.forEach(v => assert.strictEqual(v.value, ''));
 
       // Verify each environment has a value
-      const envIds = new Set(values.map(v => v.environmentId.toString()));
+      const envIds = new Set(values.map(v => v.environmentId));
       assert.ok(envIds.has(env1.id));
       assert.ok(envIds.has(env2.id));
     });
@@ -194,7 +194,7 @@ describe('Parameter Routes', () => {
           'content-type': 'application/json'
         },
         body: JSON.stringify({
-          appId: '999999999',
+          appId: '01900000-0000-7000-8000-000000000000',
           key: 'test-key'
         })
       });

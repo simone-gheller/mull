@@ -22,7 +22,7 @@ describe('Environment Routes', () => {
 
       // Query database directly
       const dbEnvironments = await ctx.prisma.environment.findMany({
-        where: { orgId: BigInt(org.id) },
+        where: { orgId: org.id },
         orderBy: { name: 'asc' }
       });
 
@@ -39,7 +39,7 @@ describe('Environment Routes', () => {
       assert.strictEqual(apiEnvironments.length, dbEnvironments.length);
 
       for (let i = 0; i < dbEnvironments.length; i++) {
-        assert.strictEqual(apiEnvironments[i].id, dbEnvironments[i].id.toString());
+        assert.strictEqual(apiEnvironments[i].id, dbEnvironments[i].id);
         assert.strictEqual(apiEnvironments[i].name, dbEnvironments[i].name);
         assert.strictEqual(apiEnvironments[i].orgId, org.id);
       }
@@ -126,7 +126,7 @@ describe('Environment Routes', () => {
 
       // Assert: Verify ParameterValues were created
       const values = await ctx.prisma.parameterValue.findMany({
-        where: { environmentId: BigInt(environment.id) }
+        where: { environmentId: environment.id }
       });
       assert.strictEqual(values.length, 2);
       values.forEach(v => assert.strictEqual(v.value, ''));

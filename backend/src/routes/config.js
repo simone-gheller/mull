@@ -21,19 +21,6 @@ export default async function configRoutes(fastify, _options) {
       });
     }
 
-    // Validate BigInt format
-    try {
-      BigInt(appId);
-      BigInt(envId);
-      BigInt(orgId);
-    } catch (err) {
-      return reply.code(400).send({
-        error: 'Bad Request',
-        message: 'appId, envId, and orgId must be valid integers',
-        statusCode: 400
-      });
-    }
-
     try {
       // 1. Validate app and environment in single query
       const validation = await prisma.$queryRaw`
@@ -46,8 +33,8 @@ export default async function configRoutes(fastify, _options) {
           e.name as env_name
         FROM apps a
         CROSS JOIN environments e
-        WHERE a.id = ${BigInt(appId)}
-          AND e.id = ${BigInt(envId)}
+        WHERE a.id = ${appId}::uuid
+          AND e.id = ${envId}::uuid
       `;
 
       if (validation.length === 0) {
@@ -61,13 +48,13 @@ export default async function configRoutes(fastify, _options) {
       const { app_id, app_org_id, app_name, env_id, env_org_id, env_name } = validation[0];
 
       // Check both belong to same orgId
-      if (app_org_id !== BigInt(orgId) || env_org_id !== BigInt(orgId)) {
+      if (app_org_id !== orgId || env_org_id !== orgId) {
         fastify.log.warn({
           appId,
           envId,
           orgId,
-          appOrgId: app_org_id.toString(),
-          envOrgId: env_org_id.toString()
+          appOrgId: app_org_id,
+          envOrgId: env_org_id
         }, 'Cross-org access attempt');
         return reply.code(403).send({
           error: 'Forbidden',
@@ -80,9 +67,9 @@ export default async function configRoutes(fastify, _options) {
       const results = await prisma.$queryRaw`
         SELECT key, value, priority, source_app_name, source_app_id
         FROM config_inheritance
-        WHERE app_id = ${BigInt(appId)}
-          AND environment_id = ${BigInt(envId)}
-          AND org_id = ${BigInt(orgId)}
+        WHERE app_id = ${appId}::uuid
+          AND environment_id = ${envId}::uuid
+          AND org_id = ${orgId}::uuid
       `;
 
       // 4. Build flat config object
@@ -93,8 +80,8 @@ export default async function configRoutes(fastify, _options) {
 
       // Log debug info server-side
       fastify.log.debug({
-        app: { id: app_id.toString(), name: app_name },
-        environment: { id: env_id.toString(), name: env_name },
+        app: { id: app_id, name: app_name },
+        environment: { id: env_id, name: env_name },
         parametersCount: results.length,
         inheritance: results.map(r => ({
           key: r.key,

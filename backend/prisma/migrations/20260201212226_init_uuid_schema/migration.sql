@@ -1,6 +1,6 @@
 -- CreateTable
 CREATE TABLE "organizations" (
-    "id" BIGSERIAL NOT NULL,
+    "id" UUID NOT NULL,
     "name" VARCHAR(255) NOT NULL,
 
     CONSTRAINT "organizations_pkey" PRIMARY KEY ("id")
@@ -8,11 +8,11 @@ CREATE TABLE "organizations" (
 
 -- CreateTable
 CREATE TABLE "apps" (
-    "id" BIGSERIAL NOT NULL,
-    "org_id" BIGINT NOT NULL,
-    "parent_id" BIGINT,
+    "id" UUID NOT NULL,
+    "org_id" UUID NOT NULL,
+    "parent_id" UUID,
     "name" VARCHAR(255) NOT NULL,
-    "ancestors" BIGINT[] DEFAULT ARRAY[]::BIGINT[],
+    "ancestors" UUID[] DEFAULT ARRAY[]::UUID[],
     "depth" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "apps_pkey" PRIMARY KEY ("id")
@@ -20,8 +20,8 @@ CREATE TABLE "apps" (
 
 -- CreateTable
 CREATE TABLE "environments" (
-    "id" BIGSERIAL NOT NULL,
-    "org_id" BIGINT NOT NULL,
+    "id" UUID NOT NULL,
+    "org_id" UUID NOT NULL,
     "name" VARCHAR(100) NOT NULL,
 
     CONSTRAINT "environments_pkey" PRIMARY KEY ("id")
@@ -29,8 +29,8 @@ CREATE TABLE "environments" (
 
 -- CreateTable
 CREATE TABLE "parameters" (
-    "id" BIGSERIAL NOT NULL,
-    "app_id" BIGINT NOT NULL,
+    "id" UUID NOT NULL,
+    "app_id" UUID NOT NULL,
     "key" VARCHAR(255) NOT NULL,
 
     CONSTRAINT "parameters_pkey" PRIMARY KEY ("id")
@@ -38,9 +38,9 @@ CREATE TABLE "parameters" (
 
 -- CreateTable
 CREATE TABLE "parameter_values" (
-    "id" BIGSERIAL NOT NULL,
-    "parameter_id" BIGINT NOT NULL,
-    "environment_id" BIGINT NOT NULL,
+    "id" UUID NOT NULL,
+    "parameter_id" UUID NOT NULL,
+    "environment_id" UUID NOT NULL,
     "value" TEXT NOT NULL,
 
     CONSTRAINT "parameter_values_pkey" PRIMARY KEY ("id")

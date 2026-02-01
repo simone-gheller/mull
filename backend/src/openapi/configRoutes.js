@@ -2,6 +2,7 @@
  * OpenAPI schemas for config routes
  */
 import { errorResponse } from './common.js';
+import { UUID_V7_PATTERN } from '../schemas/common.js';
 
 export const getConfigSchema = {
   tags: ['config'],
@@ -13,13 +14,15 @@ export const getConfigSchema = {
     properties: {
       appId: {
         type: 'string',
-        pattern: '^[0-9]+$',
-        description: 'Application ID'
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Application UUID v7'
       },
       envId: {
         type: 'string',
-        pattern: '^[0-9]+$',
-        description: 'Environment ID'
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Environment UUID v7'
       }
     }
   },
@@ -28,8 +31,9 @@ export const getConfigSchema = {
     properties: {
       orgId: {
         type: 'string',
-        pattern: '^[0-9]+$',
-        description: 'Organization ID (alternative to header)'
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Organization UUID v7 (alternative to header)'
       }
     }
   },

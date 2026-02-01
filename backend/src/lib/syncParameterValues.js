@@ -1,23 +1,22 @@
+import { uuidv7 } from 'uuidv7';
 import { getPrisma } from './prisma.js';
 
 /**
  * Sync ParameterValues for a newly created Environment
  * Creates empty ParameterValue entries for all existing parameters in the organization
  *
- * @param {string|BigInt} environmentId - Environment ID
- * @param {string|BigInt} orgId - Organization ID
+ * @param {string} environmentId - Environment UUID
+ * @param {string} orgId - Organization UUID
  * @returns {Promise<number>} Number of ParameterValues created
  */
 export async function syncEnvironmentParameterValues(environmentId, orgId) {
   const prisma = getPrisma();
-  const envIdBigInt = BigInt(environmentId);
-  const orgIdBigInt = BigInt(orgId);
 
   // Get all parameters for all apps in this organization
   const parameters = await prisma.parameter.findMany({
     where: {
       app: {
-        orgId: orgIdBigInt
+        orgId: orgId
       }
     },
     select: { id: true }
@@ -31,8 +30,9 @@ export async function syncEnvironmentParameterValues(environmentId, orgId) {
   // Create ParameterValue for each parameter with empty string
   await prisma.parameterValue.createMany({
     data: parameters.map(param => ({
+      id: uuidv7(),
       parameterId: param.id,
-      environmentId: envIdBigInt,
+      environmentId: environmentId,
       value: ''
     })),
     skipDuplicates: true // In case some values already exist
@@ -45,18 +45,16 @@ export async function syncEnvironmentParameterValues(environmentId, orgId) {
  * Sync ParameterValues for a newly created Parameter
  * Creates empty ParameterValue entries for all existing environments in the organization
  *
- * @param {string|BigInt} parameterId - Parameter ID
- * @param {string|BigInt} orgId - Organization ID
+ * @param {string} parameterId - Parameter UUID
+ * @param {string} orgId - Organization UUID
  * @returns {Promise<number>} Number of ParameterValues created
  */
 export async function syncParameterEnvironmentValues(parameterId, orgId) {
   const prisma = getPrisma();
-  const paramIdBigInt = BigInt(parameterId);
-  const orgIdBigInt = BigInt(orgId);
 
   // Get all environments for this organization
   const environments = await prisma.environment.findMany({
-    where: { orgId: orgIdBigInt },
+    where: { orgId: orgId },
     select: { id: true }
   });
 
@@ -68,7 +66,8 @@ export async function syncParameterEnvironmentValues(parameterId, orgId) {
   // Create ParameterValue for each environment with empty string
   await prisma.parameterValue.createMany({
     data: environments.map(env => ({
-      parameterId: paramIdBigInt,
+      id: uuidv7(),
+      parameterId: parameterId,
       environmentId: env.id,
       value: ''
     })),

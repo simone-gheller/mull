@@ -3,6 +3,7 @@
  * GET /parameters - List all parameters for an app
  * POST /parameters - Create new parameter (creates empty ParameterValue for all environments)
  */
+import { uuidv7 } from 'uuidv7';
 import { listParametersSchema, createParameterSchema } from '../openapi/parameterRoutes.js';
 import { syncParameterEnvironmentValues } from '../lib/syncParameterValues.js';
 
@@ -26,7 +27,7 @@ export default async function parameterRoutes(fastify, _options) {
     try {
       // Verify app exists and belongs to org
       const app = await prisma.app.findUnique({
-        where: { id: BigInt(appId) },
+        where: { id: appId },
         select: { id: true, orgId: true }
       });
 
@@ -38,7 +39,7 @@ export default async function parameterRoutes(fastify, _options) {
         });
       }
 
-      if (app.orgId !== BigInt(orgId)) {
+      if (app.orgId !== orgId) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'App does not belong to this organization',
@@ -48,7 +49,7 @@ export default async function parameterRoutes(fastify, _options) {
 
       // Get parameters for the app
       const parameters = await prisma.parameter.findMany({
-        where: { appId: BigInt(appId) },
+        where: { appId: appId },
         select: {
           id: true,
           appId: true,
@@ -57,14 +58,7 @@ export default async function parameterRoutes(fastify, _options) {
         orderBy: { key: 'asc' }
       });
 
-      // Convert BigInt to string for JSON serialization
-      const serializedParameters = parameters.map(param => ({
-        id: param.id.toString(),
-        appId: param.appId.toString(),
-        key: param.key
-      }));
-
-      return reply.send(serializedParameters);
+      return reply.send(parameters);
 
     } catch (err) {
       fastify.log.error(err, 'Failed to list parameters');
@@ -93,7 +87,7 @@ export default async function parameterRoutes(fastify, _options) {
     try {
       // Verify app exists and belongs to org
       const app = await prisma.app.findUnique({
-        where: { id: BigInt(appId) },
+        where: { id: appId },
         select: { id: true, orgId: true }
       });
 
@@ -105,7 +99,7 @@ export default async function parameterRoutes(fastify, _options) {
         });
       }
 
-      if (app.orgId !== BigInt(orgId)) {
+      if (app.orgId !== orgId) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'App does not belong to this organization',
@@ -116,7 +110,8 @@ export default async function parameterRoutes(fastify, _options) {
       // Create the parameter
       const parameter = await prisma.parameter.create({
         data: {
-          appId: BigInt(appId),
+          id: uuidv7(),
+          appId: appId,
           key: key.trim()
         },
         select: {
@@ -130,17 +125,13 @@ export default async function parameterRoutes(fastify, _options) {
       const syncedCount = await syncParameterEnvironmentValues(parameter.id, orgId);
 
       fastify.log.info({
-        parameterId: parameter.id.toString(),
-        appId: parameter.appId.toString(),
+        parameterId: parameter.id,
+        appId: parameter.appId,
         key: parameter.key,
         syncedParameterValues: syncedCount
       }, 'Parameter created and values synced');
 
-      return reply.code(201).send({
-        id: parameter.id.toString(),
-        appId: parameter.appId.toString(),
-        key: parameter.key
-      });
+      return reply.code(201).send(parameter);
 
     } catch (err) {
       // Handle unique constraint violation (duplicate key in same app)

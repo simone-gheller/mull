@@ -48,7 +48,7 @@ describe('App Routes', () => {
 
       // Query database directly
       const dbApps = await ctx.prisma.app.findMany({
-        where: { orgId: BigInt(org.id) },
+        where: { orgId: org.id },
         orderBy: [{ depth: 'asc' }, { name: 'asc' }]
       });
 
@@ -65,7 +65,7 @@ describe('App Routes', () => {
       assert.strictEqual(apiApps.length, dbApps.length);
 
       for (let i = 0; i < dbApps.length; i++) {
-        assert.strictEqual(apiApps[i].id, dbApps[i].id.toString());
+        assert.strictEqual(apiApps[i].id, dbApps[i].id);
         assert.strictEqual(apiApps[i].name, dbApps[i].name);
         assert.strictEqual(apiApps[i].depth, dbApps[i].depth);
       }
@@ -154,7 +154,7 @@ describe('App Routes', () => {
         },
         body: JSON.stringify({
           name: 'orphan-app',
-          parentId: '999999'
+          parentId: '01900000-0000-7000-8000-000000000000'
         })
       });
 

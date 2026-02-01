@@ -14,6 +14,7 @@
  *   });
  */
 
+import { uuidv7 } from 'uuidv7';
 import { buildApp as buildFastifyApp } from '../../src/server.js';
 
 /**
@@ -62,10 +63,10 @@ export async function buildTestContext() {
     /**
      * Track created resource for cleanup
      * @param {string} type - Resource type ('orgs', 'apps', 'envs', 'params', 'paramValues')
-     * @param {string} id - Resource ID
+     * @param {string} id - Resource ID (UUID string)
      */
     track(type, id) {
-      this.createdIds[type].push(BigInt(id));
+      this.createdIds[type].push(id);
     },
 
     /**
@@ -78,19 +79,17 @@ export async function buildTestContext() {
       const name = overrides.name || `test-org-${uniqueId()}`;
 
       const org = await prisma.organization.create({
-        data: { name },
+        data: {
+          id: uuidv7(),
+          name
+        },
         select: { id: true, name: true }
       });
 
-      const result = {
-        id: org.id.toString(),
-        name: org.name
-      };
-
       // Auto-track
-      this.track('orgs', result.id);
+      this.track('orgs', org.id);
 
-      return result;
+      return org;
     },
 
     /**
@@ -116,7 +115,7 @@ export async function buildTestContext() {
       // If parent provided, fetch hierarchy info
       if (parentId) {
         const parent = await prisma.app.findUnique({
-          where: { id: BigInt(parentId) },
+          where: { id: parentId },
           select: { id: true, ancestors: true, depth: true, orgId: true }
         });
 
@@ -124,7 +123,7 @@ export async function buildTestContext() {
           throw new Error(`Parent app ${parentId} not found`);
         }
 
-        if (parent.orgId.toString() !== orgId.toString()) {
+        if (parent.orgId !== orgId) {
           throw new Error(`Parent app belongs to different org`);
         }
 
@@ -134,9 +133,10 @@ export async function buildTestContext() {
 
       const app = await prisma.app.create({
         data: {
-          orgId: BigInt(orgId),
+          id: uuidv7(),
+          orgId: orgId,
           name: appName,
-          parentId: parentId ? BigInt(parentId) : null,
+          parentId: parentId || null,
           ancestors,
           depth
         },
@@ -150,19 +150,10 @@ export async function buildTestContext() {
         }
       });
 
-      const result = {
-        id: app.id.toString(),
-        orgId: app.orgId.toString(),
-        parentId: app.parentId?.toString() || null,
-        name: app.name,
-        ancestors: app.ancestors.map(id => id.toString()),
-        depth: app.depth
-      };
-
       // Auto-track
-      this.track('apps', result.id);
+      this.track('apps', app.id);
 
-      return result;
+      return app;
     },
 
     /**
@@ -185,7 +176,8 @@ export async function buildTestContext() {
 
       const env = await prisma.environment.create({
         data: {
-          orgId: BigInt(orgId),
+          id: uuidv7(),
+          orgId: orgId,
           name: envName
         },
         select: {
@@ -195,16 +187,10 @@ export async function buildTestContext() {
         }
       });
 
-      const result = {
-        id: env.id.toString(),
-        orgId: env.orgId.toString(),
-        name: env.name
-      };
-
       // Auto-track
-      this.track('envs', result.id);
+      this.track('envs', env.id);
 
-      return result;
+      return env;
     },
 
     /**
@@ -227,7 +213,8 @@ export async function buildTestContext() {
 
       const param = await prisma.parameter.create({
         data: {
-          appId: BigInt(appId),
+          id: uuidv7(),
+          appId: appId,
           key: paramKey
         },
         select: {
@@ -237,16 +224,10 @@ export async function buildTestContext() {
         }
       });
 
-      const result = {
-        id: param.id.toString(),
-        appId: param.appId.toString(),
-        key: param.key
-      };
-
       // Auto-track
-      this.track('params', result.id);
+      this.track('params', param.id);
 
-      return result;
+      return param;
     },
 
     /**
@@ -266,8 +247,9 @@ export async function buildTestContext() {
 
       const paramValue = await prisma.parameterValue.create({
         data: {
-          parameterId: BigInt(parameterId),
-          environmentId: BigInt(environmentId),
+          id: uuidv7(),
+          parameterId: parameterId,
+          environmentId: environmentId,
           value
         },
         select: {
@@ -278,17 +260,10 @@ export async function buildTestContext() {
         }
       });
 
-      const result = {
-        id: paramValue.id.toString(),
-        parameterId: paramValue.parameterId.toString(),
-        environmentId: paramValue.environmentId.toString(),
-        value: paramValue.value
-      };
-
       // Auto-track
-      this.track('paramValues', result.id);
+      this.track('paramValues', paramValue.id);
 
-      return result;
+      return paramValue;
     },
 
     /**

@@ -3,6 +3,7 @@
  * GET /apps - List all apps for an organization
  * POST /apps - Create new app
  */
+import { uuidv7 } from 'uuidv7';
 import { listAppsSchema, createAppSchema } from '../openapi/appRoutes.js';
 
 export default async function appRoutes(fastify, _options) {
@@ -23,7 +24,7 @@ export default async function appRoutes(fastify, _options) {
 
     try {
       const apps = await prisma.app.findMany({
-        where: { orgId: BigInt(orgId) },
+        where: { orgId: orgId },
         select: {
           id: true,
           orgId: true,
@@ -38,17 +39,9 @@ export default async function appRoutes(fastify, _options) {
         ]
       });
 
-      // Convert BigInt to string for JSON serialization
-      const serializedApps = apps.map(app => ({
-        id: app.id.toString(),
-        orgId: app.orgId.toString(),
-        parentId: app.parentId?.toString() || null,
-        name: app.name,
-        ancestors: app.ancestors.map(id => id.toString()),
-        depth: app.depth
-      }));
+      // Return directly - no serialization needed with UUIDs
+      return reply.send(apps);
 
-      return reply.send(serializedApps);
 
     } catch (err) {
       fastify.log.error(err, 'Failed to list apps');
@@ -81,7 +74,7 @@ export default async function appRoutes(fastify, _options) {
       // If parentId is provided, fetch parent's ancestors and depth
       if (parentId !== undefined && parentId !== null) {
         const parent = await prisma.app.findUnique({
-          where: { id: BigInt(parentId) },
+          where: { id: parentId },
           select: { id: true, orgId: true, ancestors: true, depth: true }
         });
 
@@ -94,7 +87,7 @@ export default async function appRoutes(fastify, _options) {
         }
 
         // Verify parent belongs to same org
-        if (parent.orgId !== BigInt(orgId)) {
+        if (parent.orgId !== orgId) {
           return reply.code(403).send({
             error: 'Forbidden',
             message: 'Parent app does not belong to this organization',
@@ -110,9 +103,10 @@ export default async function appRoutes(fastify, _options) {
       // Create app
       const app = await prisma.app.create({
         data: {
-          orgId: BigInt(orgId),
+          id: uuidv7(),
+          orgId: orgId,
           name: name.trim(),
-          parentId: parentId ? BigInt(parentId) : null,
+          parentId: parentId || null,
           ancestors: ancestors,
           depth: depth
         },
@@ -127,21 +121,14 @@ export default async function appRoutes(fastify, _options) {
       });
 
       fastify.log.info({
-        appId: app.id.toString(),
-        orgId: app.orgId.toString(),
+        appId: app.id,
+        orgId: app.orgId,
         name: app.name,
-        parentId: app.parentId?.toString(),
+        parentId: app.parentId,
         depth: app.depth
       }, 'App created');
 
-      return reply.code(201).send({
-        id: app.id.toString(),
-        orgId: app.orgId.toString(),
-        parentId: app.parentId?.toString() || null,
-        name: app.name,
-        ancestors: app.ancestors.map(id => id.toString()),
-        depth: app.depth
-      });
+      return reply.code(201).send(app);
 
     } catch (err) {
       // Handle unique constraint violation (duplicate name in same org)
