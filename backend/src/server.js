@@ -5,10 +5,13 @@ import swaggerUi from '@fastify/swagger-ui';
 import { getPrisma, disconnectPrisma } from './lib/prisma.js';
 import { swaggerConfig, swaggerUiConfig } from './openapi/config.js';
 import { healthCheckSchema } from './openapi/health.js';
+import authPlugin from './plugins/auth.js';
+import authRoutes from './routes/auth.js';
 import configRoutes from './routes/config.js';
 import environmentRoutes from './routes/environments.js';
 import appRoutes from './routes/apps.js';
 import parameterRoutes from './routes/parameters.js';
+import parameterValueRoutes from './routes/parameterValues.js';
 
 dotenv.config();
 
@@ -42,6 +45,9 @@ export function buildApp(options = {}) {
   const prisma = getPrisma();
   fastify.decorate('prisma', prisma);
 
+  // Register auth plugin
+  fastify.register(authPlugin);
+
   // Register Swagger documentation
   fastify.register(swagger, swaggerConfig);
 
@@ -54,10 +60,12 @@ export function buildApp(options = {}) {
   });
 
   // Register routes
+  fastify.register(authRoutes);
   fastify.register(configRoutes);
   fastify.register(environmentRoutes);
   fastify.register(appRoutes);
   fastify.register(parameterRoutes);
+  fastify.register(parameterValueRoutes);
 
   // Global error handler
   fastify.setErrorHandler((error, _request, reply) => {

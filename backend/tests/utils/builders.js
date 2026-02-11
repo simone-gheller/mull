@@ -16,6 +16,7 @@
 
 import { uuidv7 } from 'uuidv7';
 import { buildApp as buildFastifyApp } from '../../src/server.js';
+import { syncParameterEnvironmentValues } from '../../src/lib/syncParameterValues.js';
 
 /**
  * Generate unique identifier for test resources
@@ -52,7 +53,8 @@ export async function buildTestContext() {
     apps: [],
     envs: [],
     params: [],
-    paramValues: []
+    paramValues: [],
+    users: []
   };
 
   const context = {
@@ -195,7 +197,7 @@ export async function buildTestContext() {
 
     /**
      * Build parameter
-     * NOTE: ParameterValue sync is triggered by the route handler, not by this builder
+     * Automatically syncs parameter values for all environments in the organization
      *
      * @param {Object} options
      * @param {string} options.appId - Required: App ID
@@ -226,6 +228,17 @@ export async function buildTestContext() {
 
       // Auto-track
       this.track('params', param.id);
+
+      // Get orgId from app to sync parameter values
+      const app = await prisma.app.findUnique({
+        where: { id: appId },
+        select: { orgId: true }
+      });
+
+      if (app) {
+        // Sync parameter values for all environments in this organization
+        await syncParameterEnvironmentValues(param.id, app.orgId);
+      }
 
       return param;
     },
@@ -300,12 +313,85 @@ export async function buildTestContext() {
     },
 
     /**
+     * Build user (minimal)
+     * @param {Object} overrides - Optional field overrides
+     * @param {string} [overrides.email] - User email
+     * @param {string} [overrides.supabaseId] - Supabase user ID
+     * @param {string} [overrides.displayName] - Display name
+     * @param {string} [overrides.role] - User role (USER/ADMIN/OWNER)
+     * @param {string} [overrides.organizationId] - Organization ID
+     * @returns {Promise<{id: string, supabaseId: string, email: string, displayName: string, role: string}>}
+     */
+    async buildUser(overrides = {}) {
+      const email = overrides.email || `user-${uniqueId()}@test.com`;
+      const supabaseId = overrides.supabaseId || `supabase-${uuidv7()}`;
+
+      const user = await prisma.user.create({
+        data: {
+          id: uuidv7(),
+          supabaseId,
+          email,
+          displayName: overrides.displayName || email.split('@')[0],
+          role: overrides.role || 'USER',
+          organizationId: overrides.organizationId || null
+        },
+        include: {
+          organization: {
+            select: { id: true, name: true }
+          }
+        }
+      });
+
+      this.track('users', user.id);
+      return user;
+    },
+
+    /**
+     * Generate test JWT for a user
+     * @param {Object} user - User object with supabaseId and email
+     * @returns {string} JWT token
+     */
+    generateTestJWT(user) {
+      return fastify.jwt.sign({
+        sub: user.supabaseId,
+        email: user.email,
+        aud: 'authenticated',
+        role: 'authenticated'
+      });
+    },
+
+    /**
+     * Inject authenticated request
+     * @param {Object} options - Inject options (method, url, headers, body, etc.)
+     * @param {Object} user - User object to authenticate as
+     * @returns {Promise} Response from inject
+     */
+    async injectAuth(options, user) {
+      const token = this.generateTestJWT(user);
+
+      return await this.fastify.inject({
+        ...options,
+        headers: {
+          ...options.headers,
+          authorization: `Bearer ${token}`
+        }
+      });
+    },
+
+    /**
      * Cleanup all created resources and close Fastify
      * Deletes organizations (cascade handles children)
      */
     async cleanup() {
       try {
-        // Delete orgs only - Prisma cascade handles children
+        // Delete users first (no foreign keys from other tables to users)
+        if (createdIds.users?.length > 0) {
+          await prisma.user.deleteMany({
+            where: { id: { in: createdIds.users } }
+          });
+        }
+
+        // Delete orgs - Prisma cascade handles children
         // (Apps, Environments, Parameters, ParameterValues all have onDelete: Cascade)
         if (createdIds.orgs.length > 0) {
           await prisma.organization.deleteMany({

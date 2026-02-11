@@ -18,6 +18,7 @@ export const swaggerConfig = {
     ],
     tags: [
       { name: 'health', description: 'Health check' },
+      { name: 'auth', description: 'Authentication and user management' },
       { name: 'apps', description: 'Application management (hierarchical)' },
       { name: 'environments', description: 'Environment management' },
       { name: 'parameters', description: 'Configuration parameter templates' },
@@ -25,6 +26,12 @@ export const swaggerConfig = {
     ],
     components: {
       securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Supabase JWT token'
+        },
         orgId: {
           type: 'apiKey',
           name: 'x-org-id',

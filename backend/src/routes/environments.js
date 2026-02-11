@@ -11,7 +11,10 @@ export default async function environmentRoutes(fastify, _options) {
   const prisma = fastify.prisma;
 
   // GET /environments - List environments
-  fastify.get('/environments', { schema: listEnvironmentsSchema }, async (request, reply) => {
+  fastify.get('/environments', {
+    onRequest: [fastify.authenticate],
+    schema: listEnvironmentsSchema
+  }, async (request, reply) => {
     const orgId = request.headers['x-org-id'] || request.query.orgId;
 
     // Validate orgId presence (schema validates format)
@@ -47,7 +50,10 @@ export default async function environmentRoutes(fastify, _options) {
   });
 
   // POST /environments - Create environment
-  fastify.post('/environments', { schema: createEnvironmentSchema }, async (request, reply) => {
+  fastify.post('/environments', {
+    onRequest: [fastify.authenticate],
+    schema: createEnvironmentSchema
+  }, async (request, reply) => {
     const { name } = request.body;
     const orgId = request.headers['x-org-id'] || request.query.orgId;
 

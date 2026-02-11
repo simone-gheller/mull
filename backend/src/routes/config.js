@@ -8,7 +8,10 @@ import { getConfigSchema } from '../openapi/configRoutes.js';
 export default async function configRoutes(fastify, _options) {
   const prisma = fastify.prisma;
 
-  fastify.get('/config/:appId/:envId', { schema: getConfigSchema }, async (request, reply) => {
+  fastify.get('/config/:appId/:envId', {
+    onRequest: [fastify.authenticate],
+    schema: getConfigSchema
+  }, async (request, reply) => {
     const { appId, envId } = request.params;
     const orgId = request.headers['x-org-id'] || request.query.orgId;
 

@@ -11,7 +11,10 @@ export default async function parameterRoutes(fastify, _options) {
   const prisma = fastify.prisma;
 
   // GET /parameters - List parameters for an app
-  fastify.get('/parameters', { schema: listParametersSchema }, async (request, reply) => {
+  fastify.get('/parameters', {
+    onRequest: [fastify.authenticate],
+    schema: listParametersSchema
+  }, async (request, reply) => {
     const orgId = request.headers['x-org-id'] || request.query.orgId;
     const { appId } = request.query;
 
@@ -71,7 +74,10 @@ export default async function parameterRoutes(fastify, _options) {
   });
 
   // POST /parameters - Create parameter with empty values for all environments
-  fastify.post('/parameters', { schema: createParameterSchema }, async (request, reply) => {
+  fastify.post('/parameters', {
+    onRequest: [fastify.authenticate],
+    schema: createParameterSchema
+  }, async (request, reply) => {
     const { appId, key } = request.body;
     const orgId = request.headers['x-org-id'] || request.query.orgId;
 

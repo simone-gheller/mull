@@ -10,7 +10,10 @@ export default async function appRoutes(fastify, _options) {
   const prisma = fastify.prisma;
 
   // GET /apps - List apps
-  fastify.get('/apps', { schema: listAppsSchema }, async (request, reply) => {
+  fastify.get('/apps', {
+    onRequest: [fastify.authenticate],
+    schema: listAppsSchema
+  }, async (request, reply) => {
     const orgId = request.headers['x-org-id'] || request.query.orgId;
 
     // Validate orgId presence (schema validates format)
@@ -54,7 +57,10 @@ export default async function appRoutes(fastify, _options) {
   });
 
   // POST /apps - Create app
-  fastify.post('/apps', { schema: createAppSchema }, async (request, reply) => {
+  fastify.post('/apps', {
+    onRequest: [fastify.authenticate],
+    schema: createAppSchema
+  }, async (request, reply) => {
     const { name, parentId } = request.body;
     const orgId = request.headers['x-org-id'] || request.query.orgId;
 

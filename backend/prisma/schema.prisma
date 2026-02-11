@@ -20,6 +20,7 @@ model Organization {
   name String @db.VarChar(255)
 
   // Relations
+  users        User[]
   apps         App[]
   environments Environment[]
 
@@ -91,4 +92,31 @@ model ParameterValue {
   @@index([parameterId])
   @@index([environmentId])
   @@map("parameter_values")
+}
+
+// ============================================
+// AUTHENTICATION
+// ============================================
+
+model User {
+  id             String        @id @default(uuid()) @db.Uuid
+  supabaseId     String        @unique @map("supabase_id") @db.VarChar(255)
+  email          String        @unique @db.VarChar(255)
+  displayName    String?       @db.VarChar(255) @map("display_name")
+  role           UserRole      @default(USER)
+  organizationId String?       @map("organization_id") @db.Uuid
+
+  // Relations
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([supabaseId])
+  @@index([email])
+  @@index([organizationId])
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  OWNER
 }
