@@ -2,15 +2,24 @@
  * OpenAPI schemas for environment routes
  */
 import { errorResponse } from './common.js';
-import { orgIdSchema, orgIdQuerySchema } from '../schemas/common.js';
+import { UUID_V7_PATTERN } from '../schemas/common.js';
 
 export const listEnvironmentsSchema = {
   tags: ['environments'],
   summary: 'List all environments',
   description: 'Get all environments for an organization',
-  headers: orgIdSchema,
-  querystring: orgIdQuerySchema,
-  security: [{ orgId: [] }],
+  params: {
+    type: 'object',
+    required: ['orgId'],
+    properties: {
+      orgId: {
+        type: 'string',
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Organization ID'
+      }
+    }
+  },
   response: {
     200: {
       type: 'array',
@@ -32,6 +41,18 @@ export const createEnvironmentSchema = {
   tags: ['environments'],
   summary: 'Create a new environment',
   description: 'Create a new environment (e.g., development, staging, production)',
+  params: {
+    type: 'object',
+    required: ['orgId'],
+    properties: {
+      orgId: {
+        type: 'string',
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Organization ID'
+      }
+    }
+  },
   body: {
     type: 'object',
     required: ['name'],
@@ -43,9 +64,6 @@ export const createEnvironmentSchema = {
       }
     }
   },
-  headers: orgIdSchema,
-  querystring: orgIdQuerySchema,
-  security: [{ orgId: [] }],
   response: {
     201: {
       type: 'object',

@@ -10,8 +10,14 @@ export const getConfigSchema = {
   description: 'Returns flat key-value configuration with hierarchical inheritance from parent apps',
   params: {
     type: 'object',
-    required: ['appId', 'envId'],
+    required: ['orgId', 'appId', 'envId'],
     properties: {
+      orgId: {
+        type: 'string',
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Organization ID'
+      },
       appId: {
         type: 'string',
         pattern: UUID_V7_PATTERN,
@@ -26,27 +32,6 @@ export const getConfigSchema = {
       }
     }
   },
-  querystring: {
-    type: 'object',
-    properties: {
-      orgId: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        format: 'uuid',
-        description: 'Organization UUID v7 (alternative to header)'
-      }
-    }
-  },
-  headers: {
-    type: 'object',
-    properties: {
-      'x-org-id': {
-        type: 'string',
-        description: 'Organization ID'
-      }
-    }
-  },
-  security: [{ orgId: [] }],
   response: {
     200: {
       type: 'object',

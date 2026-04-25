@@ -2,15 +2,24 @@
  * OpenAPI schemas for app routes
  */
 import { errorResponse } from './common.js';
-import { orgIdSchema, orgIdQuerySchema, UUID_V7_PATTERN } from '../schemas/common.js';
+import { UUID_V7_PATTERN } from '../schemas/common.js';
 
 export const listAppsSchema = {
   tags: ['apps'],
   summary: 'List all apps',
   description: 'Get all apps for an organization with hierarchy information',
-  headers: orgIdSchema,
-  querystring: orgIdQuerySchema,
-  security: [{ orgId: [] }],
+  params: {
+    type: 'object',
+    required: ['orgId'],
+    properties: {
+      orgId: {
+        type: 'string',
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Organization ID'
+      }
+    }
+  },
   response: {
     200: {
       type: 'array',
@@ -39,6 +48,18 @@ export const createAppSchema = {
   tags: ['apps'],
   summary: 'Create a new app',
   description: 'Create a new app, optionally as a child of an existing app',
+  params: {
+    type: 'object',
+    required: ['orgId'],
+    properties: {
+      orgId: {
+        type: 'string',
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Organization ID'
+      }
+    }
+  },
   body: {
     type: 'object',
     required: ['name'],
@@ -56,9 +77,6 @@ export const createAppSchema = {
       }
     }
   },
-  headers: orgIdSchema,
-  querystring: orgIdQuerySchema,
-  security: [{ orgId: [] }],
   response: {
     201: {
       type: 'object',

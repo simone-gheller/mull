@@ -31,12 +31,6 @@ export const swaggerConfig = {
           scheme: 'bearer',
           bearerFormat: 'JWT',
           description: 'Supabase JWT token'
-        },
-        orgId: {
-          type: 'apiKey',
-          name: 'x-org-id',
-          in: 'header',
-          description: 'Organization ID for multi-tenancy'
         }
       }
     }

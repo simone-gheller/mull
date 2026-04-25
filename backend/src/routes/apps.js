@@ -14,16 +14,7 @@ export default async function appRoutes(fastify, _options) {
     onRequest: [fastify.authenticate],
     schema: listAppsSchema
   }, async (request, reply) => {
-    const orgId = request.headers['x-org-id'] || request.query.orgId;
-
-    // Validate orgId presence (schema validates format)
-    if (!orgId) {
-      return reply.code(400).send({
-        error: 'Bad Request',
-        message: 'orgId required (header: X-Org-Id or query: ?orgId=N)',
-        statusCode: 400
-      });
-    }
+    const { orgId } = request.params;
 
     try {
       const apps = await prisma.app.findMany({
@@ -62,16 +53,7 @@ export default async function appRoutes(fastify, _options) {
     schema: createAppSchema
   }, async (request, reply) => {
     const { name, parentId } = request.body;
-    const orgId = request.headers['x-org-id'] || request.query.orgId;
-
-    // Validate orgId presence (schema validates format)
-    if (!orgId) {
-      return reply.code(400).send({
-        error: 'Bad Request',
-        message: 'orgId required (header: X-Org-Id or query: ?orgId=N)',
-        statusCode: 400
-      });
-    }
+    const { orgId } = request.params;
 
     try {
       let ancestors = [];

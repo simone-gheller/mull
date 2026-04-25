@@ -15,17 +15,8 @@ export default async function parameterRoutes(fastify, _options) {
     onRequest: [fastify.authenticate],
     schema: listParametersSchema
   }, async (request, reply) => {
-    const orgId = request.headers['x-org-id'] || request.query.orgId;
+    const { orgId } = request.params;
     const { appId } = request.query;
-
-    // Validate orgId presence (schema validates format)
-    if (!orgId) {
-      return reply.code(400).send({
-        error: 'Bad Request',
-        message: 'orgId required (header: X-Org-Id or query: ?orgId=N)',
-        statusCode: 400
-      });
-    }
 
     try {
       // Verify app exists and belongs to org
@@ -79,16 +70,7 @@ export default async function parameterRoutes(fastify, _options) {
     schema: createParameterSchema
   }, async (request, reply) => {
     const { appId, key } = request.body;
-    const orgId = request.headers['x-org-id'] || request.query.orgId;
-
-    // Validate orgId presence (schema validates format)
-    if (!orgId) {
-      return reply.code(400).send({
-        error: 'Bad Request',
-        message: 'orgId required (header: X-Org-Id or query: ?orgId=N)',
-        statusCode: 400
-      });
-    }
+    const { orgId } = request.params;
 
     try {
       // Verify app exists and belongs to org

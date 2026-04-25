@@ -12,17 +12,7 @@ export default async function configRoutes(fastify, _options) {
     onRequest: [fastify.authenticate],
     schema: getConfigSchema
   }, async (request, reply) => {
-    const { appId, envId } = request.params;
-    const orgId = request.headers['x-org-id'] || request.query.orgId;
-
-    // Validate orgId presence
-    if (!orgId) {
-      return reply.code(400).send({
-        error: 'Bad Request',
-        message: 'orgId required (header: X-Org-Id or query: ?orgId=N)',
-        statusCode: 400
-      });
-    }
+    const { appId, envId, orgId } = request.params;
 
     try {
       // 1. Validate app and environment in single query

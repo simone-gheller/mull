@@ -60,12 +60,15 @@ export function buildApp(options = {}) {
   });
 
   // Register routes
+  // Auth routes - no prefix (no org context)
   fastify.register(authRoutes);
-  fastify.register(configRoutes);
-  fastify.register(environmentRoutes);
-  fastify.register(appRoutes);
-  fastify.register(parameterRoutes);
-  fastify.register(parameterValueRoutes);
+
+  // Org-scoped routes - all use /orgs/:orgId prefix
+  fastify.register(configRoutes, { prefix: '/orgs/:orgId' });
+  fastify.register(environmentRoutes, { prefix: '/orgs/:orgId' });
+  fastify.register(appRoutes, { prefix: '/orgs/:orgId' });
+  fastify.register(parameterRoutes, { prefix: '/orgs/:orgId' });
+  fastify.register(parameterValueRoutes, { prefix: '/orgs/:orgId' });
 
   // Global error handler
   fastify.setErrorHandler((error, _request, reply) => {

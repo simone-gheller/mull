@@ -15,16 +15,7 @@ export default async function environmentRoutes(fastify, _options) {
     onRequest: [fastify.authenticate],
     schema: listEnvironmentsSchema
   }, async (request, reply) => {
-    const orgId = request.headers['x-org-id'] || request.query.orgId;
-
-    // Validate orgId presence (schema validates format)
-    if (!orgId) {
-      return reply.code(400).send({
-        error: 'Bad Request',
-        message: 'orgId required (header: X-Org-Id or query: ?orgId=N)',
-        statusCode: 400
-      });
-    }
+    const { orgId } = request.params;
 
     try {
       const environments = await prisma.environment.findMany({
@@ -55,16 +46,7 @@ export default async function environmentRoutes(fastify, _options) {
     schema: createEnvironmentSchema
   }, async (request, reply) => {
     const { name } = request.body;
-    const orgId = request.headers['x-org-id'] || request.query.orgId;
-
-    // Validate orgId presence (schema validates format)
-    if (!orgId) {
-      return reply.code(400).send({
-        error: 'Bad Request',
-        message: 'orgId required (header: X-Org-Id or query: ?orgId=N)',
-        statusCode: 400
-      });
-    }
+    const { orgId } = request.params;
 
     try {
       // Create environment (foreign key constraint will validate orgId)

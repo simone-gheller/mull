@@ -2,31 +2,36 @@
  * OpenAPI schemas for parameter routes
  */
 import { errorResponse } from './common.js';
-import { orgIdSchema, orgIdQuerySchema, UUID_V7_PATTERN } from '../schemas/common.js';
+import { UUID_V7_PATTERN } from '../schemas/common.js';
 
 export const listParametersSchema = {
   tags: ['parameters'],
   summary: 'List parameters for an app',
   description: 'Get all configuration parameter templates for a specific app',
-  headers: orgIdSchema,
-  querystring: {
-    allOf: [
-      orgIdQuerySchema,
-      {
-        type: 'object',
-        required: ['appId'],
-        properties: {
-          appId: {
-            type: 'string',
-            pattern: UUID_V7_PATTERN,
-            format: 'uuid',
-            description: 'Application UUID v7'
-          }
-        }
+  params: {
+    type: 'object',
+    required: ['orgId'],
+    properties: {
+      orgId: {
+        type: 'string',
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Organization ID'
       }
-    ]
+    }
   },
-  security: [{ orgId: [] }],
+  querystring: {
+    type: 'object',
+    required: ['appId'],
+    properties: {
+      appId: {
+        type: 'string',
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Application UUID v7'
+      }
+    }
+  },
   response: {
     200: {
       type: 'array',
@@ -50,6 +55,18 @@ export const createParameterSchema = {
   tags: ['parameters'],
   summary: 'Create a new parameter',
   description: 'Create a new configuration parameter template with empty values for all environments',
+  params: {
+    type: 'object',
+    required: ['orgId'],
+    properties: {
+      orgId: {
+        type: 'string',
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Organization ID'
+      }
+    }
+  },
   body: {
     type: 'object',
     required: ['appId', 'key'],
@@ -67,9 +84,6 @@ export const createParameterSchema = {
       }
     }
   },
-  headers: orgIdSchema,
-  querystring: orgIdQuerySchema,
-  security: [{ orgId: [] }],
   response: {
     201: {
       type: 'object',
