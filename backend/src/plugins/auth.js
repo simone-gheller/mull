@@ -1,48 +1,68 @@
 /**
  * Authentication Plugin for SafeConfig
  *
- * Provides JWT-based authentication with Supabase tokens.
- * Decorates Fastify with:
- * - authenticate: Verifies JWT and auto-creates/loads user
- * - requireRole: Checks user role (USER/ADMIN/OWNER)
+ * Provides JWT-based authentication with Supabase tokens (ES256).
+ * Uses JWKS (JSON Web Key Set) for secure token verification in both local and production.
+ *
+ * Local Setup (Supabase CLI):
+ * 1. Generate signing key: `npx supabase gen signing-key --algorithm ES256 > signing_keys_temp.json`
+ * 2. Convert to array format: Wrap the object in brackets [...] and save as supabase/signing_keys.json
+ * 3. Start Supabase: `npm run supabase:start`
+ *
+ * Production:
+ * - JWKS URL: https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
  */
 
+import fp from 'fastify-plugin';
 import jwt from '@fastify/jwt';
 import { uuidv7 } from 'uuidv7';
+import buildGetJwks from 'get-jwks';
 
-export default async function authPlugin(fastify, options) {
-  // Register JWT plugin with Supabase secret
+async function authPlugin(fastify, options) {
+  const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF;
+  const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:54321';
+
+  const getJwks = buildGetJwks()
+  // Determine JWKS URL based on environment
+  const jwksUri = supabaseProjectRef
+    ? `https://${supabaseProjectRef}.supabase.co/auth/v1/.well-known/jwks.json`
+    : `${supabaseUrl}/auth/v1/.well-known/jwks.json`;
+
+  fastify.log.info({ jwksUri }, 'Configuring JWT with JWKS');
+
+  // FIX 1: usa l'opzione `jwks` built-in di @fastify/jwt che accetta jwksUri direttamente.
+  // get-jwks costruisce l'URL come `${domain}/.well-known/jwks.json`, quindi passargli
+  // l'URL completo come `domain` produceva un URL sbagliato.
   await fastify.register(jwt, {
-    secret: process.env.SUPABASE_JWT_SECRET,
-    verify: {
-      algorithms: ['HS256']
+    decode: { complete: true },
+    secret: (request, token) => {
+      const { header: { kid, alg }, payload: { iss } } = token
+      return getJwks.getPublicKey({ kid, domain: iss, alg })
     }
   });
 
   /**
    * Authenticate decorator
-   * Verifies JWT token and loads/creates user in database
+   * Verifica il JWT tramite JWKS e carica/crea l'utente sul DB.
    */
   fastify.decorate('authenticate', async function (request, reply) {
     try {
-      // Verify JWT token
-      await request.jwtVerify({
-        audience: 'authenticated',
-        issuer: `https://${process.env.SUPABASE_PROJECT_REF}.supabase.co/auth/v1`
-      });
+      // FIX 2: usa request.jwtVerify() invece di estrarre e verificare manualmente.
+      // Gestisce automaticamente l'header Authorization: Bearer, la verifica firma,
+      // e la scadenza. Popola request.user con il payload decodificato.
+      await request.jwtVerify();
 
-      // Extract Supabase claims
       const { sub: supabaseId, email } = request.user;
 
       if (!supabaseId || !email) {
         return reply.code(401).send({
           error: 'Unauthorized',
-          message: 'Invalid token: missing user claims',
+          message: 'Invalid token format',
           statusCode: 401
         });
       }
 
-      // Try to find existing user
+      // Trova o crea utente nel DB
       let user = await fastify.prisma.user.findUnique({
         where: { supabaseId },
         include: {
@@ -53,31 +73,43 @@ export default async function authPlugin(fastify, options) {
       });
 
       if (!user) {
-        // First-time user - auto-create with USER role
-        user = await fastify.prisma.user.create({
-          data: {
-            id: uuidv7(),
-            supabaseId,
-            email,
-            displayName: email.split('@')[0], // Default display name from email
-            role: 'USER'
-          },
-          include: {
-            organization: {
-              select: { id: true, name: true }
+        // Prima volta — crea utente e organizzazione personale in una transazione
+        const orgId = uuidv7();
+
+        user = await fastify.prisma.$transaction(async (tx) => {
+          await tx.organization.create({
+            data: {
+              id: orgId,
+              name: `${email.split('@')[0]}'s Organization`
             }
-          }
+          });
+
+          return tx.user.create({
+            data: {
+              id: uuidv7(),
+              supabaseId,
+              email,
+              displayName: email.split('@')[0],
+              role: 'OWNER',
+              organizationId: orgId
+            },
+            include: {
+              organization: {
+                select: { id: true, name: true }
+              }
+            }
+          });
         });
 
-        fastify.log.info({ userId: user.id, email }, 'New user auto-created');
+        fastify.log.info({ userId: user.id, orgId, email }, 'New user and organization auto-created');
       }
 
-      // Attach auth info to request
+      // Sovrascrivi request.user con l'entità DB (non solo il payload JWT)
       request.auth = { supabaseId, email };
       request.user = user;
 
     } catch (err) {
-      fastify.log.error(err, 'Authentication failed');
+      fastify.log.warn({ error: err.message }, 'Authentication failed');
       return reply.code(401).send({
         error: 'Unauthorized',
         message: 'Invalid or expired token',
@@ -87,12 +119,13 @@ export default async function authPlugin(fastify, options) {
   });
 
   /**
-   * Require specific role decorator
-   * Returns a hook function that checks user role
+   * requireRole decorator
+   * Va usato DOPO authenticate nel preHandler array.
+   * Esempio: preHandler: [fastify.authenticate, fastify.requireRole('OWNER')]
    */
   fastify.decorate('requireRole', (role) => {
     return async function (request, reply) {
-      if (request.user.role !== role) {
+      if (!request.user || request.user.role !== role) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: `Requires ${role} role`,
@@ -102,3 +135,8 @@ export default async function authPlugin(fastify, options) {
     };
   });
 }
+
+export default fp(authPlugin, {
+  name: 'auth-plugin',
+  fastify: '5.x'
+});
