@@ -1,4 +1,3 @@
-import { orgIdQuerySchema } from '../schemas/common.js';
 import {
   getParameterValuesSchema,
   getParameterValueByIdSchema,
@@ -18,14 +17,10 @@ export default async function parameterValueRoutes(fastify) {
     '/parameters/:appId/values',
     {
       onRequest: [fastify.authenticate],
-      schema: {
-        ...getParameterValuesSchema,
-        headers: orgIdQuerySchema
-      }
+      schema: getParameterValuesSchema
     },
     async (request, reply) => {
-      const { appId } = request.params;
-      const orgId = request.headers['x-org-id'];
+      const { appId, orgId } = request.params;
 
       // Verify app exists and belongs to organization
       const app = await prisma.app.findUnique({
@@ -62,33 +57,49 @@ export default async function parameterValueRoutes(fastify) {
           parameter: {
             select: {
               id: true,
-              key: true,
-              appId: true
+              key: true
             }
           },
           environment: {
             select: {
               id: true,
-              name: true,
-              orgId: true
+              name: true
             }
           }
         },
         orderBy: [
           {
-            parameter: {
-              key: 'asc'
+            environment: {
+              name: 'asc'
             }
           },
           {
-            environment: {
-              name: 'asc'
+            parameter: {
+              key: 'asc'
             }
           }
         ]
       });
 
-      return reply.send(parameterValues);
+      // Group by environment
+      const grouped = {};
+      for (const pv of parameterValues) {
+        const envName = pv.environment.name;
+        if (!grouped[envName]) {
+          grouped[envName] = {
+            environmentId: pv.environmentId,
+            values: []
+          };
+        }
+        grouped[envName].values.push({
+          id: pv.id,
+          parameterId: pv.parameterId,
+          parameterKey: pv.parameter.key,
+          value: pv.value
+        });
+      }
+
+      return reply.send(grouped);
     }
   );
 
@@ -99,14 +110,10 @@ export default async function parameterValueRoutes(fastify) {
     '/parameters/values/:id',
     {
       onRequest: [fastify.authenticate],
-      schema: {
-        ...getParameterValueByIdSchema,
-        headers: orgIdQuerySchema
-      }
+      schema: getParameterValueByIdSchema
     },
     async (request, reply) => {
-      const { id } = request.params;
-      const orgId = request.headers['x-org-id'];
+      const { id, orgId } = request.params;
 
       // Get parameter value with related data
       const parameterValue = await prisma.parameterValue.findUnique({
@@ -155,15 +162,11 @@ export default async function parameterValueRoutes(fastify) {
     '/parameters/values/:id',
     {
       onRequest: [fastify.authenticate],
-      schema: {
-        ...updateParameterValueSchema,
-        headers: orgIdQuerySchema
-      }
+      schema: updateParameterValueSchema
     },
     async (request, reply) => {
-      const { id } = request.params;
+      const { id, orgId } = request.params;
       const { value } = request.body;
-      const orgId = request.headers['x-org-id'];
 
       // First, get the parameter value to verify it exists and check organization
       const existingValue = await prisma.parameterValue.findUnique({

@@ -9,8 +9,14 @@ export const getParameterValuesSchema = {
   tags: ['ParameterValues'],
   params: {
     type: 'object',
-    required: ['appId'],
+    required: ['orgId', 'appId'],
     properties: {
+      orgId: {
+        type: 'string',
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Organization ID'
+      },
       appId: {
         type: 'string',
         pattern: UUID_V7_PATTERN,
@@ -20,29 +26,26 @@ export const getParameterValuesSchema = {
   },
   response: {
     200: {
-      description: 'Lista di parameter values',
-      type: 'array',
-      items: {
+      description: 'Parameter values raggruppati per environment',
+      type: 'object',
+      additionalProperties: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' },
-          parameterId: { type: 'string', format: 'uuid' },
-          environmentId: { type: 'string', format: 'uuid' },
-          value: { type: 'string' },
-          parameter: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              key: { type: 'string' },
-              appId: { type: 'string', format: 'uuid' }
-            }
+          environmentId: {
+            type: 'string',
+            format: 'uuid',
+            description: 'ID dell\'environment'
           },
-          environment: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              name: { type: 'string' },
-              orgId: { type: 'string', format: 'uuid' }
+          values: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid', description: 'ID del parameter value' },
+                parameterId: { type: 'string', format: 'uuid', description: 'ID del parametro' },
+                parameterKey: { type: 'string', description: 'Chiave del parametro' },
+                value: { type: 'string', description: 'Valore del parametro' }
+              }
             }
           }
         }
@@ -62,8 +65,14 @@ export const getParameterValueByIdSchema = {
   tags: ['ParameterValues'],
   params: {
     type: 'object',
-    required: ['id'],
+    required: ['orgId', 'id'],
     properties: {
+      orgId: {
+        type: 'string',
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Organization ID'
+      },
       id: {
         type: 'string',
         pattern: UUID_V7_PATTERN,
@@ -111,8 +120,14 @@ export const updateParameterValueSchema = {
   tags: ['ParameterValues'],
   params: {
     type: 'object',
-    required: ['id'],
+    required: ['orgId', 'id'],
     properties: {
+      orgId: {
+        type: 'string',
+        pattern: UUID_V7_PATTERN,
+        format: 'uuid',
+        description: 'Organization ID'
+      },
       id: {
         type: 'string',
         pattern: UUID_V7_PATTERN,
