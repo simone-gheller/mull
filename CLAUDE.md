@@ -21,6 +21,13 @@ SafeConfig is a secure configuration management system built with Node.js/Fastif
 ### Environment Setup
 - Requires `.env` file with `DATABASE_URL`, `MASTER_KEY_HEX` (64 hex chars), and `KEK_VERSION`
 - Database runs on PostgreSQL (port 5432)
+- **Supabase Local (Required for development)**:
+  ```bash
+  # Generate JWT signing key and convert to array format
+  npx supabase gen signing-key --algorithm ES256 | jq '[.]' > supabase/signing_keys.json && npm run supabase:start
+  ```
+  - JWKS endpoint: `http://localhost:54321/auth/v1/.well-known/jwks.json`
+- **Supabase Production**: Set `SUPABASE_PROJECT_REF` and `SUPABASE_URL` in `.env`
 - **Google OAuth (Optional)**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
   - If not configured, Google OAuth routes will log warnings but won't break the app
 
@@ -40,54 +47,64 @@ SafeConfig is a secure configuration management system built with Node.js/Fastif
 - Includes integrity verification via SHA-256 checksums
 
 **Database Schema**
-- Users with hybrid authentication (password + Google OAuth)
-  - `authProvider` enum (PASSWORD/GOOGLE)
-  - `googleId` for Google account linking
-  - `displayName` from OAuth providers
-- Organizations with role-based memberships (OWNER/ADMIN/MEMBER)
-- Projects containing parameters with inheritance support (parentProjectId)
-- Versioned parameter values with envelope encryption fields
-- Session management with device tracking and authentication provider tracking
-- Invitation system for organization membership
-- Audit logging for all operations
+- Users with Supabase authentication
+  - `supabaseId` unique identifier from Supabase Auth
+  - `email` and `displayName` from authentication
+  - `role` enum (USER/ADMIN/OWNER)
+  - **Auto-organization creation**: First-time users automatically get a personal organization and become OWNER
+- Organizations contain apps and environments
+  - Users belong to one organization
+  - Apps have hierarchical structure with parent-child relationships
+- Apps containing parameters with inheritance support
+- Environments (dev, staging, production, etc.)
+- Parameters define configuration keys per app
+- ParameterValues store actual values per parameter per environment
 
-**Project Inheritance (`backend/src/services/inheritance.js`)**
-- Hierarchical project structure with parent-child relationships
-- Parameter inheritance with child overrides
-- Circular dependency detection
-- Inheritance chain resolution for parameter lookups
+**App Hierarchy**
+- Apps have hierarchical structure with parent-child relationships
+- `ancestors` array tracks all parent apps
+- `depth` field indicates level in hierarchy
+- Parameter inheritance: child apps inherit from parents, can override values
 
-**Google OAuth Integration (`backend/src/services/googleOAuth.js`)**
-- Invitation-preserving OAuth flow (users still need invitations)
-- State parameter validation with CSRF protection
-- Account linking for existing users
-- Organization creation for owner registration
-- Email verification requirements
-- Support for login, registration, and invitation acceptance flows
+**Authentication (`backend/src/plugins/auth.js`)**
+- Supabase JWT token validation (ES256 algorithm) via JWKS
+- Uses JWKS (JSON Web Key Set) for secure token verification in both local and production
+- Local: JWKS URL `http://localhost:54321/auth/v1/.well-known/jwks.json`
+- Production: JWKS URL `https://{project-ref}.supabase.co/auth/v1/.well-known/jwks.json`
+- Auto-creates user + personal organization on first login
+- New users become OWNER of their organization
 
 ### Route Structure
-- `/api/parameters` - CRUD for configuration parameters (requires project access)
-- `/api/projects` - Project management (create requires ADMIN+, delete requires ADMIN+)
-- `/api/users` - User management
-- `/api/versions` - Parameter version management with encryption/decryption
-- `/auth/register` - User registration (creates new organization)
-- `/auth/login` - User authentication (smart login for already-authenticated users)
-- `/auth/refresh` - Token refresh with unique identifiers
-- `/auth/logout` - Session termination
-- `/auth/invitations` - Organization invitation management
-- `/auth/google` - Google OAuth initiation (supports login, register, invitation flows)
-- `/auth/google/callback` - Google OAuth callback handler
-- `/auth/google/link` - Link Google account to existing authenticated user
+
+**Authentication Routes** (no org context):
+- `GET /auth/me` - Get current user info (includes organization)
+- `POST /auth/admin/example` - Example admin-only endpoint
+
+**Organization-Scoped Routes** (all use `/orgs/:orgId` prefix):
+- `GET /orgs/:orgId/apps` - List all apps
+- `POST /orgs/:orgId/apps` - Create new app
+- `GET /orgs/:orgId/environments` - List all environments
+- `POST /orgs/:orgId/environments` - Create new environment (auto-syncs parameter values)
+- `GET /orgs/:orgId/parameters?appId=X` - List parameters for an app
+- `POST /orgs/:orgId/parameters` - Create new parameter (auto-creates values for all envs)
+- `GET /orgs/:orgId/parameters/:appId/values` - List all parameter values for an app
+- `GET /orgs/:orgId/parameters/values/:id` - Get single parameter value
+- `PUT /orgs/:orgId/parameters/values/:id` - Update parameter value
+- `GET /orgs/:orgId/config/:appId/:envId` - Get rendered config with inheritance
+
+**Key Design Decisions**:
+- Organization ID in URL path (not header/query) for HTTP caching compatibility
+- RESTful resource scoping: `/orgs/:orgId/resource`
+- `appId` kept as query param in `/parameters` for flexible filtering
+- All endpoints validate organization access
 
 ### Security Model
-- **JWT-based authentication** with unique token identifiers (jti) to prevent duplicate tokens
-- **Role-based access control** with OWNER > ADMIN > MEMBER hierarchy
-- **Organization-scoped security** - all resources are isolated by organization membership
-- **Comprehensive authorization** - all CRUD operations validate user permissions and organization access
-- **Envelope encryption** for all sensitive data using AES-256-GCM
-- **Associated Authenticated Data (AAD)** includes projectId|paramName|versionTag for integrity
-- **Master key rotation** support via KEK versioning
-- **Bcrypt password hashing** for secure credential storage
+- **Supabase JWT authentication** with ES256 tokens
+- **Role-based access control** with OWNER > ADMIN > USER hierarchy
+- **Organization-scoped security** - all resources isolated by organization
+- **Path-based org context** - orgId in URL path for clear resource scoping
+- **Auto-organization** - Users get personal organization on first login (become OWNER)
+- **Cross-org protection** - All CRUD operations validate organization access
 
 ## Testing
 
