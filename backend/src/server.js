@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
-import dotenv from 'dotenv';
+import fastifyEnv from '@fastify/env';
+import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { getPrisma, disconnectPrisma } from './lib/prisma.js';
@@ -12,8 +13,7 @@ import environmentRoutes from './routes/environments.js';
 import appRoutes from './routes/apps.js';
 import parameterRoutes from './routes/parameters.js';
 import parameterValueRoutes from './routes/parameterValues.js';
-
-dotenv.config();
+import { envSchema } from './config.js';
 
 /**
  * Build and configure Fastify application
@@ -26,7 +26,7 @@ export function buildApp(options = {}) {
 
   const fastify = Fastify({
     logger: logger ? {
-      level: process.env.LOG_LEVEL || 'info',
+      level: process.env.LOG_LEVEL || 'info', // verrà sovrascritto da fastify.config dopo la validazione
       transport: {
         target: 'pino-pretty',
         options: {
@@ -39,6 +39,16 @@ export function buildApp(options = {}) {
     routerOptions: {
       ignoreTrailingSlash: true
     }
+  });
+
+  // Validate required env vars at startup — server won't start if any are missing
+  fastify.register(fastifyEnv, { schema: envSchema, dotenv: true });
+
+  // Global rate limit — permissive default, tightened per-route where needed
+  fastify.register(rateLimit, {
+    global: true,
+    max: 200,
+    timeWindow: '1 minute'
   });
 
   // Decorate Fastify with Prisma singleton
