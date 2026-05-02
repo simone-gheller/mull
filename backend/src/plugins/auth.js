@@ -45,78 +45,72 @@ async function authPlugin(fastify, options) {
    * Authenticate decorator
    * Verifica il JWT tramite JWKS e carica/crea l'utente sul DB.
    */
-  fastify.decorate('authenticate', async function (request, reply) {
-    try {
-      // FIX 2: usa request.jwtVerify() invece di estrarre e verificare manualmente.
-      // Gestisce automaticamente l'header Authorization: Bearer, la verifica firma,
-      // e la scadenza. Popola request.user con il payload decodificato.
-      await request.jwtVerify();
+fastify.decorate('authenticate', async function (request, reply) {
+  try {
+    await request.jwtVerify();
 
-      const { sub: supabaseId, email } = request.user;
+    const token = request.headers.authorization?.replace('Bearer ', '');
 
-      if (!supabaseId || !email) {
-        return reply.code(401).send({
-          error: 'Unauthorized',
-          message: 'Invalid token format',
-          statusCode: 401
-        });
-      }
+    const { data: { user: supabaseUser }, error } = await fastify.supabaseAnon
+      .auth.getUser(token);
 
-      // Trova o crea utente nel DB
-      let user = await fastify.prisma.user.findUnique({
-        where: { supabaseId },
-        include: {
-          organization: {
-            select: { id: true, name: true }
-          }
-        }
-      });
-
-      if (!user) {
-        // Prima volta — crea utente e organizzazione personale in una transazione
-        const orgId = uuidv7();
-
-        user = await fastify.prisma.$transaction(async (tx) => {
-          await tx.organization.create({
-            data: {
-              id: orgId,
-              name: `${email.split('@')[0]}'s Organization`
-            }
-          });
-
-          return tx.user.create({
-            data: {
-              id: uuidv7(),
-              supabaseId,
-              email,
-              displayName: email.split('@')[0],
-              role: 'OWNER',
-              organizationId: orgId
-            },
-            include: {
-              organization: {
-                select: { id: true, name: true }
-              }
-            }
-          });
-        });
-
-        fastify.log.info({ userId: user.id, orgId, email }, 'New user and organization auto-created');
-      }
-
-      // Sovrascrivi request.user con l'entità DB (non solo il payload JWT)
-      request.auth = { supabaseId, email };
-      request.user = user;
-
-    } catch (err) {
-      fastify.log.warn({ error: err.message }, 'Authentication failed');
+    if (error || !supabaseUser) {
       return reply.code(401).send({
         error: 'Unauthorized',
-        message: 'Invalid or expired token',
+        message: 'Session revoked or expired',
         statusCode: 401
       });
     }
-  });
+
+    const { id: supabaseId, email } = supabaseUser;
+
+    let user = await fastify.prisma.user.findUnique({
+      where: { supabaseId },
+      include: {
+        organization: { select: { id: true, name: true } }
+      }
+    });
+
+    if (!user) {
+      const orgId = uuidv7();
+
+      user = await fastify.prisma.$transaction(async (tx) => {
+        await tx.organization.create({
+          data: {
+            id: orgId,
+            name: `${email.split('@')[0]}'s Organization`
+          }
+        });
+
+        return tx.user.create({
+          data: {
+            id: uuidv7(),
+            supabaseId,
+            email,
+            displayName: email.split('@')[0],
+            role: 'OWNER',
+            organizationId: orgId
+          },
+          include: {
+            organization: { select: { id: true, name: true } }
+          }
+        });
+      });
+
+      fastify.log.info({ userId: user.id, orgId, email }, 'New user and organization auto-created');
+    }
+
+    request.user = user;
+
+  } catch (err) {
+    fastify.log.warn({ error: err.message }, 'Authentication failed');
+    return reply.code(401).send({
+      error: 'Unauthorized',
+      message: 'Invalid or expired token',
+      statusCode: 401
+    });
+  }
+});
 
   /**
    * requireRole decorator

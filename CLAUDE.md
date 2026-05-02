@@ -6,6 +6,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SafeConfig is a secure configuration management system built with Node.js/Fastify and PostgreSQL. It implements envelope cryptography to securely store and manage sensitive configuration parameters.
 
+## Deployment Architecture
+
+SafeConfig uses a multi-domain setup with three independently deployable components:
+
+```
+safeconfig.io           → Marketing landing page (React + Vite — frontend/)
+app.safeconfig.io       → Dashboard SPA (React + Vite — frontend/)
+api.safeconfig.io       → REST API (Fastify — backend/)
+```
+
+**Why the landing/app split:**
+- Landing page needs SEO — served on the root domain, indexed by crawlers
+- Dashboard is a protected app — no SEO needed, lives on `app.` subdomain
+- Separating the two allows independent deploys and avoids shipping dashboard JS to marketing visitors
+
+**Current frontend state:**
+- The `frontend/` directory is one React + Vite app that already contains both the landing page (`/`) and the dashboard (`/dashboard/*`)
+- Short term: deploy as a single app on `safeconfig.io`, dashboard routes redirect to `app.safeconfig.io`
+- Long term: split into two separate Vite apps sharing a component library
+
+**Known frontend issues (needs alignment before production):**
+- `frontend/src/services/api.js` calls old endpoints (`/auth/login`, `/api/projects`) — must be updated to `/auth/signin`, `/orgs/:orgId/apps`, etc.
+- `frontend/src/context/AuthContext.jsx` expects HttpOnly cookies the backend does not currently set
+- Several `console.log` debug statements in `AuthContext.jsx` should be removed
+
+**Monorepo structure:**
+```
+safeconfig/
+├── backend/     # Fastify API — source of truth for business logic
+├── frontend/    # React + Vite (landing + dashboard)
+├── docs/        # Architecture and design documents
+└── supabase/    # Local Supabase config and signing keys
+```
+
 ## Key Commands
 
 ### Development

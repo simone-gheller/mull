@@ -7,6 +7,7 @@ import { getPrisma, disconnectPrisma } from './lib/prisma.js';
 import { swaggerConfig, swaggerUiConfig } from './openapi/config.js';
 import { healthCheckSchema } from './openapi/health.js';
 import authPlugin from './plugins/auth.js';
+import supabasePlugin from './plugins/supabase.js';
 import authRoutes from './routes/auth.js';
 import configRoutes from './routes/config.js';
 import environmentRoutes from './routes/environments.js';
@@ -55,7 +56,7 @@ export function buildApp(options = {}) {
   const prisma = getPrisma();
   fastify.decorate('prisma', prisma);
 
-  // Register auth plugin
+  fastify.register(supabasePlugin);
   fastify.register(authPlugin);
 
   // Register Swagger documentation
