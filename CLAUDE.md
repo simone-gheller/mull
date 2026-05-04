@@ -164,3 +164,12 @@ Tests are located in `backend/tests/` and use Jest with Supertest for API testin
 - Proper error status codes (403 for unauthorized, 409 for conflicts)
 - Cleanup mechanisms to prevent test pollution
 - Readable logs with pino-pretty formatting
+
+## TODO
+
+### Multi-org membership
+Currently a `User` has a single `organizationId` field — one user, one org. To support org switching:
+1. **Schema** — remove `organizationId` from `User`, add join table `UserOrganization { userId, orgId, role }` + Prisma migration
+2. **Backend** — `/auth/me` returns list of orgs; all `/orgs/:orgId/*` routes validate membership via join table instead of `user.organizationId`
+3. **AuthContext** — expose `orgId` (active) + `orgs` (list); add `switchOrg(orgId)` 
+4. **Frontend** — org switcher in `Sidebar.jsx` (dropdown or modal) replacing the static org name link
