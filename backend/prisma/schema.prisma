@@ -65,9 +65,10 @@ model Environment {
 }
 
 model Parameter {
-  id    String @id @db.Uuid
-  appId String @map("app_id") @db.Uuid
-  key   String @db.VarChar(255)
+  id          String  @id @db.Uuid
+  appId       String  @map("app_id") @db.Uuid
+  key         String  @db.VarChar(255)
+  description String? @db.Text
 
   // Relations
   app    App              @relation(fields: [appId], references: [id], onDelete: Cascade, onUpdate: Cascade)
