@@ -35,7 +35,13 @@ export const listAppsSchema = {
             items: { type: 'string' },
             description: 'Array of ancestor app IDs'
           },
-          depth: { type: 'number', description: 'Hierarchy depth (0 for root apps)' }
+          depth: { type: 'number', description: 'Hierarchy depth (0 for root apps)' },
+          _count: {
+            type: 'object',
+            properties: {
+              parameters: { type: 'number' }
+            }
+          }
         }
       }
     },

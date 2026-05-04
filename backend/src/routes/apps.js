@@ -25,7 +25,10 @@ export default async function appRoutes(fastify, _options) {
           parentId: true,
           name: true,
           ancestors: true,
-          depth: true
+          depth: true,
+          _count: {
+            select: { parameters: true }
+          }
         },
         orderBy: [
           { depth: 'asc' },

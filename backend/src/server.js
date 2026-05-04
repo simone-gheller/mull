@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import fastifyEnv from '@fastify/env';
+import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
@@ -14,6 +15,7 @@ import environmentRoutes from './routes/environments.js';
 import appRoutes from './routes/apps.js';
 import parameterRoutes from './routes/parameters.js';
 import parameterValueRoutes from './routes/parameterValues.js';
+import orgRoutes from './routes/orgs.js';
 import { envSchema } from './config.js';
 
 /**
@@ -44,6 +46,21 @@ export function buildApp(options = {}) {
 
   // Validate required env vars at startup — server won't start if any are missing
   fastify.register(fastifyEnv, { schema: envSchema, dotenv: true });
+
+  fastify.register(cors, {
+    origin: (origin, callback) => {
+      const allowed = process.env.CORS_ORIGIN
+        ? process.env.CORS_ORIGIN.split(',')
+        : ['http://localhost:5173', 'http://localhost:5174'];
+      if (!origin || allowed.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Origin ${origin} not allowed`));
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
 
   // Global rate limit — permissive default, tightened per-route where needed
   fastify.register(rateLimit, {
@@ -80,6 +97,7 @@ export function buildApp(options = {}) {
   fastify.register(appRoutes, { prefix: '/orgs/:orgId' });
   fastify.register(parameterRoutes, { prefix: '/orgs/:orgId' });
   fastify.register(parameterValueRoutes, { prefix: '/orgs/:orgId' });
+  fastify.register(orgRoutes, { prefix: '/orgs/:orgId' });
 
   // Global error handler
   fastify.setErrorHandler((error, _request, reply) => {

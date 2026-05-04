@@ -81,6 +81,10 @@ export const createParameterSchema = {
         type: 'string',
         minLength: 1,
         description: 'Parameter key/name (unique within app)'
+      },
+      description: {
+        type: 'string',
+        description: 'Optional human-readable description'
       }
     }
   },

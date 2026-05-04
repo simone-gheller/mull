@@ -62,6 +62,48 @@ export default async function authRoutes(fastify, _options) {
   });
 
   /**
+   * PATCH /auth/me
+   * currently updates displayName only, 
+   * but can be extended in the future 
+   */
+  fastify.patch('/auth/me', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      tags: ['auth'],
+      description: 'Update authenticated user profile',
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        properties: {
+          displayName: { type: 'string', maxLength: 255 },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            email: { type: 'string' },
+            displayName: { type: 'string', nullable: true },
+            role: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { user } = request;
+    const { displayName } = request.body;
+
+    const updated = await fastify.prisma.user.update({
+      where: { id: user.id },
+      data: { ...(displayName !== undefined ? { displayName } : {}) },
+      select: { id: true, email: true, displayName: true, role: true },
+    });
+
+    return reply.send(updated);
+  });
+
+  /**
    * POST /auth/admin/example
    * Example admin-only route to demonstrate role-based access control
    */
