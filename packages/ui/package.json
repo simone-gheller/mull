@@ -1,0 +1,13 @@
+{
+  "name": "@mull/ui",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./tokens": "./src/tokens.js"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  }
+}
