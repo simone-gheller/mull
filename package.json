@@ -1,0 +1,16 @@
+{
+  "name": "mull",
+  "private": true,
+  "workspaces": [
+    "frontend/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:app": "npm run dev --workspace=frontend/app",
+    "dev:marketing": "npm run dev --workspace=frontend/marketing",
+    "dev": "npm run dev --workspace=frontend/app & npm run dev --workspace=frontend/marketing",
+    "build:app": "npm run build --workspace=frontend/app",
+    "build:marketing": "npm run build --workspace=frontend/marketing",
+    "build": "npm run build --workspaces"
+  }
+}
