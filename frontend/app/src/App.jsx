@@ -3,7 +3,7 @@ import { useTheme, FONTS } from '@mull/ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/layout/Layout';
 import Login from './pages/Login';
-import Register from './pages/Register';
+import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
 import Parameters from './pages/Parameters';
@@ -41,7 +41,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-      <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
 
       <Route path="/dashboard" element={<ProtectedRoute><Layout /></ProtectedRoute>}>

@@ -124,7 +124,7 @@ export default function Login() {
 
         <p style={{ textAlign: 'center', fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted, marginTop: '20px' }}>
           no account?{' '}
-          <Link to="/register" style={{ color: T.textSecondary, textDecoration: 'none' }}>sign up</Link>
+          <Link to="/signup" style={{ color: T.textSecondary, textDecoration: 'none' }}>sign up</Link>
         </p>
       </div>
     </div>

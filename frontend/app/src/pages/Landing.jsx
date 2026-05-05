@@ -135,7 +135,7 @@ const Landing = () => {
               </Button>
               <Button
                 as={Link}
-                to="/register"
+                to="/signup"
                 variant="primary"
                 size="sm"
               >
@@ -179,7 +179,7 @@ const Landing = () => {
             >
               <Button
                 as={Link}
-                to="/register"
+                to="/signup"
                 variant="primary"
                 size="lg"
                 className="px-8 py-4 text-lg"
@@ -409,7 +409,7 @@ const Landing = () => {
                 </ul>
                 <Button 
                   as={Link}
-                  to="/register"
+                  to="/signup"
                   variant="outline" 
                   className="w-full"
                 >
@@ -458,7 +458,7 @@ const Landing = () => {
                 </ul>
                 <Button 
                   as={Link}
-                  to="/register"
+                  to="/signup"
                   variant="primary" 
                   className="w-full"
                 >
@@ -607,7 +607,7 @@ const Landing = () => {
           >
             <Button
               as={Link}
-              to="/register"
+              to="/signup"
               variant="secondary"
               size="lg"
               className="px-8 py-4 text-lg bg-white text-blue-600 hover:bg-gray-50"
