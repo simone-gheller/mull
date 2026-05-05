@@ -15,7 +15,6 @@
 
 import fp from 'fastify-plugin';
 import jwt from '@fastify/jwt';
-import { uuidv7 } from 'uuidv7';
 import buildGetJwks from 'get-jwks';
 
 async function authPlugin(fastify, options) {
@@ -62,45 +61,29 @@ fastify.decorate('authenticate', async function (request, reply) {
       });
     }
 
-    const { id: supabaseId, email } = supabaseUser;
+    const { id: supabaseId } = supabaseUser;
 
-    let user = await fastify.prisma.user.findUnique({
+    const raw = await fastify.prisma.user.findUnique({
       where: { supabaseId },
       include: {
-        organization: { select: { id: true, name: true } }
+        organizations: {
+          include: { org: { select: { id: true, name: true } } }
+        }
       }
     });
 
-    if (!user) {
-      const orgId = uuidv7();
-
-      user = await fastify.prisma.$transaction(async (tx) => {
-        await tx.organization.create({
-          data: {
-            id: orgId,
-            name: `${email.split('@')[0]}'s Organization`
-          }
-        });
-
-        return tx.user.create({
-          data: {
-            id: uuidv7(),
-            supabaseId,
-            email,
-            displayName: email.split('@')[0],
-            role: 'OWNER',
-            organizationId: orgId
-          },
-          include: {
-            organization: { select: { id: true, name: true } }
-          }
-        });
+    if (!raw) {
+      return reply.code(401).send({
+        error: 'Unauthorized',
+        message: 'User not found',
+        statusCode: 401
       });
-
-      fastify.log.info({ userId: user.id, orgId, email }, 'New user and organization auto-created');
     }
 
-    request.user = user;
+    request.user = {
+      ...raw,
+      organizations: raw.organizations.map(m => ({ id: m.orgId, name: m.org.name, role: m.role }))
+    };
 
   } catch (err) {
     fastify.log.warn({ error: err.message }, 'Authentication failed');
@@ -112,6 +95,19 @@ fastify.decorate('authenticate', async function (request, reply) {
   }
 });
 
+  fastify.decorate('validateOrgAccess', async function (request, reply) {
+    const { orgId } = request.params;
+    const membership = request.user.organizations?.find(o => o.id === orgId);
+    if (!membership) {
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: 'Not a member of this organization',
+        statusCode: 403
+      });
+    }
+    request.orgRole = membership.role;
+  });
+
   /**
    * requireRole decorator
    * Va usato DOPO authenticate nel preHandler array.
@@ -119,7 +115,7 @@ fastify.decorate('authenticate', async function (request, reply) {
    */
   fastify.decorate('requireRole', (role) => {
     return async function (request, reply) {
-      if (!request.user || request.user.role !== role) {
+      if (!request.orgRole || request.orgRole !== role) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: `Requires ${role} role`,
