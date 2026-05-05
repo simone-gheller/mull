@@ -20,7 +20,7 @@ model Organization {
   name String @db.VarChar(255)
 
   // Relations
-  users        User[]
+  members      UserOrganization[]
   apps         App[]
   environments Environment[]
 
@@ -100,20 +100,31 @@ model ParameterValue {
 // ============================================
 
 model User {
-  id             String        @id @default(uuid()) @db.Uuid
-  supabaseId     String        @unique @map("supabase_id") @db.VarChar(255)
-  email          String        @unique @db.VarChar(255)
-  displayName    String?       @db.VarChar(255) @map("display_name")
-  role           UserRole      @default(USER)
-  organizationId String?       @map("organization_id") @db.Uuid
+  id          String  @id @default(uuid()) @db.Uuid
+  supabaseId  String  @unique @map("supabase_id") @db.VarChar(255)
+  email       String  @unique @db.VarChar(255)
+  displayName String? @db.VarChar(255) @map("display_name")
 
   // Relations
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  organizations UserOrganization[]
 
   @@index([supabaseId])
   @@index([email])
-  @@index([organizationId])
   @@map("users")
+}
+
+model UserOrganization {
+  userId String   @map("user_id") @db.Uuid
+  orgId  String   @map("org_id") @db.Uuid
+  role   UserRole @default(USER)
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([userId, orgId])
+  @@index([userId])
+  @@index([orgId])
+  @@map("user_organizations")
 }
 
 enum UserRole {
