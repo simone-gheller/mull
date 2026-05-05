@@ -19,7 +19,7 @@ const ACCOUNT_NAV = [
 
 export default function Sidebar() {
   const { T } = useTheme();
-  const { user } = useAuth();
+  const { orgs, orgId } = useAuth();
   const location = useLocation();
 
   const isSettings = location.pathname.startsWith('/settings');
@@ -29,7 +29,7 @@ export default function Sidebar() {
     if (isSettings) setAccountOpen(true);
   }, [isSettings]);
 
-  const orgName = user?.organization?.name ?? 'orgs';
+  const orgName = orgs.find(o => o.id === orgId)?.name ?? 'orgs';
 
   return (
     <aside style={{

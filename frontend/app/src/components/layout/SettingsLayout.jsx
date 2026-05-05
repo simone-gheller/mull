@@ -26,12 +26,13 @@ function SectionLabel({ children, T }) {
 
 function SettingsSidebar() {
   const { T } = useTheme();
-  const { user } = useAuth();
+  const { user, orgs, orgId } = useAuth();
 
-  const displayName = user?.displayName || user?.email?.split('@')[0] || 'me';
+  const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'me';
   const email = user?.email || '';
-  const orgName = user?.organization?.name ?? 'workspace';
-  const role = user?.role?.toLowerCase() ?? 'member';
+  const activeOrg = orgs.find(o => o.id === orgId);
+  const orgName = activeOrg?.name ?? 'workspace';
+  const role = activeOrg?.role?.toLowerCase() ?? 'member';
 
   const roleVariant = { owner: 'warning', admin: 'info', member: 'success', viewer: 'default' }[role] ?? 'default';
 
