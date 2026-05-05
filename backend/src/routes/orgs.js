@@ -4,7 +4,7 @@ export default async function orgRoutes(fastify, _options) {
    * Returns org details and member count
    */
   fastify.get('/', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
     schema: {
       tags: ['orgs'],
       description: 'Get organization details',
@@ -25,20 +25,20 @@ export default async function orgRoutes(fastify, _options) {
 
     const org = await fastify.prisma.organization.findUnique({
       where: { id: orgId },
-      include: { _count: { select: { users: true } } },
+      include: { _count: { select: { members: true } } },
     });
 
     if (!org) return reply.status(404).send({ error: 'Not found' });
 
-    return reply.send({ id: org.id, name: org.name, memberCount: org._count.users });
+    return reply.send({ id: org.id, name: org.name, memberCount: org._count.members });
   });
 
   /**
    * PATCH /orgs/:orgId
-   * Update organization name
+   * Update organization name (OWNER only)
    */
   fastify.patch('/', {
-    onRequest: [fastify.authenticate, fastify.requireRole('OWNER')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('OWNER')],
     schema: {
       tags: ['orgs'],
       description: 'Update organization',
@@ -77,7 +77,7 @@ export default async function orgRoutes(fastify, _options) {
    * Returns all members of the organization
    */
   fastify.get('/members', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
     schema: {
       tags: ['orgs'],
       description: 'List organization members',
@@ -100,12 +100,17 @@ export default async function orgRoutes(fastify, _options) {
   }, async (request, reply) => {
     const { orgId } = request.params;
 
-    const members = await fastify.prisma.user.findMany({
-      where: { organizationId: orgId },
-      select: { id: true, email: true, displayName: true, role: true },
-      orderBy: [{ role: 'asc' }, { email: 'asc' }],
+    const memberships = await fastify.prisma.userOrganization.findMany({
+      where: { orgId },
+      include: { user: { select: { id: true, email: true, displayName: true } } },
+      orderBy: [{ role: 'asc' }, { user: { email: 'asc' } }],
     });
 
-    return reply.send(members);
+    return reply.send(memberships.map(m => ({
+      id: m.user.id,
+      email: m.user.email,
+      displayName: m.user.displayName,
+      role: m.role,
+    })));
   });
 }

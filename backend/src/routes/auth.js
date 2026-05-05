@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { uuidv7 } from 'uuidv7';
 
 /**
  * Authentication Routes
@@ -23,42 +23,73 @@ export default async function authRoutes(fastify, _options) {
         200: {
           type: 'object',
           properties: {
-            id: { type: 'string', description: 'User UUID' },
-            email: { type: 'string', description: 'User email' },
-            supabaseId: { type: 'string', description: 'Supabase user ID' },
-            displayName: { type: 'string', nullable: true, description: 'User display name' },
-            role: { type: 'string', enum: ['USER', 'ADMIN', 'OWNER'], description: 'User role' },
-            organization: {
-              type: 'object',
-              nullable: true,
-              properties: {
-                id: { type: 'string', description: 'Organization UUID' },
-                name: { type: 'string', description: 'Organization name' }
+            id: { type: 'string' },
+            email: { type: 'string' },
+            supabaseId: { type: 'string' },
+            displayName: { type: 'string', nullable: true },
+            organizations: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  role: { type: 'string', enum: ['USER', 'ADMIN', 'OWNER'] }
+                }
               }
             }
-          }
-        },
-        401: {
-          type: 'object',
-          properties: {
-            error: { type: 'string' },
-            message: { type: 'string' },
-            statusCode: { type: 'number' }
           }
         }
       }
     }
   }, async (request, reply) => {
     const { user } = request;
-
     return reply.send({
       id: user.id,
       email: user.email,
       supabaseId: user.supabaseId,
       displayName: user.displayName,
-      role: user.role,
-      organization: user.organization
+      organizations: user.organizations,
     });
+  });
+
+  /**
+   * POST /orgs
+   * Create a new organization for the authenticated user.
+   * Used both during initial registration (after OTP) and for adding org to existing users.
+   */
+  fastify.post('/orgs', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      tags: ['orgs'],
+      description: 'Create a new organization',
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        required: ['name'],
+        properties: {
+          name: { type: 'string', minLength: 2, maxLength: 255 },
+        },
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            name: { type: 'string' },
+            role: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { name } = request.body;
+    const orgId = uuidv7();
+    const org = await fastify.prisma.organization.create({ data: { id: orgId, name } });
+    await fastify.prisma.userOrganization.create({
+      data: { userId: request.user.id, orgId, role: 'OWNER' },
+    });
+    return reply.code(201).send({ id: org.id, name: org.name, role: 'OWNER' });
   });
 
   /**

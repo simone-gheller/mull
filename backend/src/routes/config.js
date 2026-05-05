@@ -9,7 +9,7 @@ export default async function configRoutes(fastify, _options) {
   const prisma = fastify.prisma;
 
   fastify.get('/config/:appId/:envId', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
     schema: getConfigSchema
   }, async (request, reply) => {
     const { appId, envId, orgId } = request.params;

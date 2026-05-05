@@ -16,7 +16,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.get(
     '/parameters/:appId/values',
     {
-      onRequest: [fastify.authenticate],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess],
       schema: getParameterValuesSchema
     },
     async (request, reply) => {
@@ -109,7 +109,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.get(
     '/parameters/values/:id',
     {
-      onRequest: [fastify.authenticate],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess],
       schema: getParameterValueByIdSchema
     },
     async (request, reply) => {
@@ -161,7 +161,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.put(
     '/parameters/values/:id',
     {
-      onRequest: [fastify.authenticate],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess],
       schema: updateParameterValueSchema
     },
     async (request, reply) => {

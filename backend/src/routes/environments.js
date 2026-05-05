@@ -12,7 +12,7 @@ export default async function environmentRoutes(fastify, _options) {
 
   // GET /environments - List environments
   fastify.get('/environments', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
     schema: listEnvironmentsSchema
   }, async (request, reply) => {
     const { orgId } = request.params;
@@ -42,7 +42,7 @@ export default async function environmentRoutes(fastify, _options) {
 
   // POST /environments - Create environment
   fastify.post('/environments', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
     schema: createEnvironmentSchema
   }, async (request, reply) => {
     const { name } = request.body;

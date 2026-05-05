@@ -11,7 +11,7 @@ export default async function appRoutes(fastify, _options) {
 
   // GET /apps - List apps
   fastify.get('/apps', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
     schema: listAppsSchema
   }, async (request, reply) => {
     const { orgId } = request.params;
@@ -52,7 +52,7 @@ export default async function appRoutes(fastify, _options) {
 
   // POST /apps - Create app
   fastify.post('/apps', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
     schema: createAppSchema
   }, async (request, reply) => {
     const { name, parentId } = request.body;

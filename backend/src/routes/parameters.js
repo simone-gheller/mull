@@ -12,7 +12,7 @@ export default async function parameterRoutes(fastify, _options) {
 
   // GET /parameters/resolved - Full inheritance chain for an app
   fastify.get('/parameters/resolved', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
   }, async (request, reply) => {
     const { orgId } = request.params;
     const { appId } = request.query;
@@ -97,7 +97,7 @@ export default async function parameterRoutes(fastify, _options) {
 
   // POST /parameters/override - Create or retrieve an override parameter in a child app
   fastify.post('/parameters/override', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
   }, async (request, reply) => {
     const { orgId } = request.params;
     const { key, appId, description } = request.body;
@@ -159,7 +159,7 @@ export default async function parameterRoutes(fastify, _options) {
 
   // GET /parameters - List parameters for an app
   fastify.get('/parameters', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
     schema: listParametersSchema
   }, async (request, reply) => {
     const { orgId } = request.params;
@@ -214,7 +214,7 @@ export default async function parameterRoutes(fastify, _options) {
 
   // POST /parameters - Create parameter with empty values for all environments
   fastify.post('/parameters', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
     schema: createParameterSchema
   }, async (request, reply) => {
     const { appId, key, description } = request.body;
