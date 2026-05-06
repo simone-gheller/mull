@@ -4,11 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SafeConfig is a secure configuration management system built with Node.js/Fastify and PostgreSQL. It implements envelope cryptography to securely store and manage sensitive configuration parameters.
+SafeConfig (product name: **mull**) is a secure configuration management system built with Node.js/Fastify and PostgreSQL. It implements envelope cryptography to securely store and manage sensitive configuration parameters across apps and environments. Target: B2B developer tool.
 
 ## Deployment Architecture
-
-SafeConfig uses a multi-domain setup with three independently deployable components:
 
 ```
 safeconfig.io           → Marketing landing page (React + Vite — frontend/)
@@ -16,159 +14,196 @@ app.safeconfig.io       → Dashboard SPA (React + Vite — frontend/)
 api.safeconfig.io       → REST API (Fastify — backend/)
 ```
 
-**Why the landing/app split:**
-- Landing page needs SEO — served on the root domain, indexed by crawlers
-- Dashboard is a protected app — no SEO needed, lives on `app.` subdomain
-- Separating the two allows independent deploys and avoids shipping dashboard JS to marketing visitors
-
 **Current frontend state:**
-- The `frontend/` directory is one React + Vite app that already contains both the landing page (`/`) and the dashboard (`/dashboard/*`)
-- Short term: deploy as a single app on `safeconfig.io`, dashboard routes redirect to `app.safeconfig.io`
-- Long term: split into two separate Vite apps sharing a component library
-
-**Known frontend issues (needs alignment before production):**
-- `frontend/src/services/api.js` calls old endpoints (`/auth/login`, `/api/projects`) — must be updated to `/auth/signin`, `/orgs/:orgId/apps`, etc.
-- `frontend/src/context/AuthContext.jsx` expects HttpOnly cookies the backend does not currently set
-- Several `console.log` debug statements in `AuthContext.jsx` should be removed
+- One React + Vite app (`frontend/app/`) contains both landing page and dashboard
+- Short term: deploy as single app on `safeconfig.io`
+- Long term: split into two Vite apps sharing `packages/ui` component library
 
 **Monorepo structure:**
 ```
 safeconfig/
-├── backend/     # Fastify API — source of truth for business logic
-├── frontend/    # React + Vite (landing + dashboard)
-├── docs/        # Architecture and design documents
-└── supabase/    # Local Supabase config and signing keys
+├── backend/          # Fastify API — source of truth for business logic
+├── frontend/
+│   ├── app/          # Dashboard SPA (React 19 + Vite)
+│   └── marketing/    # Landing page
+├── packages/
+│   └── ui/           # @mull/ui — shared design system
+├── docs/             # Architecture and design documents
+└── supabase/         # Local Supabase config + email templates
 ```
 
 ## Key Commands
 
-### Development
-- `npm run dev` - Start development server with nodemon
-- `npm start` - Start production server
-- `npm test` - Run tests with Jest (uses experimental VM modules)
+```bash
+# Backend (from backend/)
+npm run dev            # http://localhost:3000
+npm run migrate        # npx prisma migrate deploy
+npm run generate       # regenerate Prisma client
 
-### Database
-- `npm run migrate` - Run Prisma migrations
-- `npm run generate` - Generate Prisma client
-- `docker-compose up` - Start PostgreSQL database
+# Frontend (from root)
+npm run dev:app        # http://localhost:5173
 
-### Environment Setup
-- Requires `.env` file with `DATABASE_URL`, `MASTER_KEY_HEX` (64 hex chars), and `KEK_VERSION`
-- Database runs on PostgreSQL (port 5432)
-- **Supabase Local (Required for development)**:
-  ```bash
-  # Generate JWT signing key and convert to array format
-  npx supabase gen signing-key --algorithm ES256 | jq '[.]' > supabase/signing_keys.json && npm run supabase:start
-  ```
-  - JWKS endpoint: `http://localhost:54321/auth/v1/.well-known/jwks.json`
-- **Supabase Production**: Set `SUPABASE_PROJECT_REF` and `SUPABASE_URL` in `.env`
-- **Google OAuth (Optional)**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
-  - If not configured, Google OAuth routes will log warnings but won't break the app
+# Supabase local
+npx supabase start     # starts auth + DB (port 54321/54322)
+npx supabase stop
+# Inbucket (email testing): http://localhost:54324
+# Studio: http://localhost:54323
+```
+
+## Environment Setup
+
+Backend `.env` requires:
+- `DATABASE_URL` — PostgreSQL (Supabase local: `postgresql://postgres:postgres@127.0.0.1:54322/postgres`)
+- `SUPABASE_URL` — `http://localhost:54321` locally
+- `SUPABASE_PUBLISHABLE_KEY` — anon key from `npx supabase status`
+- `MASTER_KEY_HEX` — 64 hex chars (for envelope encryption KEK)
+- `KEK_VERSION` — integer, current key version
+- `CORS_ORIGIN` — comma-separated allowed origins (default: `http://localhost:5173,http://localhost:5174`)
+
+Optional: `SUPABASE_PROJECT_REF` (production), `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI` (OAuth).
 
 ## Architecture
 
-### Core Components
+### Database Schema (current, implemented)
 
-**Server (`backend/src/server.js`)**
-- Fastify-based REST API server
-- Runs on port 3000
-- All routes require authentication except `/auth/*`
-- Registers plugins: Prisma, JWT auth
+```prisma
+model User {
+  id            String             @id @db.Uuid        // UUIDv7
+  supabaseId    String             @unique @map("supabase_id")
+  email         String             @unique
+  displayName   String?            @map("display_name")
+  organizations UserOrganization[]
+}
 
-**Cryptography (`backend/src/crypto/crypto.js`)**
-- Envelope encryption using AES-256-GCM
-- DEK (Data Encryption Key) wrapped with KEK (Key Encryption Key)
-- Includes integrity verification via SHA-256 checksums
+model Organization {
+  id      String             @id @db.Uuid              // UUIDv7
+  name    String
+  members UserOrganization[]
+  apps    App[]
+  environments Environment[]
+}
 
-**Database Schema**
-- Users with Supabase authentication
-  - `supabaseId` unique identifier from Supabase Auth
-  - `email` and `displayName` from authentication
-  - `role` enum (USER/ADMIN/OWNER)
-  - **Auto-organization creation**: First-time users automatically get a personal organization and become OWNER
-- Organizations contain apps and environments
-  - Users belong to one organization
-  - Apps have hierarchical structure with parent-child relationships
-- Apps containing parameters with inheritance support
-- Environments (dev, staging, production, etc.)
-- Parameters define configuration keys per app
-- ParameterValues store actual values per parameter per environment
+model UserOrganization {
+  userId String   @map("user_id") @db.Uuid
+  orgId  String   @map("org_id") @db.Uuid
+  role   UserRole @default(USER)                       // USER | ADMIN | OWNER
+  user   User         @relation(...)
+  org    Organization @relation(...)
+  @@id([userId, orgId])
+}
+```
 
-**App Hierarchy**
-- Apps have hierarchical structure with parent-child relationships
-- `ancestors` array tracks all parent apps
-- `depth` field indicates level in hierarchy
-- Parameter inheritance: child apps inherit from parents, can override values
+**Key invariants:**
+- All IDs are **UUIDv7** (time-ordered). The pattern `^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-...` is validated on all `:orgId` params.
+- `User.role` and `User.organizationId` do NOT exist — they were removed in the multi-org migration.
+- `Organization.users` does NOT exist — use `Organization.members` (the join table relation).
 
-**Authentication (`backend/src/plugins/auth.js`)**
-- Supabase JWT token validation (ES256 algorithm) via JWKS
-- Uses JWKS (JSON Web Key Set) for secure token verification in both local and production
-- Local: JWKS URL `http://localhost:54321/auth/v1/.well-known/jwks.json`
-- Production: JWKS URL `https://{project-ref}.supabase.co/auth/v1/.well-known/jwks.json`
-- Auto-creates user + personal organization on first login
-- New users become OWNER of their organization
+### User Creation Flow (Registration)
+
+User and org are created **atomically by a PostgreSQL trigger** on `auth.users` INSERT:
+
+```
+frontend: supabase.auth.signUp({ options: { data: { display_name, organization_name } } })
+  → Supabase inserts into auth.users
+  → Trigger handle_new_user() fires:
+      - INSERT INTO public.users (uuid_generate_v7() IDs)
+      - INSERT INTO public.organizations (name from raw_user_meta_data)
+      - INSERT INTO public.user_organizations (role = 'OWNER')
+  → Supabase sends OTP email to Inbucket (local) or real inbox (prod)
+  → frontend: supabase.auth.verifyOtp({ email, token, type: 'signup' })
+  → onAuthStateChange fires → fetchUserData() → /auth/me → dashboard
+```
+
+For **Google OAuth**: same trigger fires, org name auto-generated from email prefix.
+
+The `authenticate` backend decorator is a **pure lookup** — it never creates users or orgs. Returns 401 if user not in `public.users`.
+
+### Authentication (`backend/src/plugins/auth.js`)
+
+Decorators registered on Fastify:
+- **`authenticate`** — verifies Supabase JWT via JWKS, looks up user+orgs via Prisma, attaches `request.user = { ...user, organizations: [{id, name, role}] }`
+- **`validateOrgAccess`** — checks `request.user.organizations` for the `:orgId` param, sets `request.orgRole`. Returns 403 if not a member.
+- **`requireRole(role)`** — checks `request.orgRole` (not `request.user.role`). Must come after `validateOrgAccess` in preHandler array.
+
+Usage pattern: `preHandler: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('OWNER')]`
 
 ### Route Structure
 
-**Authentication Routes** (no org context):
-- `GET /auth/me` - Get current user info (includes organization)
-- `POST /auth/admin/example` - Example admin-only endpoint
+**Auth routes** (no org context — `backend/src/routes/auth.js`):
+- `GET /auth/me` — returns `{ id, email, displayName, organizations: [{id, name, role}] }`
+- `PATCH /auth/me` — update displayName
+- `POST /orgs` — create additional org for authenticated user (OWNER role assigned)
+- `POST /auth/admin/example` — example admin-only endpoint
 
-**Organization-Scoped Routes** (all use `/orgs/:orgId` prefix):
-- `GET /orgs/:orgId/apps` - List all apps
-- `POST /orgs/:orgId/apps` - Create new app
-- `GET /orgs/:orgId/environments` - List all environments
-- `POST /orgs/:orgId/environments` - Create new environment (auto-syncs parameter values)
-- `GET /orgs/:orgId/parameters?appId=X` - List parameters for an app
-- `POST /orgs/:orgId/parameters` - Create new parameter (auto-creates values for all envs)
-- `GET /orgs/:orgId/parameters/:appId/values` - List all parameter values for an app
-- `GET /orgs/:orgId/parameters/values/:id` - Get single parameter value
-- `PUT /orgs/:orgId/parameters/values/:id` - Update parameter value
-- `GET /orgs/:orgId/config/:appId/:envId` - Get rendered config with inheritance
+**Org-scoped routes** (all prefixed `/orgs/:orgId`, all have `validateOrgAccess`):
+- `GET/POST /orgs/:orgId/apps`
+- `GET/POST /orgs/:orgId/environments`
+- `GET/POST /orgs/:orgId/parameters`
+- `GET/PUT /orgs/:orgId/parameters/:appId/values`
+- `GET/PUT /orgs/:orgId/parameters/values/:id`
+- `GET /orgs/:orgId/config/:appId/:envId` — rendered config with inheritance
 
-**Key Design Decisions**:
-- Organization ID in URL path (not header/query) for HTTP caching compatibility
-- RESTful resource scoping: `/orgs/:orgId/resource`
-- `appId` kept as query param in `/parameters` for flexible filtering
-- All endpoints validate organization access
+### Cryptography (`backend/src/crypto/crypto.js`)
 
-### Security Model
-- **Supabase JWT authentication** with ES256 tokens
-- **Role-based access control** with OWNER > ADMIN > USER hierarchy
-- **Organization-scoped security** - all resources isolated by organization
-- **Path-based org context** - orgId in URL path for clear resource scoping
-- **Auto-organization** - Users get personal organization on first login (become OWNER)
-- **Cross-org protection** - All CRUD operations validate organization access
+Envelope encryption: AES-256-GCM. Each parameter value has a DEK (Data Encryption Key) wrapped by the KEK (Key Encryption Key, from `MASTER_KEY_HEX`). Includes SHA-256 integrity checksums.
 
-## Testing
+### Frontend Auth (`frontend/app/src/context/AuthContext.jsx`)
 
-Tests are located in `backend/tests/` and use Jest with Supertest for API testing. Run with `npm test` which includes experimental VM modules flag for ES6 module support.
+State: `{ user, orgs, orgId, isAuthenticated, loading, error }`.
 
-### Test Infrastructure
-- **Test Helpers (`tests/setup/testHelpers.js`)** - Authentication, API helpers, and fixture management
-- **Fixtures (`tests/setup/fixtures.js`)** - Database fixtures for creating test data with proper cleanup
-- **Global Setup (`tests/setup/globalSetup.js`)** - Test server initialization and database setup
+- `orgs` — array of `{id, name, role}` from `/auth/me`
+- `orgId` — active org, resolved as: `localStorage['active_org_id']` → OWNER org → first org
+- `switchOrg(id)` — updates localStorage + `apiService.setOrgId()`
+- `verifyOtp({ email, token })` — calls `supabase.auth.verifyOtp({ type: 'signup' })`
+- `clearError` — wrapped in `useCallback([])` to prevent infinite re-render loops when used as useEffect dependency
 
-### Test Coverage
-- **Authentication & Authorization** (`auth.test.js`) - Login, registration, token refresh, role-based permissions
-- **Project Management** (`projects.test.js`) - CRUD operations with comprehensive security testing
-- **Parameter & Version Management** (`parameters.test.js`, `versions.test.js`) - Encrypted parameter versions with envelope cryptography
-- **Invitation System** (`invitations.test.js`) - Organization invitation workflow and security
-- **Cross-organizational Security** - Prevents unauthorized access across organization boundaries
-- **Error Handling** - Proper HTTP status codes and meaningful error messages
+### Frontend Routes (`frontend/app/src/App.jsx`)
 
-### Key Test Features
-- Comprehensive security testing for all endpoints
-- Role-based permission validation (OWNER/ADMIN/MEMBER)
-- Cross-organizational access prevention
-- Proper error status codes (403 for unauthorized, 409 for conflicts)
-- Cleanup mechanisms to prevent test pollution
-- Readable logs with pino-pretty formatting
+```
+/               → redirect to /login
+/login          → Login (PublicRoute)
+/signup         → Signup — two-step inline: form → OTP on same URL (PublicRoute)
+/oauth/callback → OAuthCallback
+/dashboard      → Layout (ProtectedRoute)
+  /dashboard/projects
+  /dashboard/parameters
+  /dashboard/parameters/:parameterId
+  /dashboard/environments
+  /dashboard/users        (coming soon)
+/settings       → Layout (ProtectedRoute)
+  /settings/profile
+  /settings/security      (coming soon)
+  /settings/tokens        (coming soon)
+  /settings/org
+```
+
+**Signup flow detail (`frontend/app/src/pages/Signup.jsx`):**
+- Two internal components: `FormStep` (registration form) and `OtpStep` (OTP input)
+- `sessionStorage` keys `signup_step` and `signup_email` persist step across accidental refresh
+- On OTP success: sessionStorage cleared, `onAuthStateChange` navigates to dashboard
+- `result.sessionCreated` flag handles case where email confirmation is disabled (direct dashboard nav)
+
+### Email Templates (`supabase/templates/`)
+
+- `confirmation.html` — branded OTP email (dark theme, `termGreen` code box, mono font)
+- Subject: `{{ .Token }} — verify your mull account` (OTP code visible in push notification)
+- Tracked in git; pushed to production via `supabase push` once project is linked
+
+## Security Model
+
+- **Supabase JWT** (ES256) verified via JWKS — no password/session management in backend
+- **Per-org role** (`OWNER > ADMIN > USER`) — stored in `UserOrganization`, not on `User`
+- **`validateOrgAccess` on every org-scoped route** — 403 if not a member of the org in the path
+- **UUIDv7 validation** on all `:orgId` params — rejects UUIDv4 or malformed IDs
+- **Envelope encryption** — parameter values encrypted at rest, keys managed server-side
 
 ## TODO
 
-### ~~Multi-org membership~~ ✓ Done
-Schema + trigger + AuthContext + OrgSwitcher implementati. Vedi `backend/prisma/migrations/` e `frontend/app/src/context/AuthContext.jsx`.
+### Backend unreachable detection
+Quando il backend API è giù, l'utente resta sulla dashboard con org name `'...'` e tutte le chiamate API falliscono silenziosamente. Implementare:
+1. **`frontend/app/src/lib/api.js`** — response interceptor axios: distingue errori di rete (`!error.response`) da errori HTTP normali (401/403/500). Espone `onBackendStatusChange(fn)` callback.
+2. **`frontend/app/src/context/AuthContext.jsx`** — aggiunge `backendDown` state, registra il callback, fa polling su `/health` ogni 10s quando è down, ri-fetcha i dati utente al recovery.
+3. **`frontend/app/src/App.jsx`** — `BackendStatusBanner` component inline: legge `backendDown` da `useAuth()`, mostra banner sticky con colori `T.amber` / `T.amberBg` / `T.amberBorder`. Errori HTTP normali non triggherano il banner.
 
-### Backend unreachable
-Quando il backend API è giù, l'utente resta sulla dashboard con org name `'...'` e tutte le chiamate API falliscono silenziosamente.
+### Tests out of date
+I test in `backend/tests/` usano il vecchio schema (single org, `user.organizationId`). Devono essere aggiornati per la join table `UserOrganization` e il nuovo flusso di autenticazione.
