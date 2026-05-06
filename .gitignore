@@ -8,8 +8,11 @@ node_modules/
 backend/src/generated/
 **/generated/prisma/
 
-# Supabase local files (config is in backend/prisma/)
-supabase/
+# Supabase local-only runtime files (config.toml and templates/ are tracked)
+supabase/.branches/
+supabase/.temp/
+supabase/signing_keys.json
+supabase/snippets/
 
 # macOS system and ide files
 .DS_Store
