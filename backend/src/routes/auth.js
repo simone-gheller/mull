@@ -128,7 +128,7 @@ export default async function authRoutes(fastify, _options) {
     const updated = await fastify.prisma.user.update({
       where: { id: user.id },
       data: { ...(displayName !== undefined ? { displayName } : {}) },
-      select: { id: true, email: true, displayName: true, role: true },
+      select: { id: true, email: true, displayName: true },
     });
 
     return reply.send(updated);

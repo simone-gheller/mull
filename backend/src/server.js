@@ -25,7 +25,7 @@ import { envSchema } from './config.js';
  * @returns {FastifyInstance} Configured Fastify instance
  */
 export function buildApp(options = {}) {
-  const { logger = true } = options;
+  const { logger = true, testMode = false } = options;
 
   const fastify = Fastify({
     logger: logger ? {
@@ -74,7 +74,7 @@ export function buildApp(options = {}) {
   fastify.decorate('prisma', prisma);
 
   fastify.register(supabasePlugin);
-  fastify.register(authPlugin);
+  fastify.register(authPlugin, { testMode });
 
   // Register Swagger documentation
   fastify.register(swagger, swaggerConfig);

@@ -197,6 +197,36 @@ State: `{ user, orgs, orgId, isAuthenticated, loading, error }`.
 - **UUIDv7 validation** on all `:orgId` params — rejects UUIDv4 or malformed IDs
 - **Envelope encryption** — parameter values encrypted at rest, keys managed server-side
 
+## Tests
+
+### Backend (`backend/tests/`)
+
+- Framework: Node.js built-in `test` + `assert`, HTTP via `fastify.inject()` (no supertest)
+- Run: `npm test` da `backend/` (richiede Supabase locale attivo + `.env` configurato)
+- Utility: `backend/tests/utils/builders.js` — `buildTestContext()` crea un'istanza Fastify in `testMode: true`
+
+**testMode** (`src/plugins/auth.js`): quando attivo, il decorator `authenticate` legge `x-test-user-id` header invece di verificare JWT via JWKS. Permette test senza Supabase auth. Attivato solo da `buildTestContext()`, mai in produzione.
+
+**Builder helpers:**
+- `ctx.buildUser(overrides)` — crea User (no org)
+- `ctx.buildOrgMembership({ userId, orgId, role })` — aggiunge user all'org
+- `ctx.buildUserInOrg(org, { role, ...userOverrides })` — convenience: user + membership in un colpo
+- `ctx.injectAuth(options, user)` — inject con `x-test-user-id: user.id`
+
+**Copertura attuale:**
+- `apps.test.js` — GET/POST /orgs/:orgId/apps
+- `environments.test.js` — GET/POST /orgs/:orgId/environments
+- `parameters.test.js` — GET/POST /orgs/:orgId/parameters
+- `parameterValues.test.js` — GET /orgs/:orgId/parameters/:appId/values, GET/PUT /orgs/:orgId/parameters/values/:id
+- `auth.test.js` — GET/PATCH /auth/me, POST /orgs
+- `orgs.test.js` — GET/PATCH /orgs/:orgId, GET /orgs/:orgId/members
+
+**Non coperto:** `GET /orgs/:orgId/config/:appId/:envId` (usa raw SQL + view `config_inheritance`, richiede setup aggiuntivo), `GET /orgs/:orgId/parameters/resolved`, `POST /orgs/:orgId/parameters/override`.
+
+**Nota sul formato risposta**: `GET /orgs/:orgId/parameters/:appId/values` ritorna un oggetto `{ [envName]: { environmentId, values: [{id, parameterId, parameterKey, value}] } }`, non un array.
+
+---
+
 ## TODO
 
 ### Backend unreachable detection
@@ -205,5 +235,11 @@ Quando il backend API è giù, l'utente resta sulla dashboard con org name `'...
 2. **`frontend/app/src/context/AuthContext.jsx`** — aggiunge `backendDown` state, registra il callback, fa polling su `/health` ogni 10s quando è down, ri-fetcha i dati utente al recovery.
 3. **`frontend/app/src/App.jsx`** — `BackendStatusBanner` component inline: legge `backendDown` da `useAuth()`, mostra banner sticky con colori `T.amber` / `T.amberBg` / `T.amberBorder`. Errori HTTP normali non triggherano il banner.
 
-### Tests out of date
-I test in `backend/tests/` usano il vecchio schema (single org, `user.organizationId`). Devono essere aggiornati per la join table `UserOrganization` e il nuovo flusso di autenticazione.
+### Ripensare testMode in auth.js
+Attualmente `src/plugins/auth.js` contiene un branch `if (options.testMode)` che registra decorator alternativi per i test (`authenticate`, `validateOrgAccess`, `requireRole`). Questo accoppia la logica di test al codice di produzione. Valutare alternative più pulite: mock del plugin a livello di Fastify, plugin separato solo per test, o iniezione diretta di `request.user` tramite hook `onRequest`.
+
+### Frontend tests
+Il frontend (`frontend/app/`) non ha nessun framework di test installato. Opzioni valutate:
+- **Vitest + React Testing Library** — unit/integration, integrazione nativa con Vite. Valore limitato perché ogni componente richiede mock pesanti di Supabase, axios e react-router.
+- **Playwright** — E2E nel browser reale, nessun mock, copre signup/login/dashboard. Richiede backend + Supabase attivi per girare.
+- **Raccomandazione**: Playwright per i golden path (signup, login, dashboard) quando il prodotto si stabilizza. Rimandato perché il frontend è ancora in evoluzione rapida e il costo di manutenzione supera il beneficio attuale.

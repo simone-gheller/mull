@@ -44,7 +44,7 @@ function uniqueId() {
  * });
  */
 export async function buildTestContext() {
-  const fastify = buildFastifyApp({ logger: false });
+  const fastify = buildFastifyApp({ logger: false, testMode: true });
   await fastify.ready();
 
   const prisma = fastify.prisma;
@@ -313,14 +313,12 @@ export async function buildTestContext() {
     },
 
     /**
-     * Build user (minimal)
+     * Build user (minimal, no org membership)
      * @param {Object} overrides - Optional field overrides
      * @param {string} [overrides.email] - User email
      * @param {string} [overrides.supabaseId] - Supabase user ID
      * @param {string} [overrides.displayName] - Display name
-     * @param {string} [overrides.role] - User role (USER/ADMIN/OWNER)
-     * @param {string} [overrides.organizationId] - Organization ID
-     * @returns {Promise<{id: string, supabaseId: string, email: string, displayName: string, role: string}>}
+     * @returns {Promise<{id: string, supabaseId: string, email: string, displayName: string|null}>}
      */
     async buildUser(overrides = {}) {
       const email = overrides.email || `user-${uniqueId()}@test.com`;
@@ -331,15 +329,9 @@ export async function buildTestContext() {
           id: uuidv7(),
           supabaseId,
           email,
-          displayName: overrides.displayName || email.split('@')[0],
-          role: overrides.role || 'USER',
-          organizationId: overrides.organizationId || null
+          displayName: overrides.displayName || null
         },
-        include: {
-          organization: {
-            select: { id: true, name: true }
-          }
-        }
+        select: { id: true, supabaseId: true, email: true, displayName: true }
       });
 
       this.track('users', user.id);
@@ -347,33 +339,42 @@ export async function buildTestContext() {
     },
 
     /**
-     * Generate test JWT for a user
-     * @param {Object} user - User object with supabaseId and email
-     * @returns {string} JWT token
+     * Add user to org with a role
+     * @param {Object} options
+     * @param {string} options.userId
+     * @param {string} options.orgId
+     * @param {string} [options.role] - 'USER' | 'ADMIN' | 'OWNER' (default: 'OWNER')
      */
-    generateTestJWT(user) {
-      return fastify.jwt.sign({
-        sub: user.supabaseId,
-        email: user.email,
-        aud: 'authenticated',
-        role: 'authenticated'
-      });
+    async buildOrgMembership({ userId, orgId, role = 'OWNER' }) {
+      await prisma.userOrganization.create({ data: { userId, orgId, role } });
     },
 
     /**
-     * Inject authenticated request
+     * Build user + add them to an org in one call
+     * @param {Object} org - Org object with id
+     * @param {Object} [options]
+     * @param {string} [options.role] - 'USER' | 'ADMIN' | 'OWNER' (default: 'OWNER')
+     * @param {Object} [options.userOverrides] - overrides for buildUser
+     * @returns {Promise<{id: string, supabaseId: string, email: string, displayName: string|null}>}
+     */
+    async buildUserInOrg(org, { role = 'OWNER', ...userOverrides } = {}) {
+      const user = await this.buildUser(userOverrides);
+      await this.buildOrgMembership({ userId: user.id, orgId: org.id, role });
+      return user;
+    },
+
+    /**
+     * Inject authenticated request using testMode x-test-user-id header
      * @param {Object} options - Inject options (method, url, headers, body, etc.)
-     * @param {Object} user - User object to authenticate as
+     * @param {Object} user - User object with id
      * @returns {Promise} Response from inject
      */
     async injectAuth(options, user) {
-      const token = this.generateTestJWT(user);
-
       return await this.fastify.inject({
         ...options,
         headers: {
           ...options.headers,
-          authorization: `Bearer ${token}`
+          'x-test-user-id': user.id
         }
       });
     },

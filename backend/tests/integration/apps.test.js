@@ -13,57 +13,41 @@ describe('App Routes', () => {
     await ctx.cleanup();
   });
 
-  describe('GET /apps', () => {
-    test('should return list of apps for valid orgId', async () => {
-      // Arrange
+  describe('GET /orgs/:orgId/apps', () => {
+    test('should return list of apps for org member', async () => {
       const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org);
       const app = await ctx.buildApp({ orgId: org.id });
 
-      // Act
-      const response = await ctx.fastify.inject({
-        method: 'GET',
-        url: '/apps',
-        headers: { 'x-org-id': org.id }
-      });
+      const response = await ctx.injectAuth({ method: 'GET', url: `/orgs/${org.id}/apps` }, user);
 
-      // Assert
       assert.strictEqual(response.statusCode, 200);
       const apps = JSON.parse(response.body);
       assert.ok(Array.isArray(apps));
       assert.strictEqual(apps.length, 1);
-
-      const appItem = apps[0];
-      assert.strictEqual(appItem.id, app.id);
-      assert.strictEqual(appItem.orgId, org.id);
-      assert.strictEqual(appItem.name, app.name);
-      assert.ok(Array.isArray(appItem.ancestors));
-      assert.strictEqual(typeof appItem.depth, 'number');
+      assert.strictEqual(apps[0].id, app.id);
+      assert.strictEqual(apps[0].orgId, org.id);
+      assert.strictEqual(apps[0].name, app.name);
+      assert.ok(Array.isArray(apps[0].ancestors));
+      assert.strictEqual(typeof apps[0].depth, 'number');
     });
 
-    test('should return all apps for an orgId', async () => {
-      // Arrange
+    test('should return all apps for org', async () => {
       const org = await ctx.buildOrg();
-      const app1 = await ctx.buildApp({ orgId: org.id, name: 'app-1' });
-      const app2 = await ctx.buildApp({ orgId: org.id, name: 'app-2' });
+      const user = await ctx.buildUserInOrg(org);
+      await ctx.buildApp({ orgId: org.id, name: 'app-1' });
+      await ctx.buildApp({ orgId: org.id, name: 'app-2' });
 
-      // Query database directly
       const dbApps = await ctx.prisma.app.findMany({
         where: { orgId: org.id },
         orderBy: [{ depth: 'asc' }, { name: 'asc' }]
       });
 
-      // Act
-      const response = await ctx.fastify.inject({
-        method: 'GET',
-        url: '/apps',
-        headers: { 'x-org-id': org.id }
-      });
+      const response = await ctx.injectAuth({ method: 'GET', url: `/orgs/${org.id}/apps` }, user);
 
-      // Assert
       assert.strictEqual(response.statusCode, 200);
       const apiApps = JSON.parse(response.body);
       assert.strictEqual(apiApps.length, dbApps.length);
-
       for (let i = 0; i < dbApps.length; i++) {
         assert.strictEqual(apiApps[i].id, dbApps[i].id);
         assert.strictEqual(apiApps[i].name, dbApps[i].name);
@@ -71,37 +55,37 @@ describe('App Routes', () => {
       }
     });
 
-    test('should return 400 when orgId is missing', async () => {
-      // Act
-      const response = await ctx.fastify.inject({
-        method: 'GET',
-        url: '/apps'
-      });
+    test('should return 401 without auth', async () => {
+      const org = await ctx.buildOrg();
 
-      // Assert
-      assert.strictEqual(response.statusCode, 400);
-      const error = JSON.parse(response.body);
-      assert.ok(error.message.includes('orgId required'));
+      const response = await ctx.fastify.inject({ method: 'GET', url: `/orgs/${org.id}/apps` });
+
+      assert.strictEqual(response.statusCode, 401);
+    });
+
+    test('should return 403 for non-member', async () => {
+      const org = await ctx.buildOrg();
+      const otherOrg = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(otherOrg);
+
+      const response = await ctx.injectAuth({ method: 'GET', url: `/orgs/${org.id}/apps` }, user);
+
+      assert.strictEqual(response.statusCode, 403);
     });
   });
 
-  describe('POST /apps', () => {
+  describe('POST /orgs/:orgId/apps', () => {
     test('should create root app successfully', async () => {
-      // Arrange
       const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org);
 
-      // Act
-      const response = await ctx.fastify.inject({
+      const response = await ctx.injectAuth({
         method: 'POST',
-        url: '/apps',
-        headers: {
-          'x-org-id': org.id,
-          'content-type': 'application/json'
-        },
+        url: `/orgs/${org.id}/apps`,
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: 'test-root-app' })
-      });
+      }, user);
 
-      // Assert
       assert.strictEqual(response.statusCode, 201);
       const createdApp = JSON.parse(response.body);
       assert.strictEqual(createdApp.name, 'test-root-app');
@@ -112,25 +96,17 @@ describe('App Routes', () => {
     });
 
     test('should create child app with correct hierarchy', async () => {
-      // Arrange
       const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org);
       const parent = await ctx.buildApp({ orgId: org.id, name: 'parent-app' });
 
-      // Act
-      const response = await ctx.fastify.inject({
+      const response = await ctx.injectAuth({
         method: 'POST',
-        url: '/apps',
-        headers: {
-          'x-org-id': org.id,
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: 'test-child-app',
-          parentId: parent.id
-        })
-      });
+        url: `/orgs/${org.id}/apps`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'test-child-app', parentId: parent.id })
+      }, user);
 
-      // Assert
       assert.strictEqual(response.statusCode, 201);
       const createdApp = JSON.parse(response.body);
       assert.strictEqual(createdApp.name, 'test-child-app');
@@ -141,93 +117,67 @@ describe('App Routes', () => {
     });
 
     test('should return 404 when parent app not found', async () => {
-      // Arrange
       const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org);
 
-      // Act
-      const response = await ctx.fastify.inject({
+      const response = await ctx.injectAuth({
         method: 'POST',
-        url: '/apps',
-        headers: {
-          'x-org-id': org.id,
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: 'orphan-app',
-          parentId: '01900000-0000-7000-8000-000000000000'
-        })
-      });
+        url: `/orgs/${org.id}/apps`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'orphan-app', parentId: '01900000-0000-7000-8000-000000000000' })
+      }, user);
 
-      // Assert
       assert.strictEqual(response.statusCode, 404);
       const error = JSON.parse(response.body);
       assert.ok(error.message.includes('Parent app not found'));
     });
 
     test('should return 403 when parent belongs to different org', async () => {
-      // Arrange
       const org1 = await ctx.buildOrg();
       const org2 = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org1);
       const org2App = await ctx.buildApp({ orgId: org2.id, name: 'org2-app' });
 
-      // Act
-      const response = await ctx.fastify.inject({
+      const response = await ctx.injectAuth({
         method: 'POST',
-        url: '/apps',
-        headers: {
-          'x-org-id': org1.id,
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: 'cross-org-child',
-          parentId: org2App.id
-        })
-      });
+        url: `/orgs/${org1.id}/apps`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'cross-org-child', parentId: org2App.id })
+      }, user);
 
-      // Assert
       assert.strictEqual(response.statusCode, 403);
       const error = JSON.parse(response.body);
       assert.ok(error.message.includes('does not belong to this organization'));
     });
 
     test('should return 409 when app name already exists in org', async () => {
-      // Arrange
       const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org);
       await ctx.buildApp({ orgId: org.id, name: 'duplicate-app-name' });
 
-      // Act
-      const response = await ctx.fastify.inject({
+      const response = await ctx.injectAuth({
         method: 'POST',
-        url: '/apps',
-        headers: {
-          'x-org-id': org.id,
-          'content-type': 'application/json'
-        },
+        url: `/orgs/${org.id}/apps`,
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: 'duplicate-app-name' })
-      });
+      }, user);
 
-      // Assert
       assert.strictEqual(response.statusCode, 409);
       const error = JSON.parse(response.body);
       assert.ok(error.message.includes('already exists'));
     });
 
     test('should trim whitespace from app name', async () => {
-      // Arrange
       const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org);
 
-      // Act
-      const response = await ctx.fastify.inject({
+      const response = await ctx.injectAuth({
         method: 'POST',
-        url: '/apps',
-        headers: {
-          'x-org-id': org.id,
-          'content-type': 'application/json'
-        },
+        url: `/orgs/${org.id}/apps`,
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: '  whitespace-app  ' })
-      });
+      }, user);
 
-      // Assert
       assert.strictEqual(response.statusCode, 201);
       const createdApp = JSON.parse(response.body);
       assert.strictEqual(createdApp.name, 'whitespace-app');

@@ -18,6 +18,45 @@ import jwt from '@fastify/jwt';
 import buildGetJwks from 'get-jwks';
 
 async function authPlugin(fastify, options) {
+  if (options.testMode) {
+    fastify.decorate('authenticate', async function (request, reply) {
+      const userId = request.headers['x-test-user-id'];
+      if (!userId) {
+        return reply.code(401).send({ error: 'Unauthorized', message: 'Missing x-test-user-id', statusCode: 401 });
+      }
+      const raw = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        include: { organizations: { include: { org: { select: { id: true, name: true } } } } }
+      });
+      if (!raw) {
+        return reply.code(401).send({ error: 'Unauthorized', message: 'User not found', statusCode: 401 });
+      }
+      request.user = {
+        ...raw,
+        organizations: raw.organizations.map(m => ({ id: m.orgId, name: m.org.name, role: m.role }))
+      };
+    });
+
+    fastify.decorate('validateOrgAccess', async function (request, reply) {
+      const { orgId } = request.params;
+      const membership = request.user.organizations?.find(o => o.id === orgId);
+      if (!membership) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not a member of this organization', statusCode: 403 });
+      }
+      request.orgRole = membership.role;
+    });
+
+    fastify.decorate('requireRole', (role) => {
+      return async function (request, reply) {
+        if (!request.orgRole || request.orgRole !== role) {
+          return reply.code(403).send({ error: 'Forbidden', message: `Requires ${role} role`, statusCode: 403 });
+        }
+      };
+    });
+
+    return;
+  }
+
   const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF;
   const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:54321';
 
