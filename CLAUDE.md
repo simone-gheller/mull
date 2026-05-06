@@ -167,9 +167,8 @@ Tests are located in `backend/tests/` and use Jest with Supertest for API testin
 
 ## TODO
 
-### Multi-org membership
-Currently a `User` has a single `organizationId` field — one user, one org. To support org switching:
-1. **Schema** — remove `organizationId` from `User`, add join table `UserOrganization { userId, orgId, role }` + Prisma migration
-2. **Backend** — `/auth/me` returns list of orgs; all `/orgs/:orgId/*` routes validate membership via join table instead of `user.organizationId`
-3. **AuthContext** — expose `orgId` (active) + `orgs` (list); add `switchOrg(orgId)` 
-4. **Frontend** — org switcher in `Sidebar.jsx` (dropdown or modal) replacing the static org name link
+### ~~Multi-org membership~~ ✓ Done
+Schema + trigger + AuthContext + OrgSwitcher implementati. Vedi `backend/prisma/migrations/` e `frontend/app/src/context/AuthContext.jsx`.
+
+### Backend unreachable
+Quando il backend API è giù, l'utente resta sulla dashboard con org name `'...'` e tutte le chiamate API falliscono silenziosamente.
