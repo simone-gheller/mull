@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useTheme, Card, Btn, Badge, FONTS } from '@mull/ui';
+import { useTheme, Btn, FONTS } from '@mull/ui';
 import apiService from '../services/api';
 import Modal from '../components/ui/Modal';
 import FormInput from '../components/ui/FormInput';
@@ -10,6 +10,7 @@ export default function Environments() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newSecret, setNewSecret] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
 
@@ -24,16 +25,15 @@ export default function Environments() {
     if (!newName.trim()) return;
     setCreating(true); setError(null);
     try {
-      const created = await apiService.createEnvironment({ name: newName.trim() });
+      const payload = { name: newName.trim() };
+      if (newSecret) payload.isSecret = true;
+      const created = await apiService.createEnvironment(payload);
       setEnvironments([...environments, created]);
-      setShowModal(false); setNewName('');
+      setShowModal(false); setNewName(''); setNewSecret(false);
     } catch (e) {
       setError(e.response?.data?.message || 'Failed to create environment');
     } finally { setCreating(false); }
   };
-
-  const ENV_COLORS = { production: 'danger', staging: 'warning', development: 'success', dev: 'success', prod: 'danger' };
-  const envVariant = (name) => ENV_COLORS[name.toLowerCase()] ?? 'default';
 
   return (
     <div>
@@ -65,15 +65,24 @@ export default function Environments() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
           {environments.map(env => (
             <div key={env.id} style={{
-              background: T.surface, border: `1px solid ${T.border}`,
+              background: env.isSecret ? `${T.amber}08` : T.surface,
+              border: `1px solid ${env.isSecret ? `${T.amber}40` : T.border}`,
               borderRadius: '6px', padding: '16px 18px',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div>
-                <div style={{ fontFamily: FONTS.mono, fontSize: '13px', color: T.textPrimary, marginBottom: '6px' }}>
+                <div style={{ fontFamily: FONTS.mono, fontSize: '13px', color: T.textPrimary, marginBottom: env.isSecret ? '6px' : 0 }}>
                   {env.name}
                 </div>
-                <Badge T={T} variant={envVariant(env.name)}>{env.name}</Badge>
+                {env.isSecret && (
+                  <span style={{
+                    fontFamily: FONTS.mono, fontSize: '9px', color: T.amber,
+                    background: `${T.amber}18`, border: `1px solid ${T.amber}40`,
+                    padding: '1px 6px', borderRadius: '2px', letterSpacing: '0.05em',
+                  }}>
+                    ◈ SECRET
+                  </span>
+                )}
               </div>
               <button style={{
                 background: 'none', border: 'none', cursor: 'pointer',
@@ -87,7 +96,7 @@ export default function Environments() {
         </div>
       )}
 
-      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setNewName(''); setError(null); }} title="new environment" size="sm">
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setNewName(''); setNewSecret(false); setError(null); }} title="new environment" size="sm">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <FormInput
             label="Environment name"
@@ -97,9 +106,43 @@ export default function Environments() {
             onKeyDown={e => e.key === 'Enter' && handleCreate()}
             autoFocus
           />
+
+          {/* Secret toggle */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 10px',
+            background: newSecret ? `${T.amber}10` : T.overlay,
+            border: `1px solid ${newSecret ? `${T.amber}40` : T.border}`,
+            borderRadius: '4px',
+          }}>
+            <div>
+              <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: newSecret ? T.amber : T.textMuted }}>
+                secret environment
+              </div>
+              <div style={{ fontFamily: FONTS.display, fontSize: '10px', color: T.textMuted, marginTop: '2px' }}>
+                {newSecret ? 'all values always masked, ADMIN+ only' : 'values visible to all members'}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNewSecret(v => !v)}
+              style={{
+                width: '36px', height: '20px', borderRadius: '10px',
+                background: newSecret ? T.amber : T.border,
+                border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
+              }}
+            >
+              <span style={{
+                position: 'absolute', top: '2px', left: newSecret ? '18px' : '2px',
+                width: '16px', height: '16px', borderRadius: '50%',
+                background: T.bg, transition: 'left 0.2s', display: 'block',
+              }} />
+            </button>
+          </div>
+
           {error && <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.red }}>{error}</div>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowModal(false); setNewName(''); setError(null); }}>cancel</Btn>
+            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowModal(false); setNewName(''); setNewSecret(false); setError(null); }}>cancel</Btn>
             <Btn T={T} variant="primary" size="sm" onClick={handleCreate} disabled={!newName.trim() || creating}>
               {creating ? 'creating…' : 'create'}
             </Btn>
