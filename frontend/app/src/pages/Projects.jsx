@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@mull/ui';
+import { Trash2, Download } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import apiService from '../services/api';
 import Modal from '../components/ui/Modal';
 import FormInput from '../components/ui/FormInput';
@@ -8,10 +10,25 @@ import FormInput from '../components/ui/FormInput';
 export default function Apps() {
   const { T } = useTheme();
   const navigate = useNavigate();
+  const { orgs, orgId } = useAuth();
 
   const [apps, setApps] = useState([]);
   const [tree, setTree] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Detail panel
+  const [selectedApp, setSelectedApp] = useState(null);
+  const [detail, setDetail] = useState(null); // { ownCount, inheritedCount, overrideCount }
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  // Delete modal
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  // Hover state for icon buttons
+  const [hoveredIcon, setHoveredIcon] = useState(null);
 
   // Modal form
   const [showModal, setShowModal] = useState(false);
@@ -26,6 +43,7 @@ export default function Apps() {
       .then(data => {
         setApps(data);
         setTree(buildAppTree(data));
+        if (data.length > 0) handleSelectApp(data[0]);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -59,8 +77,53 @@ export default function Apps() {
   };
 
   const handleEdit = (node) => {
-    // navigate to parameters for that app
     navigate(`/dashboard/parameters?project=${node.id}`);
+  };
+
+  const handleSelectApp = async (node) => {
+    if (selectedApp?.id === node.id) {
+      setSelectedApp(null);
+      setDetail(null);
+      return;
+    }
+    setSelectedApp(node);
+    setDetail(null);
+    setDetailLoading(true);
+    try {
+      const resolved = await apiService.getResolvedParameters(node.id);
+      const ownCount = resolved.filter(p => p.isOwn && !p.isOverride).length;
+      const inheritedCount = resolved.filter(p => !p.isOwn).length;
+      const overrideCount = resolved.filter(p => p.isOverride).length;
+      setDetail({ ownCount, inheritedCount, overrideCount });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (deleteConfirm !== selectedApp.name) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await apiService.deleteProject(selectedApp.id);
+      const next = apps.filter(a => a.id !== selectedApp.id);
+      setApps(next);
+      setTree(buildAppTree(next));
+      setSelectedApp(null);
+      setDetail(null);
+      setShowDeleteModal(false);
+      setDeleteConfirm('');
+    } catch (e) {
+      setDeleteError(e.response?.data?.message || e.message || 'Failed to delete app');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleExport = () => {
+    // TODO: implement export
   };
 
   return (
@@ -83,34 +146,197 @@ export default function Apps() {
         </Btn>
       </div>
 
-      {/* Tree */}
-      {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {[...Array(4)].map((_, i) => (
-            <div key={i} style={{
-              height: '46px', background: T.surface,
-              border: `1px solid ${T.border}`, borderRadius: '5px',
-              animation: 'pulse 1.4s infinite',
-            }} />
-          ))}
+      {/* Tree + detail panel */}
+      <div style={{ display: 'grid', gridTemplateColumns: selectedApp ? '1fr 300px' : '1fr', gap: '16px', alignItems: 'start' }}>
+        {/* Tree */}
+        <div>
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {[...Array(4)].map((_, i) => (
+                <div key={i} style={{
+                  height: '46px', background: T.surface,
+                  border: `1px solid ${T.border}`, borderRadius: '5px',
+                  animation: 'pulse 1.4s infinite',
+                }} />
+              ))}
+            </div>
+          ) : tree.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '64px 0' }}>
+              <div style={{ fontFamily: FONTS.mono, fontSize: '32px', color: T.textMuted, marginBottom: '12px' }}>◈</div>
+              <p style={{ fontFamily: FONTS.display, fontSize: '15px', color: T.textSecondary, marginBottom: '16px' }}>
+                No apps yet. Create your first app to get started.
+              </p>
+              <Btn T={T} variant="primary" onClick={() => { resetForm(); setShowModal(true); }}>
+                create first app
+              </Btn>
+            </div>
+          ) : (
+            <AppTreeA
+              nodes={tree}
+              T={T}
+              onEdit={handleEdit}
+              onSelect={handleSelectApp}
+              selectedId={selectedApp?.id}
+            />
+          )}
         </div>
-      ) : tree.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '64px 0' }}>
-          <div style={{ fontFamily: FONTS.mono, fontSize: '32px', color: T.textMuted, marginBottom: '12px' }}>◈</div>
-          <p style={{ fontFamily: FONTS.display, fontSize: '15px', color: T.textSecondary, marginBottom: '16px' }}>
-            No apps yet. Create your first app to get started.
-          </p>
-          <Btn T={T} variant="primary" onClick={() => { resetForm(); setShowModal(true); }}>
-            create first app
-          </Btn>
-        </div>
-      ) : (
-        <AppTreeA
-          nodes={tree}
-          T={T}
-          onEdit={handleEdit}
-        />
-      )}
+
+        {/* Detail panel */}
+        {selectedApp && (
+          <div style={{
+            background: T.surface,
+            border: `1px solid ${T.border}`,
+            borderRadius: '6px',
+            position: 'sticky',
+            top: '16px',
+          }}>
+            {/* Panel header */}
+            <div style={{
+              padding: '12px 16px 10px',
+              borderBottom: `1px solid ${T.border}`,
+              borderRadius: '6px 6px 0 0',
+              display: 'flex', alignItems: 'center', gap: '8px',
+            }}>
+              <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.termGreen, letterSpacing: '0.12em' }}>//</span>
+              <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted, letterSpacing: '0.12em', textTransform: 'uppercase' }}>app detail</span>
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                {/* Export — TODO */}
+                <div style={{ position: 'relative' }}>
+                  {hoveredIcon === 'export' && (
+                    <div style={{
+                      position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+                      background: T.elevated, border: `1px solid ${T.border}`, borderRadius: '4px',
+                      padding: '3px 8px', fontFamily: FONTS.mono, fontSize: '10px', color: T.textSecondary,
+                      whiteSpace: 'nowrap', zIndex: 50, pointerEvents: 'none',
+                    }}>
+                      export JSON
+                      <div style={{
+                        position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+                        width: 0, height: 0,
+                        borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
+                        borderTop: `5px solid ${T.border}`,
+                      }} />
+                    </div>
+                  )}
+                  <button
+                    onClick={handleExport}
+                    onMouseEnter={() => setHoveredIcon('export')}
+                    onMouseLeave={() => setHoveredIcon(null)}
+                    style={{
+                      background: hoveredIcon === 'export' ? T.overlay : 'transparent',
+                      border: `1px solid ${hoveredIcon === 'export' ? T.border : 'transparent'}`,
+                      borderRadius: '4px', cursor: 'pointer',
+                      padding: '4px', display: 'flex', alignItems: 'center',
+                      transition: 'all 0.12s',
+                    }}
+                  >
+                    <Download size={13} color={T.textMuted} strokeWidth={1.5} />
+                  </button>
+                </div>
+
+                {/* Delete */}
+                <div style={{ position: 'relative' }}>
+                  {hoveredIcon === 'delete' && (
+                    <div style={{
+                      position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+                      background: T.elevated, border: `1px solid ${T.border}`, borderRadius: '4px',
+                      padding: '3px 8px', fontFamily: FONTS.mono, fontSize: '10px', color: T.textSecondary,
+                      whiteSpace: 'nowrap', zIndex: 50, pointerEvents: 'none',
+                    }}>
+                      delete app
+                      <div style={{
+                        position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+                        width: 0, height: 0,
+                        borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
+                        borderTop: `5px solid ${T.border}`,
+                      }} />
+                    </div>
+                  )}
+                  <button
+                    onClick={() => { setDeleteConfirm(''); setDeleteError(null); setShowDeleteModal(true); }}
+                    onMouseEnter={() => setHoveredIcon('delete')}
+                    onMouseLeave={() => setHoveredIcon(null)}
+                    style={{
+                      background: hoveredIcon === 'delete' ? `${T.red}15` : 'transparent',
+                      border: `1px solid ${hoveredIcon === 'delete' ? `${T.red}40` : 'transparent'}`,
+                      borderRadius: '4px', cursor: 'pointer',
+                      padding: '4px', display: 'flex', alignItems: 'center',
+                      transition: 'all 0.12s',
+                    }}
+                  >
+                    <Trash2 size={13} color={hoveredIcon === 'delete' ? T.red : T.textMuted} strokeWidth={1.5} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '16px' }}>
+              {/* App name */}
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontFamily: FONTS.mono, fontWeight: 700, fontSize: '14px', color: T.textPrimary, marginBottom: '4px' }}>
+                  {selectedApp.name}
+                </div>
+                <div style={{ fontFamily: FONTS.mono, fontSize: '9px', color: T.textMuted }}>
+                  depth {selectedApp.depth ?? 0}
+                  {selectedApp.parentId && (
+                    <span style={{ marginLeft: '8px' }}>
+                      · child of {apps.find(a => a.id === selectedApp.parentId)?.name ?? '…'}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Parameter counts */}
+              {detailLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} style={{ height: '28px', background: T.overlay, borderRadius: '3px', animation: 'pulse 1.4s infinite' }} />
+                  ))}
+                </div>
+              ) : detail && (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '20px' }}>
+                    {[
+                      { label: 'own', value: detail.ownCount, color: T.termGreen },
+                      { label: 'inherited', value: detail.inheritedCount, color: T.amber },
+                      { label: 'overrides', value: detail.overrideCount, color: T.blue },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '6px 10px',
+                        background: T.overlay,
+                        borderRadius: '4px',
+                        border: `1px solid ${T.border}`,
+                      }}>
+                        <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted, letterSpacing: '0.08em' }}>
+                          {label}
+                        </span>
+                        <span style={{
+                          fontFamily: FONTS.mono, fontSize: '12px', fontWeight: 700, color,
+                        }}>
+                          {value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                </>
+              )}
+
+              {/* Actions */}
+              <Btn
+                T={T}
+                variant="primary"
+                size="sm"
+                onClick={() => navigate(`/dashboard/parameters?project=${selectedApp.id}`)}
+                style={{ width: '100%' }}
+              >
+                view parameters →
+              </Btn>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Create modal */}
       <Modal
@@ -189,6 +415,56 @@ export default function Apps() {
             </Btn>
             <Btn T={T} variant="primary" size="sm" onClick={handleCreate} disabled={!formName.trim() || creating}>
               {creating ? 'creating…' : 'create app'}
+            </Btn>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete confirmation modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => { setShowDeleteModal(false); setDeleteConfirm(''); setDeleteError(null); }}
+        title="delete app"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div style={{
+            padding: '10px 12px',
+            background: `${T.red}10`, border: `1px solid ${T.red}30`,
+            borderLeft: `3px solid ${T.red}`, borderRadius: '4px',
+            fontFamily: FONTS.mono, fontSize: '11px', color: T.textSecondary, lineHeight: 1.6,
+          }}>
+            This will permanently delete <span style={{ color: T.textPrimary, fontWeight: 700 }}>{selectedApp?.name}</span> and all its parameters and values. This action cannot be undone.
+          </div>
+
+          <FormInput
+            label={`Type "${selectedApp?.name}" to confirm`}
+            placeholder={selectedApp?.name}
+            value={deleteConfirm}
+            onChange={e => setDeleteConfirm(e.target.value)}
+            autoFocus
+          />
+
+          {deleteError && (
+            <div style={{
+              padding: '8px 12px',
+              background: T.redBg, border: `1px solid ${T.redBorder}`,
+              borderLeft: `3px solid ${T.red}`, borderRadius: '4px',
+              fontFamily: FONTS.mono, fontSize: '11px', color: T.red,
+            }}>
+              {deleteError}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '4px' }}>
+            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowDeleteModal(false); setDeleteConfirm(''); setDeleteError(null); }}>
+              cancel
+            </Btn>
+            <Btn
+              T={T} variant="danger" size="sm"
+              onClick={handleDelete}
+              disabled={deleteConfirm !== selectedApp?.name || deleting}
+            >
+              {deleting ? 'deleting…' : 'delete app'}
             </Btn>
           </div>
         </div>

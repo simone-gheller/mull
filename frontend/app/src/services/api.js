@@ -52,12 +52,20 @@ class ApiService {
   }
 
   async updateProject(appId, appData) {
-    const response = await apiClient.put(`/orgs/${this.orgId}/apps/${appId}`, appData);
+    const response = await apiClient.patch(`/orgs/${this.orgId}/apps/${appId}`, appData);
     return response.data;
   }
 
   async deleteProject(appId) {
     await apiClient.delete(`/orgs/${this.orgId}/apps/${appId}`);
+  }
+
+  async exportProjectParameters(appId) {
+    const [resolved, values] = await Promise.all([
+      this.getResolvedParameters(appId),
+      this.getParameterValues(appId),
+    ]);
+    return { parameters: resolved, values };
   }
 
   // Environments
