@@ -50,6 +50,104 @@ export default async function appRoutes(fastify, _options) {
     }
   });
 
+  // GET /apps/:appId - Get single app
+  fastify.get('/apps/:appId', {
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+  }, async (request, reply) => {
+    const { orgId, appId } = request.params;
+
+    const app = await prisma.app.findUnique({
+      where: { id: appId },
+      select: {
+        id: true,
+        orgId: true,
+        parentId: true,
+        name: true,
+        ancestors: true,
+        depth: true,
+        _count: { select: { parameters: true } }
+      }
+    });
+
+    if (!app) {
+      return reply.code(404).send({ error: 'Not Found', message: 'App not found', statusCode: 404 });
+    }
+
+    if (app.orgId !== orgId) {
+      return reply.code(403).send({ error: 'Forbidden', message: 'App does not belong to this organization', statusCode: 403 });
+    }
+
+    return reply.send(app);
+  });
+
+  // PATCH /apps/:appId - Update app
+  fastify.patch('/apps/:appId', {
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+  }, async (request, reply) => {
+    const { orgId, appId } = request.params;
+    const { name } = request.body ?? {};
+
+    const existing = await prisma.app.findUnique({
+      where: { id: appId },
+      select: { orgId: true }
+    });
+
+    if (!existing) {
+      return reply.code(404).send({ error: 'Not Found', message: 'App not found', statusCode: 404 });
+    }
+
+    if (existing.orgId !== orgId) {
+      return reply.code(403).send({ error: 'Forbidden', message: 'App does not belong to this organization', statusCode: 403 });
+    }
+
+    if (!name?.trim()) {
+      return reply.code(400).send({ error: 'Bad Request', message: 'No fields to update', statusCode: 400 });
+    }
+
+    try {
+      const updated = await prisma.app.update({
+        where: { id: appId },
+        data: { name: name.trim() },
+        select: { id: true, orgId: true, parentId: true, name: true, ancestors: true, depth: true }
+      });
+      return reply.send(updated);
+    } catch (err) {
+      if (err.code === 'P2002') {
+        return reply.code(409).send({ error: 'Conflict', message: 'App with this name already exists in organization', statusCode: 409 });
+      }
+      fastify.log.error(err, 'Failed to update app');
+      return reply.code(500).send({ error: 'Internal Server Error', message: 'Failed to update app', statusCode: 500 });
+    }
+  });
+
+  // DELETE /apps/:appId - Delete app
+  fastify.delete('/apps/:appId', {
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+  }, async (request, reply) => {
+    const { orgId, appId } = request.params;
+
+    const existing = await prisma.app.findUnique({
+      where: { id: appId },
+      select: { orgId: true }
+    });
+
+    if (!existing) {
+      return reply.code(404).send({ error: 'Not Found', message: 'App not found', statusCode: 404 });
+    }
+
+    if (existing.orgId !== orgId) {
+      return reply.code(403).send({ error: 'Forbidden', message: 'App does not belong to this organization', statusCode: 403 });
+    }
+
+    try {
+      await prisma.app.delete({ where: { id: appId } });
+      return reply.code(204).send();
+    } catch (err) {
+      fastify.log.error(err, 'Failed to delete app');
+      return reply.code(500).send({ error: 'Internal Server Error', message: 'Failed to delete app', statusCode: 500 });
+    }
+  });
+
   // POST /apps - Create app
   fastify.post('/apps', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess],
@@ -99,7 +197,7 @@ export default async function appRoutes(fastify, _options) {
           name: name.trim(),
           parentId: parentId || null,
           ancestors: ancestors,
-          depth: depth
+          depth: depth,
         },
         select: {
           id: true,
@@ -107,7 +205,7 @@ export default async function appRoutes(fastify, _options) {
           parentId: true,
           name: true,
           ancestors: true,
-          depth: true
+          depth: true,
         }
       });
 
