@@ -68,7 +68,7 @@ export default function Dashboard() {
               <p style={{ fontFamily: FONTS.display, fontSize: '13px', color: T.textSecondary, marginBottom: '14px' }}>
                 No projects yet
               </p>
-              <Btn T={T} variant="primary" size="sm" as={Link} to="/dashboard/projects">
+              <Btn T={T} variant="primary" size="sm" as={Link} to="/dashboard/apps">
                 create first project
               </Btn>
             </div>
@@ -91,7 +91,7 @@ export default function Dashboard() {
                 </Link>
               ))}
               <div style={{ marginTop: '12px' }}>
-                <Link to="/dashboard/projects" style={{ textDecoration: 'none' }}>
+                <Link to="/dashboard/apps" style={{ textDecoration: 'none' }}>
                   <Btn T={T} variant="secondary" size="sm">view all →</Btn>
                 </Link>
               </div>
@@ -103,7 +103,7 @@ export default function Dashboard() {
         <Card T={T} title="quick actions">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[
-              { label: '+ new project',     href: '/dashboard/projects' },
+              { label: '+ new project',     href: '/dashboard/apps' },
               { label: '+ new parameter',   href: '/dashboard/parameters' },
               { label: '+ new environment', href: '/dashboard/environments' },
               { label: '≡ manage users',    href: '/dashboard/users' },

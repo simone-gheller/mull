@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useTheme, NavItem, FONTS } from '@mull/ui';
-import { useAuth } from '../../context/AuthContext';
 
 const MAIN_NAV = [
   { icon: '▣', label: 'dashboard',    href: '/dashboard',              end: true },
-  { icon: '◈', label: 'apps',          href: '/dashboard/projects' },
+  { icon: '◈', label: 'apps',          href: '/dashboard/apps' },
   { icon: '◇', label: 'parameters',   href: '/dashboard/parameters' },
   { icon: '▷', label: 'environments', href: '/dashboard/environments' },
   { icon: '≡', label: 'users',        href: '/dashboard/users' },
@@ -19,7 +18,6 @@ const ACCOUNT_NAV = [
 
 export default function Sidebar() {
   const { T } = useTheme();
-  const { orgs, orgId } = useAuth();
   const location = useLocation();
 
   const isSettings = location.pathname.startsWith('/settings');
@@ -28,8 +26,6 @@ export default function Sidebar() {
   useEffect(() => {
     if (isSettings) setAccountOpen(true);
   }, [isSettings]);
-
-  const orgName = orgs.find(o => o.id === orgId)?.name ?? 'orgs';
 
   return (
     <aside style={{
@@ -55,7 +51,7 @@ export default function Sidebar() {
             mull
           </div>
           <div style={{ fontFamily: FONTS.mono, fontSize: '9px', color: T.textMuted, letterSpacing: '0.05em' }}>
-            {orgName}
+            secure by default
           </div>
         </div>
       </div>
@@ -110,7 +106,7 @@ export default function Sidebar() {
         {/* Organization */}
         <NavLink to="/settings/org" style={{ textDecoration: 'none' }}>
           {({ isActive }) => (
-            <NavItem T={T} icon="▣" label={orgName} active={isActive} />
+            <NavItem T={T} icon="▣" label="settings" active={isActive} />
           )}
         </NavLink>
       </nav>

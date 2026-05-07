@@ -46,7 +46,7 @@ function AppRoutes() {
 
       <Route path="/dashboard" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
-        <Route path="projects" element={<Projects />} />
+        <Route path="apps" element={<Projects />} />
         <Route path="parameters" element={<Parameters />} />
         <Route path="parameters/:parameterId" element={<ParameterDetail />} />
         <Route path="environments" element={<Environments />} />
