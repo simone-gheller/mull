@@ -39,6 +39,7 @@ export default async function parameterRoutes(fastify, _options) {
           id: true,
           key: true,
           description: true,
+          isSecret: true,
           appId: true,
           app: { select: { id: true, name: true, depth: true } },
         },
@@ -77,6 +78,7 @@ export default async function parameterRoutes(fastify, _options) {
           id: p.id,
           key: p.key,
           description: p.description,
+          isSecret: p.isSecret,
           appId: p.appId,
           appName: p.app.name,
           isOwn,
@@ -196,6 +198,7 @@ export default async function parameterRoutes(fastify, _options) {
           appId: true,
           key: true,
           description: true,
+          isSecret: true,
         },
         orderBy: { key: 'asc' }
       });
@@ -217,7 +220,7 @@ export default async function parameterRoutes(fastify, _options) {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess],
     schema: createParameterSchema
   }, async (request, reply) => {
-    const { appId, key, description } = request.body;
+    const { appId, key, description, isSecret } = request.body;
     const { orgId } = request.params;
 
     try {
@@ -250,12 +253,14 @@ export default async function parameterRoutes(fastify, _options) {
           appId: appId,
           key: key.trim(),
           ...(description ? { description: description.trim() } : {}),
+          ...(isSecret !== undefined ? { isSecret } : {}),
         },
         select: {
           id: true,
           appId: true,
           key: true,
           description: true,
+          isSecret: true,
         }
       });
 

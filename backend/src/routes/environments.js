@@ -23,7 +23,8 @@ export default async function environmentRoutes(fastify, _options) {
         select: {
           id: true,
           orgId: true,
-          name: true
+          name: true,
+          isSecret: true
         },
         orderBy: { name: 'asc' }
       });
@@ -45,7 +46,7 @@ export default async function environmentRoutes(fastify, _options) {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess],
     schema: createEnvironmentSchema
   }, async (request, reply) => {
-    const { name } = request.body;
+    const { name, isSecret } = request.body;
     const { orgId } = request.params;
 
     try {
@@ -54,12 +55,14 @@ export default async function environmentRoutes(fastify, _options) {
         data: {
           id: uuidv7(),
           orgId: orgId,
-          name: name.trim()
+          name: name.trim(),
+          ...(isSecret !== undefined ? { isSecret } : {}),
         },
         select: {
           id: true,
           orgId: true,
-          name: true
+          name: true,
+          isSecret: true
         }
       });
 

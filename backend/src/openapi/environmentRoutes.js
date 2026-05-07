@@ -28,7 +28,8 @@ export const listEnvironmentsSchema = {
         properties: {
           id: { type: 'string', description: 'Environment ID' },
           orgId: { type: 'string', description: 'Organization ID' },
-          name: { type: 'string', description: 'Environment name' }
+          name: { type: 'string', description: 'Environment name' },
+          isSecret: { type: 'boolean', description: 'Whether all values in this environment are always masked' }
         }
       }
     },
@@ -61,6 +62,10 @@ export const createEnvironmentSchema = {
         type: 'string',
         minLength: 1,
         description: 'Environment name (unique within organization)'
+      },
+      isSecret: {
+        type: 'boolean',
+        description: 'Whether all values in this environment are always masked'
       }
     }
   },
@@ -70,7 +75,8 @@ export const createEnvironmentSchema = {
       properties: {
         id: { type: 'string', description: 'Environment ID' },
         orgId: { type: 'string', description: 'Organization ID' },
-        name: { type: 'string', description: 'Environment name' }
+        name: { type: 'string', description: 'Environment name' },
+        isSecret: { type: 'boolean', description: 'Whether all values in this environment are always masked' }
       }
     },
     400: errorResponse,

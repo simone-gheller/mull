@@ -46,10 +46,36 @@ async function authPlugin(fastify, options) {
       request.orgRole = membership.role;
     });
 
-    fastify.decorate('requireRole', (role) => {
+    fastify.decorate('requireRole', (minRole, options = {}) => {
+      const HIERARCHY = ['USER', 'ADMIN', 'OWNER'];
       return async function (request, reply) {
-        if (!request.orgRole || request.orgRole !== role) {
-          return reply.code(403).send({ error: 'Forbidden', message: `Requires ${role} role`, statusCode: 403 });
+        if (options.onlyIfSecret) {
+          try {
+            let isSecret = false;
+            const appId = request.params.appId;
+            if (appId) {
+              // Grouped-values route: no app-level secret anymore — skip.
+              return;
+            } else if (request.params.id) {
+              // Single-value routes: gate on app OR env secret (cleartext value exposed here).
+              const pv = await fastify.prisma.parameterValue.findUnique({
+                where: { id: request.params.id },
+                include: {
+                  parameter: { select: { appId: true } },
+                  environment: { select: { isSecret: true } }
+                }
+              });
+              if (pv) {
+                isSecret = !!pv.environment?.isSecret;
+              }
+            }
+            if (!isSecret) return;
+          } catch {
+            return; // invalid UUID or other lookup error — let the route handler respond
+          }
+        }
+        if (!request.orgRole || HIERARCHY.indexOf(request.orgRole) < HIERARCHY.indexOf(minRole)) {
+          return reply.code(403).send({ error: 'Forbidden', message: `Requires ${minRole} or higher`, statusCode: 403 });
         }
       };
     });
@@ -152,12 +178,38 @@ fastify.decorate('authenticate', async function (request, reply) {
    * Va usato DOPO authenticate nel preHandler array.
    * Esempio: preHandler: [fastify.authenticate, fastify.requireRole('OWNER')]
    */
-  fastify.decorate('requireRole', (role) => {
+  fastify.decorate('requireRole', (minRole, options = {}) => {
+    const HIERARCHY = ['USER', 'ADMIN', 'OWNER'];
     return async function (request, reply) {
-      if (!request.orgRole || request.orgRole !== role) {
+      if (options.onlyIfSecret) {
+        try {
+          let isSecret = false;
+          const appId = request.params.appId;
+          if (appId) {
+            const app = await fastify.prisma.app.findUnique({ where: { id: appId }, select: { isSecret: true } });
+            isSecret = !!app?.isSecret;
+          } else if (request.params.id) {
+            const pv = await fastify.prisma.parameterValue.findUnique({
+              where: { id: request.params.id },
+              include: {
+                parameter: { select: { appId: true } },
+                environment: { select: { isSecret: true } }
+              }
+            });
+            if (pv) {
+              const app = await fastify.prisma.app.findUnique({ where: { id: pv.parameter.appId }, select: { isSecret: true } });
+              isSecret = !!(app?.isSecret || pv.environment?.isSecret);
+            }
+          }
+          if (!isSecret) return;
+        } catch {
+          return; // invalid UUID or other lookup error — let the route handler respond
+        }
+      }
+      if (!request.orgRole || HIERARCHY.indexOf(request.orgRole) < HIERARCHY.indexOf(minRole)) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: `Requires ${role} role`,
+          message: `Requires ${minRole} or higher`,
           statusCode: 403
         });
       }
