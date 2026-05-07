@@ -8,7 +8,7 @@ export const THEMES = {
     borderHover: "#2a3040",
     textPrimary:   "#f5f7fa",
     textSecondary: "#8a95a8",
-    textMuted:     "#3d4555",
+    textMuted:     "#636e84",
     textDisabled:  "#1e2330",
     termGreen:     "#22c55e",
     termGreenDim:  "#16a34a",

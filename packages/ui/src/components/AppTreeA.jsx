@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { FONTS } from '../tokens.js';
 
 function ActionBtn({ label, hoverColor, T, onClick }) {
@@ -21,19 +21,30 @@ function ActionBtn({ label, hoverColor, T, onClick }) {
   );
 }
 
-function TreeNode({ node, T, onEdit, onDelete, onSelect, selectedId }) {
+function TreeNode({ node, T, onEdit, onDelete, onSelect, selectedId, defaultFocusable }) {
   const [open, setOpen] = useState(true);
   const [hover, setHover] = useState(false);
   const hasChildren = node.children?.length > 0;
   const isSelected = selectedId === node.id;
 
   return (
-    <div>
+    <div
+      role="treeitem"
+      aria-expanded={hasChildren ? open : undefined}
+      aria-selected={isSelected}
+    >
       {/* Row */}
       <div
+        data-treerow
+        tabIndex={isSelected || defaultFocusable ? 0 : -1}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         onClick={() => onSelect?.(node)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(node); }
+          if (e.key === 'ArrowRight' && hasChildren && !open) { e.preventDefault(); setOpen(true); }
+          if (e.key === 'ArrowLeft' && hasChildren && open) { e.preventDefault(); setOpen(false); }
+        }}
         style={{
           display: "flex", alignItems: "center", gap: "10px",
           padding: "8px 12px", borderRadius: "5px",
@@ -51,11 +62,14 @@ function TreeNode({ node, T, onEdit, onDelete, onSelect, selectedId }) {
               background: T.elevated, border: `1px solid ${T.border}`,
               borderRadius: "3px", cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: FONTS.mono, fontSize: "10px", color: T.textMuted,
-              transition: "all 0.1s",
+              color: T.textMuted,
             }}
           >
-            {open ? "−" : "+"}
+            <span style={{
+              display: "inline-block", fontSize: "7px", lineHeight: 1,
+              transform: open ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 0.15s ease-out",
+            }}>▶</span>
           </button>
         ) : (
           <div style={{
@@ -92,16 +106,21 @@ function TreeNode({ node, T, onEdit, onDelete, onSelect, selectedId }) {
         )}
       </div>
 
-      {/* Children — single continuous borderLeft, no absolute positioning */}
-      {open && hasChildren && (
-        <div style={{
-          marginLeft: "19px",          /* align with center of the toggle button */
+      {/* Children — grid-template-rows transition for smooth expand/collapse */}
+      {hasChildren && (
+        <div role="group" style={{
+          display: "grid",
+          gridTemplateRows: open ? "1fr" : "0fr",
+          transition: "grid-template-rows 0.15s ease-out",
+          marginLeft: "19px",
           paddingLeft: "19px",
           borderLeft: `1px solid ${T.border}`,
         }}>
-          {node.children.map(child => (
-            <TreeNode key={child.id} node={child} T={T} onEdit={onEdit} onDelete={onDelete} onSelect={onSelect} selectedId={selectedId} />
-          ))}
+          <div style={{ overflow: "hidden" }}>
+            {node.children.map(child => (
+              <TreeNode key={child.id} node={child} T={T} onEdit={onEdit} onDelete={onDelete} onSelect={onSelect} selectedId={selectedId} />
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -109,10 +128,26 @@ function TreeNode({ node, T, onEdit, onDelete, onSelect, selectedId }) {
 }
 
 export function AppTreeA({ nodes, T, onEdit, onDelete, onSelect, selectedId }) {
+  const treeRef = useRef(null);
+
+  const handleKeyDown = (e) => {
+    if (!['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    const items = [...treeRef.current.querySelectorAll('[data-treerow]')];
+    const idx = items.indexOf(document.activeElement);
+    if (idx === -1) return;
+    e.preventDefault();
+    const next = e.key === 'ArrowDown' ? items[idx + 1] : items[idx - 1];
+    if (next) {
+      items[idx].tabIndex = -1;
+      next.tabIndex = 0;
+      next.focus();
+    }
+  };
+
   return (
-    <div style={{ padding: "6px 8px" }}>
-      {nodes.map(node => (
-        <TreeNode key={node.id} node={node} T={T} onEdit={onEdit} onDelete={onDelete} onSelect={onSelect} selectedId={selectedId} />
+    <div role="tree" ref={treeRef} onKeyDown={handleKeyDown} style={{ padding: "6px 8px" }}>
+      {nodes.map((node, i) => (
+        <TreeNode key={node.id} node={node} T={T} onEdit={onEdit} onDelete={onDelete} onSelect={onSelect} selectedId={selectedId} defaultFocusable={!selectedId && i === 0} />
       ))}
     </div>
   );

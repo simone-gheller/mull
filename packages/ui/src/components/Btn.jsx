@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FONTS } from '../tokens.js';
 
-export function Btn({ children, variant = "primary", size = "md", icon, disabled, T, ...rest }) {
+export function Btn({ children, variant = "primary", size = "md", icon, disabled, style: externalStyle, T, ...rest }) {
   const [h, setH] = useState(false);
   const [a, setA] = useState(false);
   const pad = { sm: "4px 12px", md: "8px 18px", lg: "11px 26px" }[size];
@@ -52,6 +52,7 @@ export function Btn({ children, variant = "primary", size = "md", icon, disabled
         transition: "all 0.13s", opacity: disabled ? 0.35 : 1,
         letterSpacing: "0.02em", outline: "none",
         transform: a ? "translateY(1px)" : "none",
+        ...externalStyle,
       }}
     >
       {icon && <span>{icon}</span>}

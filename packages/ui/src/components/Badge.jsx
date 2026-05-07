@@ -2,12 +2,13 @@ import { FONTS } from '../tokens.js';
 
 export function Badge({ children, variant = "default", pulse: p, T }) {
   const v = {
-    default: { bg: T.elevated, color: T.textSecondary, border: T.border },
-    success: { bg: T.termGreenBg, color: T.termGreen, border: T.termGreenBorder },
-    warning: { bg: T.amberBg, color: T.amber, border: T.amberBorder },
-    danger:  { bg: T.redBg,  color: T.red,   border: T.redBorder },
-    info:    { bg: T.blueBg, color: T.blue,  border: T.blueBorder },
-  }[variant];
+    default:        { bg: T.elevated,    color: T.textSecondary, border: T.border },
+    success:        { bg: T.termGreenBg, color: T.termGreen,     border: T.termGreenBorder },
+    warning:        { bg: T.amberBg,     color: T.amber,         border: T.amberBorder },
+    danger:         { bg: T.redBg,       color: T.red,           border: T.redBorder },
+    info:           { bg: T.blueBg,      color: T.blue,          border: T.blueBorder },
+    outline:        { bg: 'transparent', color: T.termGreen,     border: T.termGreenBorder },
+  }[variant] ?? { bg: T.elevated, color: T.textSecondary, border: T.border };
   return (
     <span style={{
       fontFamily: FONTS.mono, fontSize: "10px", letterSpacing: "0.07em",

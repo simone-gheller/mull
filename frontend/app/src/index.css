@@ -1,7 +1,26 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'DM Sans', 'Outfit', system-ui, sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
 }
+
+*:focus-visible {
+  outline: 2px solid #22c55e;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+.term-cursor {
+  display: inline-block; width: 2px; height: 0.85em;
+  background: currentColor; margin-left: 2px; vertical-align: baseline;
+  animation: termBlink 0.75s step-end infinite;
+}
+@keyframes termBlink { 0%,100%{opacity:1} 50%{opacity:0} }
+@media (prefers-reduced-motion: reduce) { .term-cursor { animation: none; opacity: 1; } }

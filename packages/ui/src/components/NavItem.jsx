@@ -13,11 +13,11 @@ export function NavItem({ icon, label, active, badge, T }) {
         background: active ? T.elevated : h ? T.overlay : "transparent",
         border: `1px solid ${active ? T.border : "transparent"}`,
         fontFamily: FONTS.mono, fontSize: "12px",
-        color: active ? T.textPrimary : h ? T.textSecondary : T.textMuted,
+        color: active ? T.textPrimary : h ? T.textPrimary : T.textSecondary,
         transition: "all 0.1s", userSelect: "none",
       }}
     >
-      <span style={{ fontSize: "13px", opacity: active ? 1 : 0.6 }}>{icon}</span>
+      <span style={{ fontSize: "13px", opacity: active ? 1 : 0.75 }}>{icon}</span>
       <span style={{ flex: 1 }}>{label}</span>
       {badge && (
         <span style={{

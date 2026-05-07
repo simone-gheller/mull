@@ -1,12 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FONTS } from '../../tokens.js';
 import { TermLine } from './TermLine.jsx';
 
 export function TermBlock({ lines, T }) {
-  const [step, setStep] = useState(0);
-  useEffect(() => { setStep(0); }, []);
+  const [step, setStep] = useState(-1);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setStep(0); observer.disconnect(); } },
+      { threshold: 0.25 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div style={{
+    <div ref={ref} style={{
       background: T.bg, border: `1px solid ${T.border}`,
       borderRadius: "6px", overflow: "hidden",
       fontFamily: FONTS.mono, fontSize: "12px",
@@ -24,7 +36,7 @@ export function TermBlock({ lines, T }) {
       </div>
       <div style={{ padding: "16px 18px", minHeight: "140px" }}>
         {lines.map((l, i) => (
-          <TermLine key={i} line={l} active={i <= step}
+          <TermLine key={i} line={l} active={step >= 0 && i <= step}
             onDone={() => setTimeout(() => setStep(s => s + 1), 300)}
             T={T} />
         ))}
