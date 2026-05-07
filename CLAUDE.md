@@ -238,6 +238,34 @@ Quando il backend API è giù, l'utente resta sulla dashboard con org name `'...
 ### Ripensare testMode in auth.js
 Attualmente `src/plugins/auth.js` contiene un branch `if (options.testMode)` che registra decorator alternativi per i test (`authenticate`, `validateOrgAccess`, `requireRole`). Questo accoppia la logica di test al codice di produzione. Valutare alternative più pulite: mock del plugin a livello di Fastify, plugin separato solo per test, o iniezione diretta di `request.user` tramite hook `onRequest`.
 
+### Audit log (parameter values)
+Tracciare chi ha modificato un valore, in quale environment, da/a quale valore, con timestamp.
+- Schema: nuovo model `ParameterValueAudit` (id, parameterValueId, userId, oldValue, newValue, changedAt)
+- Backend: `PUT /parameters/values/:id` popola record audit dopo ogni update
+- Frontend: sezione `// audit` in `frontend/app/src/pages/ParameterDetail.jsx` — sostituisce il placeholder `// history`
+
+### Version history (parameter values)
+Visualizzare la storia dei valori per un parametro+environment specifico.
+- Derivabile dall'audit log (stesso model, query filtrata per `parameterValueId`)
+- Frontend: sezione `// history` già presente come placeholder in `ParameterDetail.jsx`
+- Utile per rollback manuale a un valore precedente
+
+### Toast notification system
+Notifica bottom-right che appare dopo azioni utente (delete, create, export, ecc.) e scompare automaticamente dopo ~3s.
+
+- **`frontend/app/src/context/ToastContext.jsx`** — `ToastProvider` con state `[{ id, type, message }]`. Espone `useToast()` → `{ toast(message, type) }`. Il provider renderizza il container in posizione fixed bottom-right. `type` può essere `'success'` | `'error'` | `'info'`.
+- **`frontend/app/src/App.jsx`** — wrappare `<App>` con `<ToastProvider>`.
+- **Componente Toast** — già esiste in `@mull/ui` (`Toast` da `packages/ui/src/components/Toast.jsx`), accetta `variant`, `msg`, `sub`, `T`. Usare quello, non crearne uno nuovo.
+- **Chiamate** — `toast('app deleted successfully', 'success')` dopo delete, `toast('app created', 'success')` dopo create, `toast('Failed to delete app', 'error')` in caso di errore. Usare in `Projects.jsx`, `Parameters.jsx`, `Environments.jsx`.
+- **Auto-dismiss** — `setTimeout(() => removeToast(id), 3000)` nel provider. Animazione: slide-in da destra con `translateX(0)`, slide-out con `translateX(110%)` + `opacity: 0` prima della rimozione dallo state.
+
+### Export parametri (Projects.jsx)
+Il bottone export è già presente nel detail panel di `/dashboard/apps` (`handleExport` è stub vuoto). Implementare:
+- Chiamare `apiService.getResolvedParameters(selectedApp.id)` + `apiService.getParameterValues(selectedApp.id)` in parallelo
+- Costruire oggetto JSON: `{ app: { id, name }, exportedAt: ISO string, parameters: [{ key, description, isSecret, values: { [envName]: value } }] }`
+- Creare blob, generare URL temporaneo con `URL.createObjectURL`, triggerare download con `<a download>` sintetico, revocare URL
+- Notifica toast `'parameters exported'` al completamento
+
 ### Frontend tests
 Il frontend (`frontend/app/`) non ha nessun framework di test installato. Opzioni valutate:
 - **Vitest + React Testing Library** — unit/integration, integrazione nativa con Vite. Valore limitato perché ogni componente richiede mock pesanti di Supabase, axios e react-router.
