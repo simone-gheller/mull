@@ -1,67 +1,83 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme, Btn, Badge, FONTS } from '@mull/ui';
+import { useAuth } from '../context/AuthContext';
 import apiService from '../services/api';
+
+const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
 // ─── Env value card ───────────────────────────────────────────────────────────
 
-function EnvCard({ row, editLabel, T, onEdit }) {
-  const [visible, setVisible] = useState(false);
-  const [copied, setCopied] = useState(false);
+function EnvRow({ row, editLabel, T, onEdit }) {
+  const [visible, setVisible]           = useState(false);
+  const [copied, setCopied]             = useState(false);
+  const [revealHovered, setRevealHovered] = useState(false);
 
   const handleCopy = async () => {
     try { await navigator.clipboard.writeText(row.value); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
   };
 
   return (
-    <div style={{
-      background: T.surface, border: `1px solid ${T.border}`,
-      borderRadius: '6px', padding: '14px 16px',
+    <div role="row" style={{
+      display: 'grid', gridTemplateColumns: '160px 1fr 120px',
+      alignItems: 'center', padding: '9px 14px',
+      borderBottom: `1px solid ${T.border}`,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Badge T={T} variant="info">{row.env}</Badge>
-          {row.isInherited && (
-            <span style={{
-              fontFamily: FONTS.mono, fontSize: '9px', color: T.amber,
-              background: `${T.amber}18`, border: `1px solid ${T.amber}40`,
-              padding: '1px 6px', borderRadius: '2px',
-            }}>
-              from {row.inheritedFrom}
-            </span>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: '6px' }}>
-          <Btn T={T} variant="secondary" size="sm" onClick={() => setVisible(v => !v)}>
-            {visible ? 'hide' : 'show'}
-          </Btn>
-          <Btn T={T} variant="secondary" size="sm" onClick={() => onEdit(row)}>
-            {editLabel}
-          </Btn>
-        </div>
+      {/* ENV */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <Badge T={T} variant={row.isSecret ? 'warning' : 'default'}>{row.env}</Badge>
+        {row.isInherited && (
+          <span style={{
+            fontFamily: FONTS.mono, fontSize: '9px', color: T.amber,
+            background: `${T.amber}18`, border: `1px solid ${T.amber}40`,
+            padding: '1px 5px', borderRadius: '2px',
+          }}>↑ {row.inheritedFrom}</span>
+        )}
       </div>
 
-      <div style={{ position: 'relative' }}>
-        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: '4px', padding: '10px 12px' }}>
-          <pre style={{
-            fontFamily: FONTS.mono, fontSize: '12px', margin: 0,
-            whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-            color: visible ? (row.isInherited ? T.textSecondary : T.amber) : T.textMuted,
-            letterSpacing: visible ? 'normal' : '0.12em',
-          }}>
-            {visible ? (row.value || '(empty)') : '•'.repeat(Math.min(row.value?.length || 16, 24))}
-          </pre>
+      {/* VALUE */}
+      <div style={{ minWidth: 0 }}>
+        <span style={{
+          fontFamily: FONTS.mono, fontSize: '12px',
+          color: !visible ? T.textMuted : !row.value ? T.textMuted : row.isInherited ? T.textSecondary : T.amber,
+          letterSpacing: visible ? 'normal' : '0.1em',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
+          fontStyle: visible && !row.value ? 'italic' : 'normal',
+        }}>
+          {visible
+            ? (row.value || '(empty)')
+            : '•'.repeat(Math.min(row.value?.length || 16, 20))}
+        </span>
+      </div>
+
+      {/* ACTIONS */}
+      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+        <div
+          style={{ position: 'relative' }}
+          onMouseEnter={() => { if (!visible) setRevealHovered(true); }}
+          onMouseLeave={() => setRevealHovered(false)}
+        >
+          <Btn T={T} variant="secondary" size="sm" onClick={() => { setVisible(v => !v); setRevealHovered(false); }}>
+            {visible ? 'hide' : 'show'}
+          </Btn>
+          {revealHovered && (
+            <div style={{
+              position: 'absolute', bottom: 'calc(100% + 5px)', right: 0,
+              fontFamily: FONTS.mono, fontSize: '9px', color: T.textMuted,
+              background: T.elevated, border: `1px solid ${T.border}`,
+              padding: '3px 8px', borderRadius: '3px', whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+            }}>
+              click to reveal
+            </div>
+          )}
         </div>
-        {visible && row.value && (
-          <button onClick={handleCopy} style={{
-            position: 'absolute', top: '8px', right: '8px',
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontFamily: FONTS.mono, fontSize: '10px',
-            color: copied ? T.termGreen : T.textMuted,
-          }}>
-            {copied ? 'copied!' : 'copy'}
-          </button>
-        )}
+        <Btn T={T} variant="secondary" size="sm" onClick={handleCopy} disabled={!visible || !row.value}>
+          {copied ? 'copied!' : 'copy'}
+        </Btn>
+        <Btn T={T} variant="secondary" size="sm" onClick={() => onEdit(row)}>
+          {editLabel}
+        </Btn>
       </div>
     </div>
   );
@@ -180,67 +196,83 @@ function OverrideBanner({ sourceAppName, T }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ParameterDetail() {
-  const { parameterId } = useParams();
-  const [searchParams] = useSearchParams();
+  const { orgSlug, appSlug, paramKey } = useParams();
   const navigate = useNavigate();
   const { T } = useTheme();
+  const { orgs, orgId } = useAuth();
 
-  const appId               = searchParams.get('appId');
-  const sourceAppId         = searchParams.get('sourceAppId') || appId;
-  const sourceAppName       = searchParams.get('sourceAppName') || '';
-  const currentAppName      = searchParams.get('currentAppName') || '';
-  const paramKey            = searchParams.get('key') || '';
-  const isOwn               = searchParams.get('own') !== '0';
-  const isOverride          = searchParams.get('isOverride') === '1';
-  const overrideFromAppName = searchParams.get('overrideFromAppName') || '';
-  // For override: IDs of the source (shadowed) parameter so we can show fallback values
-  const overrideSourceAppId   = searchParams.get('overrideSourceAppId') || '';
-  const overrideSourceParamId = searchParams.get('overrideSourceParamId') || '';
-
+  const [resolved, setResolved] = useState(null);
   const [envValues, setEnvValues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingRow, setEditingRow] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [loadKey, setLoadKey] = useState(0);
 
   useEffect(() => {
-    if (!sourceAppId) { setLoading(false); return; }
     setLoading(true);
+    setEnvValues([]);
 
     const load = async () => {
-      // Load the primary values (own app for own/override, ancestor for inherited)
-      const ownGrouped = await apiService.getParameterValues(sourceAppId);
+      // 1. Resolve app by slug
+      const apps = await apiService.getProjects();
+      const app = apps.find(a => slugify(a.name) === appSlug);
+      if (!app) return;
 
-      // For override params: also load source values to use as fallback for empty envs
+      // 2. Resolve parameter by key within that app
+      const resolvedParams = await apiService.getResolvedParameters(app.id);
+      const param = resolvedParams.find(p => p.key === paramKey);
+      if (!param) return;
+
+      const r = {
+        parameterId:          param.id,
+        appId:                app.id,
+        currentAppName:       app.name,
+        sourceAppId:          param.appId,
+        sourceAppName:        param.appName,
+        isOwn:                param.isOwn,
+        isOverride:           param.isOverride ?? false,
+        overrideSourceAppId:  param.overrideSourceAppId ?? '',
+        overrideSourceParamId: param.overrideSourceParamId ?? '',
+        overrideFromAppName:  param.overriddenFromAppName ?? '',
+      };
+      setResolved(r);
+
+      // 3. Load values and environments
+      const [ownGrouped, envList] = await Promise.all([
+        apiService.getParameterValues(r.sourceAppId),
+        apiService.getEnvironments(),
+      ]);
+      const envSecretById = Object.fromEntries(
+        (Array.isArray(envList) ? envList : []).map(e => [e.id, e.isSecret])
+      );
+
       let sourceGrouped = null;
-      if (isOwn && isOverride && overrideSourceAppId && overrideSourceParamId) {
-        sourceGrouped = await apiService.getParameterValues(overrideSourceAppId);
+      if (r.isOwn && r.isOverride && r.overrideSourceAppId && r.overrideSourceParamId) {
+        sourceGrouped = await apiService.getParameterValues(r.overrideSourceAppId);
       }
 
       const rows = [];
       for (const [envName, envData] of Object.entries(ownGrouped)) {
-        const ownMatch = envData.values.find(v => v.parameterId === parameterId);
+        const ownMatch = envData.values.find(v => v.parameterId === r.parameterId);
         if (!ownMatch) continue;
 
         let value = ownMatch.value ?? '';
         let isInherited = false;
 
-        // If own value is empty and we have a source fallback, use it
         if (!value && sourceGrouped) {
           const sourceEnvData = sourceGrouped[envName];
-          const sourceMatch = sourceEnvData?.values.find(v => v.parameterId === overrideSourceParamId);
-          if (sourceMatch?.value) {
-            value = sourceMatch.value;
-            isInherited = true;
-          }
+          const sourceMatch = sourceEnvData?.values.find(v => v.parameterId === r.overrideSourceParamId);
+          if (sourceMatch?.value) { value = sourceMatch.value; isInherited = true; }
         }
 
         rows.push({
           env: envName,
           environmentId: envData.environmentId,
-          valueId: ownMatch.id,   // always own param's valueId — saves always go to own
+          valueId: ownMatch.id,
           value,
           isInherited,
-          inheritedFrom: isInherited ? overrideFromAppName : null,
+          inheritedFrom: isInherited ? r.overrideFromAppName : null,
+          isSecret: envSecretById[envData.environmentId] ?? false,
         });
       }
 
@@ -248,44 +280,24 @@ export default function ParameterDetail() {
     };
 
     load().catch(console.error).finally(() => setLoading(false));
-  }, [parameterId, sourceAppId, isOwn, isOverride, overrideSourceAppId, overrideSourceParamId]);
+  }, [orgSlug, appSlug, paramKey, orgs, orgId, loadKey]);
 
   const handleSave = async (newValue) => {
-    if (!editingRow) return;
+    if (!editingRow || !resolved) return;
     setSaving(true);
     try {
-      if (!isOwn) {
-        // Inherited → create override in current app, then set this env's value
-        const { parameter, values } = await apiService.createParameterOverride(paramKey, appId);
+      if (!resolved.isOwn) {
+        // Inherited → create override, then set value; reload via loadKey
+        const { values } = await apiService.createParameterOverride(paramKey, resolved.appId);
         const targetValue = values.find(v => v.environmentId === editingRow.environmentId);
-        if (targetValue) {
-          await apiService.updateParameterValue(targetValue.id, { value: newValue });
-        }
+        if (targetValue) await apiService.updateParameterValue(targetValue.id, { value: newValue });
         setEditingRow(null);
-        // Navigate to override param, preserving source info for fallback loading
-        navigate(
-          `/dashboard/parameters/${parameter.id}` +
-          `?appId=${appId}` +
-          `&sourceAppId=${appId}` +
-          `&sourceAppName=${encodeURIComponent(currentAppName)}` +
-          `&currentAppName=${encodeURIComponent(currentAppName)}` +
-          `&key=${encodeURIComponent(paramKey)}` +
-          `&own=1` +
-          `&isOverride=1` +
-          `&overrideFromAppName=${encodeURIComponent(sourceAppName)}` +
-          `&overrideSourceAppId=${encodeURIComponent(sourceAppId)}` +
-          `&overrideSourceParamId=${encodeURIComponent(parameterId)}`,
-          { replace: true }
-        );
+        setLoadKey(k => k + 1);
       } else {
-        // Own or override: update value in place
         const updated = await apiService.updateParameterValue(editingRow.valueId, { value: newValue });
-        setEnvValues(prev => prev.map(r => {
-          if (r.valueId !== editingRow.valueId) return r;
-          const v = updated.value ?? newValue;
-          // If value cleared → check if fallback applies (will reload on next render cycle)
-          return { ...r, value: v, isInherited: false, inheritedFrom: null };
-        }));
+        setEnvValues(prev => prev.map(r =>
+          r.valueId !== editingRow.valueId ? r : { ...r, value: updated.value ?? newValue, isInherited: false, inheritedFrom: null }
+        ));
         setEditingRow(null);
       }
     } catch (e) { console.error(e); } finally { setSaving(false); }
@@ -295,6 +307,7 @@ export default function ParameterDetail() {
     return <div style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.termGreen }}>loading…</div>;
   }
 
+  const { isOwn, isOverride, sourceAppName, overrideFromAppName, currentAppName } = resolved ?? {};
   const editLabel = isOwn ? 'edit' : 'override';
   const modalMode = isOwn ? 'own' : 'inherited';
 
@@ -304,8 +317,8 @@ export default function ParameterDetail() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px' }}>
         <Btn T={T} variant="secondary" size="sm" onClick={() => navigate(-1)}>←</Btn>
         <div>
-          <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.termGreen, letterSpacing: '0.15em', marginBottom: '4px' }}>
-            // parameter
+          <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.termGreen, letterSpacing: '0.15em', marginBottom: '8px' }}>
+            // parameters · detail
           </div>
           <h1 style={{ fontFamily: FONTS.mono, fontWeight: 500, fontSize: '20px', color: T.textPrimary, letterSpacing: '0.02em' }}>
             {paramKey}
@@ -332,12 +345,8 @@ export default function ParameterDetail() {
       </div>
 
       {/* Contextual banner */}
-      {!isOwn && (
-        <InheritedBanner sourceAppName={sourceAppName} currentAppName={currentAppName} T={T} />
-      )}
-      {isOwn && isOverride && (
-        <OverrideBanner sourceAppName={overrideFromAppName} T={T} />
-      )}
+      {!isOwn && <InheritedBanner sourceAppName={sourceAppName} currentAppName={currentAppName} T={T} />}
+      {isOwn && isOverride && <OverrideBanner sourceAppName={overrideFromAppName} T={T} />}
 
       {/* Values per environment */}
       <div style={{ marginBottom: '32px' }}>
@@ -354,9 +363,17 @@ export default function ParameterDetail() {
             </p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div role="table" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '6px', overflow: 'hidden' }}>
+            <div role="row" style={{
+              display: 'grid', gridTemplateColumns: '160px 1fr 120px',
+              padding: '6px 14px', borderBottom: `1px solid ${T.border}`,
+              fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted,
+              letterSpacing: '0.1em', textTransform: 'uppercase',
+            }}>
+              <span>environment</span><span>value</span><span />
+            </div>
             {envValues.map(row => (
-              <EnvCard key={row.env} row={row} editLabel={editLabel} T={T} onEdit={setEditingRow} />
+              <EnvRow key={row.env} row={row} editLabel={editLabel} T={T} onEdit={setEditingRow} />
             ))}
           </div>
         )}

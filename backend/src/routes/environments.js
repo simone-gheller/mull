@@ -41,6 +41,31 @@ export default async function environmentRoutes(fastify, _options) {
     }
   });
 
+  // DELETE /environments/:envId - Delete environment (ADMIN+)
+  fastify.delete('/environments/:envId', {
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+  }, async (request, reply) => {
+    const { orgId, envId } = request.params;
+
+    try {
+      const env = await prisma.environment.findFirst({
+        where: { id: envId, orgId },
+        select: { id: true },
+      });
+
+      if (!env) {
+        return reply.code(404).send({ error: 'Not Found', message: 'Environment not found', statusCode: 404 });
+      }
+
+      await prisma.environment.delete({ where: { id: envId } });
+      return reply.code(204).send();
+
+    } catch (err) {
+      fastify.log.error(err, 'Failed to delete environment');
+      return reply.code(500).send({ error: 'Internal Server Error', message: 'Failed to delete environment', statusCode: 500 });
+    }
+  });
+
   // POST /environments - Create environment
   fastify.post('/environments', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess],

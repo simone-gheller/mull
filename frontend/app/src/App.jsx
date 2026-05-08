@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useTheme, FONTS } from '@mull/ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import Layout from './components/layout/Layout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -24,14 +25,14 @@ function Spinner() {
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
-  if (loading) return <Spinner />;
+  if (loading) return null;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return children;
 }
 
 function PublicRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
-  if (loading) return <Spinner />;
+  if (loading) return null;
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
   return children;
 }
@@ -48,7 +49,7 @@ function AppRoutes() {
         <Route index element={<Dashboard />} />
         <Route path="apps" element={<Projects />} />
         <Route path="parameters" element={<Parameters />} />
-        <Route path="parameters/:parameterId" element={<ParameterDetail />} />
+        <Route path=":orgSlug/:appSlug/parameters/:paramKey" element={<ParameterDetail />} />
         <Route path="environments" element={<Environments />} />
         <Route path="users" element={<div style={{ fontFamily: FONTS.mono }}>Users — coming soon</div>} />
       </Route>
@@ -70,7 +71,9 @@ export default function App() {
   return (
     <AuthProvider>
       <Router>
-        <AppRoutes />
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
       </Router>
     </AuthProvider>
   );

@@ -229,6 +229,16 @@ State: `{ user, orgs, orgId, isAuthenticated, loading, error }`.
 
 ## TODO
 
+### Verifica shortcut da tastiera (fix #30)
+Gli shortcut globali sono implementati in `frontend/app/src/components/layout/Layout.jsx` ma non verificati manualmente. Testare:
+- `⌘K` apre/chiude la palette e non si attiva quando si digita in un input
+- `?` apre il modal shortcut solo fuori da input di testo
+- `/` mette il focus su `[data-search]` in Parameters (non attivo su altre pagine)
+- `N` apre il modal corretto in Projects, Parameters (solo se app selezionata), Environments — e non si attiva durante la digitazione
+- `Esc` chiude palette e modal shortcut
+- Arrow keys + Space navigano l'albero AppTreeA
+- Nessun conflitto tra shortcut globali e input nelle pagine
+
 ### Backend unreachable detection
 Quando il backend API è giù, l'utente resta sulla dashboard con org name `'...'` e tutte le chiamate API falliscono silenziosamente. Implementare:
 1. **`frontend/app/src/lib/api.js`** — response interceptor axios: distingue errori di rete (`!error.response`) da errori HTTP normali (401/403/500). Espone `onBackendStatusChange(fn)` callback.

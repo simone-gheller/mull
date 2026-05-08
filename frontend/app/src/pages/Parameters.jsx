@@ -1,8 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+
+const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@mull/ui';
 import { Layers, ChevronsUpDown, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import apiService from '../services/api';
 import Modal from '../components/ui/Modal';
 import FormInput from '../components/ui/FormInput';
@@ -108,6 +111,8 @@ function EnvDropdown({ environments, selectedEnvId, onSelect, T }) {
 export default function Parameters() {
   const { T } = useTheme();
   const { orgs, orgId } = useAuth();
+  const { toast } = useToast();
+  const orgSlug = slugify(orgs.find(o => o.id === orgId)?.name ?? orgId ?? '');
   const [searchParams] = useSearchParams();
   const selectedProjectId = searchParams.get('project');
 
@@ -119,6 +124,8 @@ export default function Parameters() {
   const parametersRef = useRef([]);
   useEffect(() => { parametersRef.current = parameters; }, [parameters]);
   const loadVersionRef = useRef(0);
+  const isUserEnvSwitch = useRef(false);
+  const [envSwitching, setEnvSwitching] = useState(false);
 
   const [currentApp, setCurrentApp] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -128,7 +135,8 @@ export default function Parameters() {
   const [hoveredEyeId, setHoveredEyeId] = useState(null);
   const [newKey, setNewKey] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const [newSecret, setNewSecret] = useState(false);
+  const [newSecret, setNewSecret]   = useState(false);
+  const [newDefault, setNewDefault] = useState('');
   const [creating, setCreating] = useState(false);
 
   // Environment selector
@@ -192,8 +200,20 @@ export default function Parameters() {
 
   useEffect(() => {
     setRevealedIds(new Set());
-    loadParamValues(currentApp?.id, selectedEnvId);
+    const showSkeleton = isUserEnvSwitch.current;
+    isUserEnvSwitch.current = false;
+    if (showSkeleton) setEnvSwitching(true);
+    Promise.all([
+      loadParamValues(currentApp?.id, selectedEnvId),
+      showSkeleton ? new Promise(r => setTimeout(r, 400)) : Promise.resolve(),
+    ]).then(() => { if (showSkeleton) setEnvSwitching(false); });
   }, [currentApp?.id, selectedEnvId, loadParamValues]);
+
+  useEffect(() => {
+    const handler = () => { if (currentApp) setShowModal(true); };
+    window.addEventListener('mull:new', handler);
+    return () => window.removeEventListener('mull:new', handler);
+  }, [currentApp]);
 
   const selectApp = async (node) => {
     if (currentApp?.id === node.id) return;
@@ -219,11 +239,29 @@ export default function Parameters() {
       if (newDesc.trim()) payload.description = newDesc.trim();
       if (newSecret) payload.isSecret = true;
       const created = await apiService.createParameter(payload);
+
+      if (newDefault.trim()) {
+        const allValues = await apiService.getParameterValues(currentApp.id);
+        await Promise.all(
+          Object.values(allValues).flatMap(env =>
+            env.values
+              .filter(v => v.parameterId === created.id)
+              .map(v => apiService.updateParameterValue(v.id, { value: newDefault.trim() }))
+          )
+        );
+      }
+
       setParameters(prev => [...prev, { ...created, appName: currentApp.name, isOwn: true }]);
+      toast('parameter created', 'success', created.key);
       setShowModal(false);
-      setNewKey('');
-      setNewDesc('');
+      setNewKey(''); setNewDesc(''); setNewDefault('');
     } catch (e) { console.error(e); } finally { setCreating(false); }
+  };
+
+  const handleEnvSelect = (envId) => {
+    if (envId === selectedEnvId) return;
+    isUserEnvSwitch.current = true;
+    setSelectedEnvId(envId);
   };
 
   const toggleReveal = (paramId) => {
@@ -282,12 +320,14 @@ export default function Parameters() {
           {loading ? (
             <div style={{ padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {[...Array(3)].map((_, i) => (
-                <div key={i} style={{ height: '36px', background: T.overlay, borderRadius: '4px', animation: 'pulse 1.4s infinite' }} />
+                <div key={i} style={{ height: '36px', background: T.elevated, borderRadius: '4px', animation: 'pulse 1.4s infinite' }} />
               ))}
             </div>
           ) : tree.length === 0 ? (
             <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-              <p style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>no apps yet</p>
+              <p style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.textSecondary }}>
+                <span style={{ color: T.termGreen }}>❯</span> no apps yet<span className="term-cursor" style={{ color: T.textSecondary }} />
+              </p>
             </div>
           ) : (
             <AppTreeA nodes={tree} T={T} onSelect={selectApp} selectedId={currentApp?.id} />
@@ -298,29 +338,19 @@ export default function Parameters() {
         <div>
           {!loading && !currentApp ? (
             <div style={{ textAlign: 'center', padding: '80px 0' }}>
-              <div style={{ fontFamily: FONTS.mono, fontSize: '32px', color: T.textMuted, marginBottom: '12px' }}>◈</div>
-              <p style={{ fontFamily: FONTS.display, fontSize: '14px', color: T.textSecondary }}>
-                Select an app to view its parameters
+              <p style={{ fontFamily: FONTS.mono, fontSize: '13px', color: T.textSecondary }}>
+                <span style={{ color: T.termGreen }}>❯</span> select an app from the tree to view parameters<span className="term-cursor" style={{ color: T.textSecondary }} />
               </p>
             </div>
           ) : (
             <>
-              {/* Search + env selector */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <div style={{ flex: '0 0 520px' }}>
-                  <FormInput
-                    placeholder="search parameters…"
-                    prefix="/"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
-                </div>
-
+              {/* Env selector + search */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
                 {environments.length > 0 ? (
                   <EnvDropdown
                     environments={environments}
                     selectedEnvId={selectedEnvId}
-                    onSelect={setSelectedEnvId}
+                    onSelect={handleEnvSelect}
                     T={T}
                   />
                 ) : (
@@ -331,9 +361,20 @@ export default function Parameters() {
                     animation: 'pulse 1.4s infinite',
                   }} />
                 )}
+
+                <div style={{ flex: 1 }}>
+                  <FormInput
+                    data-search
+                    placeholder="search parameters…"
+                    prefix="/"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                  />
+                </div>
               </div>
 
-              {/* Table header */}
+              {/* Table header + rows — aria-live announces env changes to screen readers */}
+              <div aria-live="polite" aria-label="parameter values">
               <div style={{
                 display: 'grid', gridTemplateColumns: '1fr 160px 160px 120px',
                 padding: '6px 14px', borderBottom: `1px solid ${T.border}`,
@@ -346,17 +387,17 @@ export default function Parameters() {
                 <span></span>
               </div>
 
-              {loading || paramsLoading ? (
+              {loading || paramsLoading || envSwitching ? (
                 [...Array(6)].map((_, i) => (
                   <div key={i} style={{
                     display: 'grid', gridTemplateColumns: '1fr 160px 160px 120px',
                     alignItems: 'center', padding: '9px 14px', minHeight: '40px',  
                     borderBottom: `1px solid ${T.border}`, gap: '8px',
                   }}>
-                    <div style={{ height: '14px', width: `${45 + (i * 13) % 35}%`, background: T.overlay, borderRadius: '3px', animation: 'pulse 1.4s infinite' }} />
-                    <div style={{ height: '14px', width: '70%', background: T.overlay, borderRadius: '3px', animation: 'pulse 1.4s infinite' }} />
-                    <div style={{ height: '14px', width: '40%', background: T.overlay, borderRadius: '3px', animation: 'pulse 1.4s infinite' }} />
-                    <div style={{ height: '14px', width: '50%', background: T.overlay, borderRadius: '3px', animation: 'pulse 1.4s infinite' }} />
+                    <div style={{ height: '14px', width: `${45 + (i * 13) % 35}%`, background: T.elevated, borderRadius: '3px', animation: 'pulse 1.4s infinite' }} />
+                    <div style={{ height: '14px', width: '70%', background: T.elevated, borderRadius: '3px', animation: 'pulse 1.4s infinite' }} />
+                    <div style={{ height: '14px', width: '40%', background: T.elevated, borderRadius: '3px', animation: 'pulse 1.4s infinite' }} />
+                    <div style={{ height: '14px', width: '50%', background: T.elevated, borderRadius: '3px', animation: 'pulse 1.4s infinite' }} />
                   </div>
                 ))
               ) : filtered.length === 0 ? (
@@ -391,7 +432,7 @@ export default function Parameters() {
                     {/* Value */}
                     <span style={{ fontFamily: FONTS.mono, fontSize: '11px' }}>
                       {isEmpty ? (
-                        <span style={{ color: T.amber }}>(empty)</span>
+                        <span style={{ color: T.textMuted, fontStyle: 'italic' }}>(empty)</span>
                       ) : value === undefined ? (
                         <span style={{ color: T.textMuted }}>—</span>
                       ) : isRevealed ? (
@@ -495,19 +536,7 @@ export default function Parameters() {
                       })()}
 
                       <Link
-                        to={
-                          `/dashboard/parameters/${param.id}` +
-                          `?appId=${currentApp.id}` +
-                          `&sourceAppId=${param.appId}` +
-                          `&sourceAppName=${encodeURIComponent(param.appName)}` +
-                          `&currentAppName=${encodeURIComponent(currentApp.name)}` +
-                          `&key=${encodeURIComponent(param.key)}` +
-                          `&own=${param.isOwn ? '1' : '0'}` +
-                          `&isOverride=${param.isOverride ? '1' : '0'}` +
-                          `&overrideFromAppName=${encodeURIComponent(param.overriddenFromAppName ?? '')}` +
-                          `&overrideSourceAppId=${encodeURIComponent(param.overrideSourceAppId ?? '')}` +
-                          `&overrideSourceParamId=${encodeURIComponent(param.overrideSourceParamId ?? '')}`
-                        }
+                        to={`/dashboard/${orgSlug}/${slugify(currentApp.name)}/parameters/${encodeURIComponent(param.key)}`}
                         style={{ textDecoration: 'none' }}
                       >
                         <Btn T={T} variant="secondary" size="sm">view</Btn>
@@ -516,6 +545,7 @@ export default function Parameters() {
                   </div>
                 );
               })}
+              </div>
             </>
           )}
         </div>
@@ -523,7 +553,7 @@ export default function Parameters() {
 
       <Modal
         isOpen={showModal}
-        onClose={() => { setShowModal(false); setNewKey(''); setNewDesc(''); setNewSecret(false); }}
+        onClose={() => { setShowModal(false); setNewKey(''); setNewDesc(''); setNewSecret(false); setNewDefault(''); }}
         title={`new parameter · ${currentApp?.name ?? ''}`}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -541,6 +571,13 @@ export default function Parameters() {
             value={newDesc}
             onChange={e => setNewDesc(e.target.value)}
           />
+          <FormInput
+            label="Default value (optional)"
+            placeholder="applied to all environments"
+            value={newDefault}
+            onChange={e => setNewDefault(e.target.value)}
+            type={newSecret ? 'password' : 'text'}
+          />
 
           {/* Secret toggle */}
           <div style={{
@@ -552,10 +589,10 @@ export default function Parameters() {
           }}>
             <div>
               <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: newSecret ? T.amber : T.textMuted }}>
-                secret parameter
+                {newSecret ? 'mask value (secret)' : 'show value in list'}
               </div>
               <div style={{ fontFamily: FONTS.display, fontSize: '10px', color: T.textMuted, marginTop: '2px' }}>
-                {newSecret ? 'value always masked in list view' : 'value visible in list view'}
+                {newSecret ? 'shown as •••••• · visible to ADMIN+ only' : 'value readable by all members'}
               </div>
             </div>
             <button
@@ -576,10 +613,10 @@ export default function Parameters() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowModal(false); setNewKey(''); setNewDesc(''); setNewSecret(false); }}>
+            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowModal(false); setNewKey(''); setNewDesc(''); setNewSecret(false); setNewDefault(''); }}>
               cancel
             </Btn>
-            <Btn T={T} variant="primary" size="sm" onClick={handleCreate} disabled={!newKey.trim() || creating}>
+            <Btn T={T} variant="primary" size="sm" onClick={handleCreate} disabled={!newKey.trim() || creating} style={{ background: T.termGreenBg, color: T.termGreen, border: `1px solid ${T.termGreenBorder}` }}>
               {creating ? 'creating…' : 'create'}
             </Btn>
           </div>

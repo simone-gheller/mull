@@ -79,6 +79,10 @@ class ApiService {
     return response.data;
   }
 
+  async deleteEnvironment(envId) {
+    await apiClient.delete(`/orgs/${this.orgId}/environments/${envId}`);
+  }
+
   // Parameters
   async getParameters(appId) {
     const response = await apiClient.get(`/orgs/${this.orgId}/parameters?appId=${appId}`);

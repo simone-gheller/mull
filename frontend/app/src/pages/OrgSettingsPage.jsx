@@ -57,7 +57,7 @@ function Skeleton({ height = 40, T }) {
   return <div style={{ height, borderRadius: '6px', background: T.elevated, border: `1px solid ${T.border}`, marginBottom: '8px' }} />;
 }
 
-const ROLE_VARIANT = { OWNER: 'warning', ADMIN: 'info', USER: 'success', VIEWER: 'default' };
+const ROLE_VARIANT = { OWNER: 'warning', ADMIN: 'info', USER: 'default', VIEWER: 'default' };
 const TABS = ['members', 'tokens', 'billing', 'audit', 'settings'];
 
 // ── Members tab ──────────────────────────────────────────────

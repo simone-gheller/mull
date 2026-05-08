@@ -1,12 +1,43 @@
+import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useTheme, FONTS } from '@mull/ui';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { CommandPalette } from '../CommandPalette';
+import { ShortcutsModal } from '../ShortcutsModal';
 
 export default function Layout() {
   const { T } = useTheme();
   const { orgId } = useAuth();
+  const [cmdOpen,      setCmdOpen]      = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = (e) => {
+      const tag = document.activeElement?.tagName;
+      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable;
+
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCmdOpen(o => !o);
+        return;
+      }
+      if (isTyping) return;
+
+      if (e.key === '?') {
+        e.preventDefault();
+        setShortcutsOpen(o => !o);
+      } else if (e.key === '/') {
+        e.preventDefault();
+        document.querySelector('[data-search]')?.focus();
+      } else if (e.key === 'n' || e.key === 'N') {
+        window.dispatchEvent(new CustomEvent('mull:new'));
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: T.bg }}>
       <style>{`
@@ -26,6 +57,8 @@ export default function Layout() {
           <Outlet key={orgId} />
         </main>
       </div>
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} T={T} />
+      <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} T={T} />
     </div>
   );
 }

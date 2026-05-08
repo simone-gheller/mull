@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@mull/ui';
-import { Trash2, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import apiService from '../services/api';
 import Modal from '../components/ui/Modal';
 import FormInput from '../components/ui/FormInput';
+import TrashButton from '../components/ui/TrashButton';
+import DeleteConfirmModal from '../components/ui/DeleteConfirmModal';
 
 export default function Apps() {
   const { T } = useTheme();
@@ -23,11 +25,10 @@ export default function Apps() {
 
   // Delete modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
-  // Hover state for icon buttons
+  // Hover state for export icon button
   const [hoveredIcon, setHoveredIcon] = useState(null);
 
   // Modal form
@@ -47,6 +48,12 @@ export default function Apps() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const handler = () => { resetForm(); setShowModal(true); };
+    window.addEventListener('mull:new', handler);
+    return () => window.removeEventListener('mull:new', handler);
   }, []);
 
   const resetForm = () => {
@@ -103,7 +110,6 @@ export default function Apps() {
   };
 
   const handleDelete = async () => {
-    if (deleteConfirm !== selectedApp.name) return;
     setDeleting(true);
     setDeleteError(null);
     try {
@@ -114,7 +120,6 @@ export default function Apps() {
       setSelectedApp(null);
       setDetail(null);
       setShowDeleteModal(false);
-      setDeleteConfirm('');
     } catch (e) {
       setDeleteError(e.response?.data?.message || e.message || 'Failed to delete app');
     } finally {
@@ -162,12 +167,14 @@ export default function Apps() {
             </div>
           ) : tree.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '64px 0' }}>
-              <div style={{ fontFamily: FONTS.mono, fontSize: '32px', color: T.textMuted, marginBottom: '12px' }}>◈</div>
-              <p style={{ fontFamily: FONTS.display, fontSize: '15px', color: T.textSecondary, marginBottom: '16px' }}>
-                No apps yet. Create your first app to get started.
+              <p style={{ fontFamily: FONTS.mono, fontSize: '13px', color: T.textSecondary, marginBottom: '8px' }}>
+                <span style={{ color: T.termGreen }}>❯</span> no apps yet<span className="term-cursor" style={{ color: T.textSecondary }} />
+              </p>
+              <p style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted, marginBottom: '20px' }}>
+                create your first app to start organizing config inheritance
               </p>
               <Btn T={T} variant="primary" onClick={() => { resetForm(); setShowModal(true); }}>
-                create first app
+                + new app
               </Btn>
             </div>
           ) : (
@@ -235,38 +242,11 @@ export default function Apps() {
                 </div>
 
                 {/* Delete */}
-                <div style={{ position: 'relative' }}>
-                  {hoveredIcon === 'delete' && (
-                    <div style={{
-                      position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
-                      background: T.elevated, border: `1px solid ${T.border}`, borderRadius: '4px',
-                      padding: '3px 8px', fontFamily: FONTS.mono, fontSize: '10px', color: T.textSecondary,
-                      whiteSpace: 'nowrap', zIndex: 50, pointerEvents: 'none',
-                    }}>
-                      delete app
-                      <div style={{
-                        position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-                        width: 0, height: 0,
-                        borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
-                        borderTop: `5px solid ${T.border}`,
-                      }} />
-                    </div>
-                  )}
-                  <button
-                    onClick={() => { setDeleteConfirm(''); setDeleteError(null); setShowDeleteModal(true); }}
-                    onMouseEnter={() => setHoveredIcon('delete')}
-                    onMouseLeave={() => setHoveredIcon(null)}
-                    style={{
-                      background: hoveredIcon === 'delete' ? `${T.red}15` : 'transparent',
-                      border: `1px solid ${hoveredIcon === 'delete' ? `${T.red}40` : 'transparent'}`,
-                      borderRadius: '4px', cursor: 'pointer',
-                      padding: '4px', display: 'flex', alignItems: 'center',
-                      transition: 'all 0.12s',
-                    }}
-                  >
-                    <Trash2 size={13} color={hoveredIcon === 'delete' ? T.red : T.textMuted} strokeWidth={1.5} />
-                  </button>
-                </div>
+                <TrashButton
+                  T={T}
+                  label="delete app"
+                  onClick={() => { setDeleteError(null); setShowDeleteModal(true); }}
+                />
               </div>
             </div>
 
@@ -290,7 +270,7 @@ export default function Apps() {
               {detailLoading ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {[...Array(3)].map((_, i) => (
-                    <div key={i} style={{ height: '28px', background: T.overlay, borderRadius: '3px', animation: 'pulse 1.4s infinite' }} />
+                    <div key={i} style={{ height: '28px', background: T.elevated, borderRadius: '3px', animation: 'pulse 1.4s infinite' }} />
                   ))}
                 </div>
               ) : detail && (
@@ -420,55 +400,18 @@ export default function Apps() {
         </div>
       </Modal>
 
-      {/* Delete confirmation modal */}
-      <Modal
+      <DeleteConfirmModal
         isOpen={showDeleteModal}
-        onClose={() => { setShowDeleteModal(false); setDeleteConfirm(''); setDeleteError(null); }}
-        title="delete app"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div style={{
-            padding: '10px 12px',
-            background: `${T.red}10`, border: `1px solid ${T.red}30`,
-            borderLeft: `3px solid ${T.red}`, borderRadius: '4px',
-            fontFamily: FONTS.mono, fontSize: '11px', color: T.textSecondary, lineHeight: 1.6,
-          }}>
-            This will permanently delete <span style={{ color: T.textPrimary, fontWeight: 700 }}>{selectedApp?.name}</span> and all its parameters and values. This action cannot be undone.
-          </div>
-
-          <FormInput
-            label={`Type "${selectedApp?.name}" to confirm`}
-            placeholder={selectedApp?.name}
-            value={deleteConfirm}
-            onChange={e => setDeleteConfirm(e.target.value)}
-            autoFocus
-          />
-
-          {deleteError && (
-            <div style={{
-              padding: '8px 12px',
-              background: T.redBg, border: `1px solid ${T.redBorder}`,
-              borderLeft: `3px solid ${T.red}`, borderRadius: '4px',
-              fontFamily: FONTS.mono, fontSize: '11px', color: T.red,
-            }}>
-              {deleteError}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '4px' }}>
-            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowDeleteModal(false); setDeleteConfirm(''); setDeleteError(null); }}>
-              cancel
-            </Btn>
-            <Btn
-              T={T} variant="danger" size="sm"
-              onClick={handleDelete}
-              disabled={deleteConfirm !== selectedApp?.name || deleting}
-            >
-              {deleting ? 'deleting…' : 'delete app'}
-            </Btn>
-          </div>
-        </div>
-      </Modal>
+        onClose={() => { setShowDeleteModal(false); setDeleteError(null); }}
+        entityName={selectedApp?.name ?? ''}
+        warningText={
+          <>This will permanently delete <strong style={{ color: T.textPrimary }}>{selectedApp?.name}</strong> and all its parameters and values. This action cannot be undone.</>
+        }
+        onDelete={handleDelete}
+        deleting={deleting}
+        error={deleteError}
+        deleteLabel="delete app"
+      />
     </div>
   );
 }

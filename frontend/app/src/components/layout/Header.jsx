@@ -98,14 +98,14 @@ export default function Header() {
 
       {/* Right — theme toggle + user avatar + logout */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <button onClick={toggle} style={{
+        <button onClick={toggle} aria-label={mode === 'dark' ? 'switch to light mode' : 'switch to dark mode'} style={{
           background: 'none', border: `1px solid ${T.border}`, borderRadius: '4px',
           cursor: 'pointer', fontFamily: FONTS.mono, fontSize: '11px',
           color: T.textMuted, padding: '4px 10px',
         }}>
           {mode === 'dark' ? '☀' : '●'}
         </button>
-        <NavLink to="/settings/profile" style={{
+        <NavLink to="/settings/profile" aria-label="profile settings" style={{
           textDecoration: 'none', display: 'flex', alignItems: 'center',
           padding: '4px', borderRadius: '4px', border: `1px solid ${T.border}`,
           color: T.textMuted, transition: 'all 0.1s',

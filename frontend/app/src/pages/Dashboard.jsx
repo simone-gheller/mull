@@ -7,17 +7,22 @@ import apiService from '../services/api';
 export default function Dashboard() {
   const { T } = useTheme();
   const { user } = useAuth();
-  const [stats, setStats] = useState({ projects: 0, parameters: 0 });
+  const [stats, setStats] = useState({ projects: 0, parameters: 0, environments: 0 });
   const [recentProjects, setRecentProjects] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiService.getProjects()
-      .then(projects => {
+    Promise.all([
+      apiService.getProjects(),
+      apiService.getEnvironments(),
+      new Promise(r => setTimeout(r, 300)),
+    ])
+      .then(([projects, envs]) => {
         setRecentProjects(projects.slice(0, 5));
         setStats({
           projects: projects.length,
           parameters: projects.reduce((s, p) => s + (p._count?.parameters || 0), 0),
+          environments: Array.isArray(envs) ? envs.length : 0,
         });
       })
       .catch(console.error)
@@ -42,26 +47,22 @@ export default function Dashboard() {
       </div>
 
       {/* Stats */}
-      {loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '28px' }}>
-          {[...Array(4)].map((_, i) => (
-            <div key={i} style={{ height: '88px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '6px', animation: 'pulse 1.4s infinite' }} />
-          ))}
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '28px' }}>
-          <Stat T={T} label="Projects" value={stats.projects} />
-          <Stat T={T} label="Parameters" value={stats.parameters} />
-          <Stat T={T} label="Environments" value="—" />
-          <Stat T={T} label="API calls / day" value="—" />
-        </div>
-      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '28px' }}>
+        <Stat T={T} label="Projects"      value={stats.projects}     loading={loading} />
+        <Stat T={T} label="Parameters"    value={stats.parameters}   loading={loading} />
+        <Stat T={T} label="Environments"  value={stats.environments} loading={loading} empty={!loading && stats.environments === 0} sub={!loading && stats.environments === 0 ? 'nothing yet' : undefined} />
+        <Stat T={T} label="API calls / day" value={0}               loading={loading} empty sub="nothing yet" />
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         {/* Recent projects */}
         <Card T={T} title="recent projects">
           {loading ? (
-            <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>loading…</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {[...Array(3)].map((_, i) => (
+                <div key={i} style={{ height: '32px', background: T.elevated, borderRadius: '4px', animation: 'pulse 1.4s infinite' }} />
+              ))}
+            </div>
           ) : recentProjects.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
               <div style={{ fontFamily: FONTS.mono, fontSize: '24px', color: T.textMuted, marginBottom: '10px' }}>◈</div>

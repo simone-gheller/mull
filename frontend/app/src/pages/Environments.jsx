@@ -3,6 +3,8 @@ import { useTheme, Btn, FONTS } from '@mull/ui';
 import apiService from '../services/api';
 import Modal from '../components/ui/Modal';
 import FormInput from '../components/ui/FormInput';
+import TrashButton from '../components/ui/TrashButton';
+import DeleteConfirmModal from '../components/ui/DeleteConfirmModal';
 
 export default function Environments() {
   const { T } = useTheme();
@@ -12,7 +14,10 @@ export default function Environments() {
   const [newName, setNewName] = useState('');
   const [newSecret, setNewSecret] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState(null);
+  const [createError, setCreateError] = useState(null);
+  const [confirmEnv, setConfirmEnv] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   useEffect(() => {
     apiService.getEnvironments()
@@ -21,9 +26,28 @@ export default function Environments() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    const handler = () => setShowModal(true);
+    window.addEventListener('mull:new', handler);
+    return () => window.removeEventListener('mull:new', handler);
+  }, []);
+
+  const handleDelete = async () => {
+    if (!confirmEnv) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await apiService.deleteEnvironment(confirmEnv.id);
+      setEnvironments(envs => envs.filter(e => e.id !== confirmEnv.id));
+      setConfirmEnv(null);
+    } catch (e) {
+      setDeleteError(e.response?.data?.message || 'Failed to delete environment');
+    } finally { setDeleting(false); }
+  };
+
   const handleCreate = async () => {
     if (!newName.trim()) return;
-    setCreating(true); setError(null);
+    setCreating(true); setCreateError(null);
     try {
       const payload = { name: newName.trim() };
       if (newSecret) payload.isSecret = true;
@@ -31,7 +55,7 @@ export default function Environments() {
       setEnvironments([...environments, created]);
       setShowModal(false); setNewName(''); setNewSecret(false);
     } catch (e) {
-      setError(e.response?.data?.message || 'Failed to create environment');
+      setCreateError(e.response?.data?.message || 'Failed to create environment');
     } finally { setCreating(false); }
   };
 
@@ -55,21 +79,26 @@ export default function Environments() {
         </div>
       ) : environments.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '64px 0' }}>
-          <div style={{ fontFamily: FONTS.mono, fontSize: '32px', color: T.textMuted, marginBottom: '12px' }}>▷</div>
-          <p style={{ fontFamily: FONTS.display, fontSize: '14px', color: T.textSecondary, marginBottom: '16px' }}>
-            No environments yet. Create one to assign values to parameters.
+          <p style={{ fontFamily: FONTS.mono, fontSize: '13px', color: T.textSecondary, marginBottom: '8px' }}>
+            <span style={{ color: T.termGreen }}>❯</span> no environments yet<span className="term-cursor" style={{ color: T.textSecondary }} />
           </p>
-          <Btn T={T} variant="primary" onClick={() => setShowModal(true)}>create first environment</Btn>
+          <p style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted, marginBottom: '20px' }}>
+            create one to assign values to your parameters
+          </p>
+          <Btn T={T} variant="primary" onClick={() => setShowModal(true)}>+ new environment</Btn>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
           {environments.map(env => (
-            <div key={env.id} style={{
-              background: env.isSecret ? `${T.amber}08` : T.surface,
-              border: `1px solid ${env.isSecret ? `${T.amber}40` : T.border}`,
-              borderRadius: '6px', padding: '16px 18px',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
+            <div
+              key={env.id}
+              style={{
+                background: env.isSecret ? `${T.amber}08` : T.surface,
+                border: `1px solid ${env.isSecret ? `${T.amber}40` : T.border}`,
+                borderRadius: '6px', padding: '16px 18px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}
+            >
               <div>
                 <div style={{ fontFamily: FONTS.mono, fontSize: '13px', color: T.textPrimary, marginBottom: env.isSecret ? '6px' : 0 }}>
                   {env.name}
@@ -84,19 +113,31 @@ export default function Environments() {
                   </span>
                 )}
               </div>
-              <button style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted,
-                padding: '4px 8px',
-              }}>
-                ×
-              </button>
+
+              <TrashButton
+                T={T}
+                label={`delete ${env.name}`}
+                onClick={() => { setConfirmEnv(env); setDeleteError(null); }}
+              />
             </div>
           ))}
         </div>
       )}
 
-      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setNewName(''); setNewSecret(false); setError(null); }} title="new environment" size="sm">
+      <DeleteConfirmModal
+        isOpen={!!confirmEnv}
+        onClose={() => { setConfirmEnv(null); setDeleteError(null); }}
+        entityName={confirmEnv?.name ?? ''}
+        warningText={
+          <>This will permanently delete <strong style={{ color: T.textPrimary }}>{confirmEnv?.name}</strong> and all its parameter values. This action cannot be undone.</>
+        }
+        onDelete={handleDelete}
+        deleting={deleting}
+        error={deleteError}
+        deleteLabel="delete environment"
+      />
+
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setNewName(''); setNewSecret(false); setCreateError(null); }} title="new environment" size="sm">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <FormInput
             label="Environment name"
@@ -107,7 +148,6 @@ export default function Environments() {
             autoFocus
           />
 
-          {/* Secret toggle */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '8px 10px',
@@ -140,9 +180,9 @@ export default function Environments() {
             </button>
           </div>
 
-          {error && <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.red }}>{error}</div>}
+          {createError && <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.red }}>{createError}</div>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowModal(false); setNewName(''); setNewSecret(false); setError(null); }}>cancel</Btn>
+            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowModal(false); setNewName(''); setNewSecret(false); setCreateError(null); }}>cancel</Btn>
             <Btn T={T} variant="primary" size="sm" onClick={handleCreate} disabled={!newName.trim() || creating}>
               {creating ? 'creating…' : 'create'}
             </Btn>
