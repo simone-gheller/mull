@@ -44,7 +44,7 @@ export default function App() {
         </button>
       </div>
 
-      <Page />
+      <Page onNavigate={setPage} />
     </div>
   );
 }

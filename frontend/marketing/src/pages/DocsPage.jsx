@@ -9,13 +9,65 @@ const SECTIONS = [
   { icon: "⊙", title: "Security model", desc: "Deep dive into the cryptographic model, key rotation, and audit logging." },
 ];
 
-export function DocsPage() {
+export function DocsPage({ onNavigate }) {
   const { T } = useTheme();
 
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", color: T.textPrimary, padding: "80px 32px" }}>
+    <div style={{ background: T.bg, minHeight: "100vh", color: T.textPrimary }}>
       <style>{`* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
-      <div style={{ maxWidth: "960px", margin: "0 auto" }}>
+
+      {/* Nav */}
+      <nav style={{
+        position: "sticky", top: 0, zIndex: 100,
+        background: T.surface, borderBottom: `1px solid ${T.border}`,
+        padding: "0 32px", height: "52px",
+        display: "flex", alignItems: "center", gap: "24px",
+        backdropFilter: "blur(8px)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "9px", flex: 1 }}>
+          <a
+            href="#"
+            onClick={e => { e.preventDefault(); onNavigate?.('home'); }}
+            style={{ display: "flex", alignItems: "center", gap: "9px", textDecoration: "none" }}
+          >
+            <div style={{
+              width: "26px", height: "26px", borderRadius: "5px",
+              background: T.elevated, border: `1px solid ${T.border}`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "13px", color: T.textPrimary,
+            }}>▣</div>
+            <span style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: "16px", color: T.textPrimary, letterSpacing: "-0.01em" }}>
+              mull
+            </span>
+          </a>
+        </div>
+        <div style={{ display: "flex", gap: "4px" }}>
+          {[
+            { label: "docs",    page: "docs" },
+            { label: "pricing", page: "pricing" },
+          ].map(({ label, page }) => (
+            <a
+              key={label}
+              href="#"
+              onClick={e => { e.preventDefault(); onNavigate?.(page); }}
+              style={{
+                fontFamily: FONTS.mono, fontSize: "11px",
+                color: page === "docs" ? T.textPrimary : T.textMuted,
+                padding: "6px 12px", borderRadius: "4px", textDecoration: "none",
+                transition: "color 0.1s", cursor: "pointer",
+              }}
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <Btn T={T} variant="secondary" size="sm">sign in</Btn>
+          <Btn T={T} variant="primary" size="sm">get started →</Btn>
+        </div>
+      </nav>
+
+      <div style={{ maxWidth: "960px", margin: "0 auto", padding: "80px 32px" }}>
 
         <div style={{ fontFamily: FONTS.mono, fontSize: "10px", color: T.termGreen, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "16px" }}>
           // documentation
