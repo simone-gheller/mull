@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@mull/ui';
-import { Layers, ChevronsUpDown, Eye, EyeOff } from 'lucide-react';
+import { Layers, ChevronsUpDown, Eye, EyeOff, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import apiService from '../services/api';
@@ -117,6 +117,7 @@ export default function Parameters() {
   const selectedProjectId = searchParams.get('project');
 
   const orgRole = orgs.find(o => o.id === orgId)?.role ?? 'USER';
+  const isAdmin = ['ADMIN', 'OWNER'].includes(orgRole);
 
   const [apps, setApps] = useState([]);
   const [tree, setTree] = useState([]);
@@ -133,6 +134,7 @@ export default function Parameters() {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [hoveredEyeId, setHoveredEyeId] = useState(null);
+  const [hoveredLockId, setHoveredLockId] = useState(null);
   const [newKey, setNewKey] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newSecret, setNewSecret]   = useState(false);
@@ -416,7 +418,8 @@ export default function Parameters() {
                 const hasValue = value !== undefined && value !== '';
                 const isEmpty = value === '';
                 const isRevealed = revealedIds.has(param.id);
-                const canReveal = !valuesBlocked && hasValue;
+                const isEffectivelySecret = param.isSecret || envIsSecret;
+                const canReveal = !envIsSecret && !(param.isSecret && !isAdmin) && hasValue;
 
                 return (
                   <div key={param.id} style={{
@@ -479,14 +482,21 @@ export default function Parameters() {
                     {/* Actions: eye + view */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       {(() => {
+                        const isInteractive = canReveal || isRevealed;
+                        // Option A: no tooltip on the eye when secret — the lock already explains it
                         const tooltipText =
-                          envIsSecret          ? 'This is a secret parameter' :
+                          isEffectivelySecret  ? null :
                           !param.isOwn         ? 'inherited' :
                           !hasValue && !isEmpty ? 'no value' :
                           isRevealed           ? 'hide value' : 'reveal value';
+                        const eyeAriaLabel =
+                          isRevealed           ? 'Hide value' :
+                          canReveal            ? 'Reveal value' :
+                          isEffectivelySecret  ? 'Value hidden — secret parameter' :
+                                                 'No value set';
                         return (
                           <div style={{ position: 'relative', display: 'inline-flex' }}>
-                            {hoveredEyeId === param.id && (
+                            {hoveredEyeId === param.id && tooltipText && (
                               <div style={{
                                 position: 'absolute',
                                 bottom: 'calc(100% + 7px)',
@@ -510,20 +520,22 @@ export default function Parameters() {
                               </div>
                             )}
                             <button
-                              onClick={() => (canReveal || isRevealed) && toggleReveal(param.id)}
+                              aria-label={eyeAriaLabel}
+                              aria-disabled={!isInteractive ? 'true' : undefined}
+                              onClick={() => isInteractive && toggleReveal(param.id)}
                               onMouseEnter={() => setHoveredEyeId(param.id)}
                               onMouseLeave={() => setHoveredEyeId(null)}
                               style={{
                                 background: hoveredEyeId === param.id ? T.overlay : 'transparent',
                                 border: `1px solid ${hoveredEyeId === param.id ? T.border : 'transparent'}`,
                                 borderRadius: '4px', padding: '4px',
-                                cursor: (canReveal || isRevealed) ? 'pointer' : 'default',
+                                cursor: isInteractive ? 'pointer' : 'default',
                                 display: 'flex', alignItems: 'center',
-                                opacity: (valuesBlocked || isRevealed || canReveal) ? 1 : 0.25,
+                                opacity: isInteractive ? 1 : 0.35,
                                 transition: 'background 0.12s, border-color 0.12s',
                               }}
                             >
-                              {valuesBlocked ? (
+                              {isEffectivelySecret && !isRevealed ? (
                                 <EyeOff size={14} color={T.textMuted} strokeWidth={1.5} />
                               ) : isRevealed ? (
                                 <EyeOff size={14} color={T.amber} strokeWidth={1.5} />
@@ -534,6 +546,45 @@ export default function Parameters() {
                           </div>
                         );
                       })()}
+
+                      <div
+                        style={{ position: 'relative', display: 'inline-flex' }}
+                        onMouseEnter={() => isEffectivelySecret && setHoveredLockId(param.id)}
+                        onMouseLeave={() => setHoveredLockId(null)}
+                        aria-label={isEffectivelySecret ? 'Secret parameter' : undefined}
+                        aria-hidden={!isEffectivelySecret}
+                        role={isEffectivelySecret ? 'img' : undefined}
+                      >
+                        {hoveredLockId === param.id && (
+                          <div style={{
+                            position: 'absolute',
+                            bottom: 'calc(100% + 7px)',
+                            left: '50%', transform: 'translateX(-50%)',
+                            background: T.elevated,
+                            border: `1px solid ${T.border}`,
+                            borderRadius: '4px',
+                            padding: '3px 8px',
+                            fontFamily: FONTS.mono, fontSize: '10px', color: T.textSecondary,
+                            whiteSpace: 'nowrap', zIndex: 50, pointerEvents: 'none',
+                          }}>
+                            Secret
+                            <div style={{
+                              position: 'absolute',
+                              top: '100%', left: '50%', transform: 'translateX(-50%)',
+                              width: 0, height: 0,
+                              borderLeft: '5px solid transparent',
+                              borderRight: '5px solid transparent',
+                              borderTop: `5px solid ${T.border}`,
+                            }} />
+                          </div>
+                        )}
+                        <Lock
+                          size={13}
+                          strokeWidth={1.5}
+                          color={isEffectivelySecret ? T.amber : T.textMuted}
+                          style={{ opacity: isEffectivelySecret ? 1 : 0.35 }}
+                        />
+                      </div>
 
                       <Link
                         to={`/dashboard/${orgSlug}/${slugify(currentApp.name)}/parameters/${encodeURIComponent(param.key)}`}

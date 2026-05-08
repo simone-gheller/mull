@@ -107,7 +107,6 @@ export default function Dashboard() {
               { label: '+ new project',     href: '/dashboard/apps' },
               { label: '+ new parameter',   href: '/dashboard/parameters' },
               { label: '+ new environment', href: '/dashboard/environments' },
-              { label: '≡ manage users',    href: '/dashboard/users' },
             ].map(({ label, href }) => (
               <Link key={href} to={href} style={{ textDecoration: 'none' }}>
                 <Btn T={T} variant="secondary" size="sm" style={{ width: '100%', justifyContent: 'flex-start' }}>

@@ -57,13 +57,15 @@ export default async function parameterValueRoutes(fastify) {
           parameter: {
             select: {
               id: true,
-              key: true
+              key: true,
+              isSecret: true,
             }
           },
           environment: {
             select: {
               id: true,
-              name: true
+              name: true,
+              isSecret: true,
             }
           }
         },
@@ -81,7 +83,8 @@ export default async function parameterValueRoutes(fastify) {
         ]
       });
 
-      // Group by environment
+      // Group by environment, redacting values the caller is not allowed to read
+      const isAdmin = ['ADMIN', 'OWNER'].includes(request.orgRole);
       const grouped = {};
       for (const pv of parameterValues) {
         const envName = pv.environment.name;
@@ -91,11 +94,12 @@ export default async function parameterValueRoutes(fastify) {
             values: []
           };
         }
+        const isSecretValue = pv.environment.isSecret || pv.parameter.isSecret;
         grouped[envName].values.push({
           id: pv.id,
           parameterId: pv.parameterId,
           parameterKey: pv.parameter.key,
-          value: pv.value
+          value: isSecretValue && !isAdmin ? null : pv.value,
         });
       }
 

@@ -53,7 +53,6 @@ function AppRoutes() {
         <Route path="parameters" element={<Parameters />} />
         <Route path=":orgSlug/:appSlug/parameters/:paramKey" element={<ParameterDetail />} />
         <Route path="environments" element={<Environments />} />
-        <Route path="users" element={<ComingSoon section="dashboard" feature="users" icon="≡" title="Team Members" description="Invite and manage your organization's members." />} />
       </Route>
 
       <Route path="/settings" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
