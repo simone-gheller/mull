@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Lock } from 'lucide-react';
 import { useTheme, Btn, FONTS } from '@mull/ui';
 import apiService from '../services/api';
 import Modal from '../components/ui/Modal';
@@ -104,12 +105,18 @@ export default function Environments() {
                   {env.name}
                 </div>
                 {env.isSecret && (
-                  <span style={{
-                    fontFamily: FONTS.mono, fontSize: '9px', color: T.amber,
-                    background: `${T.amber}18`, border: `1px solid ${T.amber}40`,
-                    padding: '1px 6px', borderRadius: '2px', letterSpacing: '0.05em',
-                  }}>
-                    ◈ SECRET
+                  <span
+                    title="All parameters in this environment are secret — only Admin and above can view or edit values"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                      fontFamily: FONTS.mono, fontSize: '9px', color: T.amber,
+                      background: `${T.amber}18`, border: `1px solid ${T.amber}40`,
+                      padding: '1px 6px', borderRadius: '2px', letterSpacing: '0.05em',
+                      cursor: 'default',
+                    }}
+                  >
+                    <Lock size={9} strokeWidth={2} color={T.amber} />
+                    SECRET
                   </span>
                 )}
               </div>

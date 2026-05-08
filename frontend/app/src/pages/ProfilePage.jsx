@@ -159,16 +159,18 @@ export default function ProfilePage() {
       {/* Security */}
       <Section T={T} title="Security" description="Password and two-factor authentication">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <SecurityRow T={T} label="Password" value="Managed via Supabase Auth" action="change" />
+          <SecurityRow T={T} label="Password" value="Never changed" action="change" />
           <SecurityRow T={T} label="Two-factor authentication" value="Not configured" action="enable" />
-          <SecurityRow T={T} label="Active sessions" value="Managed via Supabase Auth" action="view all" />
+          <SecurityRow T={T} label="Active sessions" value="Current and recent logins" action="view all" />
         </div>
       </Section>
 
       {/* Personal tokens */}
       <Section T={T} title="Personal API Tokens" description="Tokens scoped to your user — not shared with the org">
-        <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>
-          // personal tokens — coming soon
+        <div style={{ textAlign: 'center', padding: '16px 0' }}>
+          <div style={{ fontFamily: FONTS.mono, fontSize: '22px', color: T.textMuted, marginBottom: '10px' }}>▷</div>
+          <div style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: '13px', color: T.textSecondary, marginBottom: '4px' }}>Personal tokens coming soon</div>
+          <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>Tokens scoped to your user for CI/CD and API access.</div>
         </div>
       </Section>
 

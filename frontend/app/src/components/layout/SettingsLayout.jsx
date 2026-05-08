@@ -1,14 +1,8 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { useTheme, NavItem, FONTS, Badge } from '@mull/ui';
+import { useTheme, FONTS, Badge } from '@mull/ui';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../settings/Avatar';
 import Header from './Header';
-
-const ACCOUNT_NAV = [
-  { icon: '◈', label: 'profile',         href: '/settings/profile' },
-  { icon: '◇', label: 'security',        href: '/settings/security' },
-  { icon: '▷', label: 'personal tokens', href: '/settings/tokens' },
-];
 
 function SectionLabel({ children, T }) {
   return (
@@ -54,15 +48,6 @@ function SettingsSidebar() {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '4px 8px', overflowY: 'auto' }}>
-        <SectionLabel T={T}>account</SectionLabel>
-        {ACCOUNT_NAV.map(item => (
-          <NavLink key={item.href} to={item.href} style={{ textDecoration: 'none' }}>
-            {({ isActive }) => (
-              <NavItem T={T} icon={item.icon} label={item.label} active={isActive} />
-            )}
-          </NavLink>
-        ))}
-
         <SectionLabel T={T}>organization</SectionLabel>
         <NavLink to={`/settings/org`} style={{ textDecoration: 'none' }}>
           {({ isActive }) => (

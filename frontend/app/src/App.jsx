@@ -12,7 +12,9 @@ import ParameterDetail from './pages/ParameterDetail';
 import Environments from './pages/Environments';
 import OAuthCallback from './pages/OAuthCallback';
 import ProfilePage from './pages/ProfilePage';
+import SecurityPage from './pages/SecurityPage';
 import OrgSettingsPage from './pages/OrgSettingsPage';
+import ComingSoon from './components/ui/ComingSoon';
 
 function Spinner() {
   const { T } = useTheme();
@@ -51,14 +53,14 @@ function AppRoutes() {
         <Route path="parameters" element={<Parameters />} />
         <Route path=":orgSlug/:appSlug/parameters/:paramKey" element={<ParameterDetail />} />
         <Route path="environments" element={<Environments />} />
-        <Route path="users" element={<div style={{ fontFamily: FONTS.mono }}>Users — coming soon</div>} />
+        <Route path="users" element={<ComingSoon section="dashboard" feature="users" icon="≡" title="Team Members" description="Invite and manage your organization's members." />} />
       </Route>
 
       <Route path="/settings" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/settings/profile" replace />} />
         <Route path="profile" element={<ProfilePage />} />
-        <Route path="security" element={<div style={{ fontFamily: FONTS.mono, fontSize: '13px' }}>Security — coming soon</div>} />
-        <Route path="tokens" element={<div style={{ fontFamily: FONTS.mono, fontSize: '13px' }}>Personal tokens — coming soon</div>} />
+        <Route path="security" element={<SecurityPage />} />
+        <Route path="tokens" element={<ComingSoon section="settings" feature="personal tokens" icon="▷" title="Personal Tokens" description="Create tokens scoped to your user account for API access." />} />
         <Route path="org" element={<OrgSettingsPage />} />
       </Route>
 

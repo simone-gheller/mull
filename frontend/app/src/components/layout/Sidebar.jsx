@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useTheme, NavItem, FONTS } from '@mull/ui';
 
 const MAIN_NAV = [
@@ -7,25 +6,11 @@ const MAIN_NAV = [
   { icon: '◈', label: 'apps',          href: '/dashboard/apps' },
   { icon: '◇', label: 'parameters',   href: '/dashboard/parameters' },
   { icon: '▷', label: 'environments', href: '/dashboard/environments' },
-  { icon: '≡', label: 'users',        href: '/dashboard/users' },
 ];
 
-const ACCOUNT_NAV = [
-  { icon: '◈', label: 'profile',         href: '/settings/profile' },
-  { icon: '◇', label: 'security',        href: '/settings/security' },
-  { icon: '▷', label: 'personal tokens', href: '/settings/tokens' },
-];
 
 export default function Sidebar() {
   const { T } = useTheme();
-  const location = useLocation();
-
-  const isSettings = location.pathname.startsWith('/settings');
-  const [accountOpen, setAccountOpen] = useState(isSettings);
-
-  useEffect(() => {
-    if (isSettings) setAccountOpen(true);
-  }, [isSettings]);
 
   return (
     <aside style={{
@@ -69,39 +54,6 @@ export default function Sidebar() {
 
         {/* Divider */}
         <div style={{ height: '1px', background: T.border, margin: '8px 2px' }} />
-
-        {/* Account — expandable */}
-        <button
-          onClick={() => setAccountOpen(o => !o)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            width: '100%', padding: '7px 10px', borderRadius: '4px',
-            border: 'none', background: 'transparent',
-            cursor: 'pointer', transition: 'background 0.1s',
-            ...(accountOpen || isSettings ? { background: T.elevated } : {}),
-          }}
-        >
-          <span style={{ fontFamily: FONTS.mono, fontSize: '13px', color: isSettings ? T.textPrimary : T.textMuted, opacity: 0.8 }}>⊙</span>
-          <span style={{ fontFamily: FONTS.mono, fontSize: '12px', color: isSettings ? T.textPrimary : T.textMuted, flex: 1, textAlign: 'left' }}>
-            account
-          </span>
-          <span style={{ fontFamily: FONTS.mono, fontSize: '9px', color: T.textMuted }}>
-            {accountOpen ? '▾' : '▸'}
-          </span>
-        </button>
-
-        {/* Account sub-items */}
-        {accountOpen && (
-          <div style={{ paddingLeft: '14px', marginTop: '2px' }}>
-            {ACCOUNT_NAV.map(item => (
-              <NavLink key={item.href} to={item.href} style={{ textDecoration: 'none' }}>
-                {({ isActive }) => (
-                  <NavItem T={T} icon={item.icon} label={item.label} active={isActive} />
-                )}
-              </NavLink>
-            ))}
-          </div>
-        )}
 
         {/* Organization */}
         <NavLink to="/settings/org" style={{ textDecoration: 'none' }}>

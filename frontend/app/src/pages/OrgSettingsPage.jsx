@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useTheme, FONTS, Btn, Badge, Input } from '@mull/ui';
 import { useOrg } from '../hooks/useOrg';
 import { useMembers } from '../hooks/useMembers';
@@ -59,6 +60,71 @@ function Skeleton({ height = 40, T }) {
 
 const ROLE_VARIANT = { OWNER: 'warning', ADMIN: 'info', USER: 'default', VIEWER: 'default' };
 const TABS = ['members', 'tokens', 'billing', 'audit', 'settings'];
+
+// ── Role select ──────────────────────────────────────────────
+
+function RoleSelect({ value, onChange, T }) {
+  const [open, setOpen] = useState(false);
+  const [hov, setHov] = useState(null);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  const options = [
+    { value: 'USER', label: 'member' },
+    { value: 'ADMIN', label: 'admin' },
+  ];
+  const selected = options.find(o => o.value === value) ?? options[0];
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px',
+          background: T.surface, border: `1px solid ${open ? T.borderHover : T.border}`,
+          borderRadius: '4px', padding: '8px 12px',
+          fontFamily: FONTS.mono, fontSize: '12px', color: T.textSecondary,
+          cursor: 'pointer', transition: 'border-color 0.1s',
+        }}
+      >
+        <span style={{ flex: 1, textAlign: 'left' }}>{selected.label}</span>
+        <ChevronDown size={12} color={T.textMuted} strokeWidth={1.5} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+          background: T.surface, border: `1px solid ${T.border}`, borderRadius: '4px',
+          zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.2)', overflow: 'hidden',
+        }}>
+          {options.map(opt => (
+            <div
+              key={opt.value}
+              onMouseEnter={() => setHov(opt.value)}
+              onMouseLeave={() => setHov(null)}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              style={{
+                padding: '8px 12px', cursor: 'pointer',
+                fontFamily: FONTS.mono, fontSize: '12px',
+                color: opt.value === value ? T.textPrimary : T.textSecondary,
+                background: hov === opt.value ? T.elevated : (opt.value === value ? T.overlay : 'transparent'),
+                transition: 'background 0.1s',
+              }}
+            >
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Members tab ──────────────────────────────────────────────
 
@@ -131,19 +197,8 @@ function InviteBar({ T }) {
         />
       </div>
       <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-        <select
-          value={role}
-          onChange={e => setRole(e.target.value)}
-          style={{
-            background: T.surface, border: `1px solid ${T.border}`, borderRadius: '4px',
-            padding: '8px 12px', fontFamily: FONTS.mono, fontSize: '12px',
-            color: T.textSecondary, outline: 'none', cursor: 'pointer',
-          }}
-        >
-          <option value="USER">member</option>
-          <option value="ADMIN">admin</option>
-        </select>
-        <Btn T={T} variant="primary" size="md" disabled>send invite</Btn>
+        <RoleSelect value={role} onChange={setRole} T={T} />
+        <Btn T={T} variant="primary" size="md" disabled title="Invite system coming soon">send invite</Btn>
       </div>
     </div>
   );
@@ -293,8 +348,10 @@ function BillingTab({ memberCount, T }) {
 function AuditTab({ T }) {
   return (
     <Section T={T} title="Audit Log" description="Last 30 days of activity">
-      <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>
-        // audit log — coming soon
+      <div style={{ textAlign: 'center', padding: '24px 0' }}>
+        <div style={{ fontFamily: FONTS.mono, fontSize: '22px', color: T.textMuted, marginBottom: '10px' }}>◇</div>
+        <div style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: '13px', color: T.textSecondary, marginBottom: '4px' }}>Audit log coming soon</div>
+        <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>Activity tracking will show who changed what and when.</div>
       </div>
     </Section>
   );
