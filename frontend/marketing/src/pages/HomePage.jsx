@@ -2,6 +2,55 @@ import { useState, useEffect } from 'react';
 import { useTheme, Btn, Badge, Card, Stat, FONTS } from '@mull/ui';
 import TerminalHero from '../components/TerminalHero';
 
+function useTypewriter(phrases, { typeSpeed = 36, eraseSpeed = 22, pause = 4000 } = {}) {
+  const reducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const [idx, setIdx] = useState(0);
+  const [typed, setTyped] = useState(reducedMotion ? phrases[0].length : 0);
+  const [erasing, setErasing] = useState(false);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    const phrase = phrases[idx];
+    if (!erasing) {
+      if (typed < phrase.length) {
+        const t = setTimeout(() => setTyped(n => n + 1), typeSpeed);
+        return () => clearTimeout(t);
+      }
+      const t = setTimeout(() => setErasing(true), pause);
+      return () => clearTimeout(t);
+    } else {
+      if (typed > 0) {
+        const t = setTimeout(() => setTyped(n => n - 1), eraseSpeed);
+        return () => clearTimeout(t);
+      }
+      setErasing(false);
+      setIdx(i => (i + 1) % phrases.length);
+      setTyped(0);
+    }
+  }, [typed, erasing, idx, reducedMotion]);
+
+  return phrases[idx].slice(0, typed);
+}
+
+const HERO_PHRASES = [
+  "for teams that ship.",
+  "without the clipboard.",
+  "for pipelines that scale.",
+  "before it leaks.",
+];
+
+const FEAT_PHRASES = [
+  "trusted by everyone.",
+  "zero plaintext, by design.",
+];
+
+const PRICING_PHRASES = [
+  "start free, scale when you grow.",
+  "no surprises, ever.",
+];
+
+const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+
 const TIERS = [
   {
     name: "Hobby",
@@ -38,13 +87,6 @@ const TIERS = [
   },
 ];
 
-const PHRASES = [
-  "for teams that ship.",
-  "without the clipboard.",
-  "for pipelines that scale.",
-  "before it leaks.",
-];
-
 const FEATURES = [
   {
     glyph: "◈",
@@ -53,8 +95,8 @@ const FEATURES = [
   },
   {
     glyph: "▷",
-    title: "CLI-first",
-    desc: "Push, pull, and rotate secrets from your terminal. The dashboard is for your team; the CLI is for your pipeline.",
+    title: "Config inheritance",
+    desc: "Child apps inherit secrets from their parent automatically. Override only what diverges — prod, staging, and dev stay in sync without duplication.",
   },
   {
     glyph: "≡",
@@ -81,31 +123,9 @@ const FEATURES = [
 
 export function HomePage({ onNavigate }) {
   const { T } = useTheme();
-  const reducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const [phraseIdx, setPhraseIdx] = useState(0);
-  const [typed, setTyped]         = useState(reducedMotion ? PHRASES[0].length : 0);
-  const [erasing, setErasing]     = useState(false);
-
-  useEffect(() => {
-    if (reducedMotion) return;
-    const phrase = PHRASES[phraseIdx];
-    if (!erasing) {
-      if (typed < phrase.length) {
-        const t = setTimeout(() => setTyped(n => n + 1), 36);
-        return () => clearTimeout(t);
-      }
-      const t = setTimeout(() => setErasing(true), 4000);
-      return () => clearTimeout(t);
-    } else {
-      if (typed > 0) {
-        const t = setTimeout(() => setTyped(n => n - 1), 22);
-        return () => clearTimeout(t);
-      }
-      setErasing(false);
-      setPhraseIdx(i => (i + 1) % PHRASES.length);
-      setTyped(0);
-    }
-  }, [typed, erasing, phraseIdx, reducedMotion]);
+  const heroText = useTypewriter(HERO_PHRASES);
+  const featText = useTypewriter(FEAT_PHRASES, { typeSpeed: 40, eraseSpeed: 25, pause: 3500 });
+  const pricingText = useTypewriter(PRICING_PHRASES, { typeSpeed: 38, eraseSpeed: 24, pause: 3800 });
 
   return (
     <div style={{ background: T.bg, minHeight: "100vh", color: T.textPrimary }}>
@@ -162,8 +182,12 @@ export function HomePage({ onNavigate }) {
           ))}
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <Btn T={T} variant="secondary" size="sm">sign in</Btn>
-          <Btn T={T} variant="primary" size="sm">get started →</Btn>
+          <a href={`${APP_URL}/login`} style={{ textDecoration: "none" }}>
+            <Btn T={T} variant="secondary" size="sm">sign in</Btn>
+          </a>
+          <a href={`${APP_URL}/signup`} style={{ textDecoration: "none" }}>
+            <Btn T={T} variant="primary" size="sm">get started →</Btn>
+          </a>
         </div>
       </nav>
 
@@ -178,7 +202,7 @@ export function HomePage({ onNavigate }) {
         }}>
           Secrets management<br />
           <span style={{ color: T.textMuted, fontWeight: 400 }}>
-            {PHRASES[phraseIdx].slice(0, typed)}
+            {heroText}
             <span className="hero-cursor" />
           </span>
         </h1>
@@ -189,8 +213,12 @@ export function HomePage({ onNavigate }) {
           Mull keeps your credentials encrypted, versioned, and scoped by environment — with a CLI that fits into any pipeline.
         </p>
         <div style={{ display: "flex", gap: "12px", marginBottom: "64px" }}>
-          <Btn T={T} variant="primary" size="lg">start for free →</Btn>
-          <Btn T={T} variant="terminal" size="lg" icon="❯">view docs</Btn>
+          <a href={`${APP_URL}/signup`} style={{ textDecoration: "none" }}>
+            <Btn T={T} variant="primary" size="lg">start for free →</Btn>
+          </a>
+          <a href="#docs" style={{ textDecoration: "none" }}>
+            <Btn T={T} variant="terminal" size="lg" icon="❯">view docs</Btn>
+          </a>
         </div>
 
         {/* Terminal demo */}
@@ -201,10 +229,25 @@ export function HomePage({ onNavigate }) {
       <section id="features" style={{ padding: "64px 32px", maxWidth: "960px", margin: "0 auto" }}>
         <div style={{
           fontFamily: FONTS.mono, fontSize: "10px", color: T.termGreen,
-          letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "40px",
+          letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "24px",
         }}>
           // features
         </div>
+
+        {/* Section heading with typewriter */}
+        <div style={{ marginBottom: "48px" }}>
+          <h2 style={{
+            fontFamily: FONTS.display, fontWeight: 700, fontSize: "38px",
+            color: T.textPrimary, letterSpacing: "-0.03em", lineHeight: 1.1,
+          }}>
+            Built for developers.<br />
+            <span style={{ color: T.textMuted, fontWeight: 400 }}>
+              {featText}
+              <span className="hero-cursor" />
+            </span>
+          </h2>
+        </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
           {FEATURES.map(f => (
             <div key={f.title} style={{
@@ -231,15 +274,21 @@ export function HomePage({ onNavigate }) {
 
       {/* Pricing */}
       <section id="pricing" style={{ padding: "64px 32px", maxWidth: "960px", margin: "0 auto" }}>
-        <div style={{ fontFamily: FONTS.mono, fontSize: "10px", color: T.termGreen, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "16px" }}>
+        <div style={{ fontFamily: FONTS.mono, fontSize: "10px", color: T.termGreen, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "24px" }}>
           // pricing
         </div>
-        <h2 style={{ fontFamily: FONTS.display, fontWeight: 700, fontSize: "32px", color: T.textPrimary, letterSpacing: "-0.03em", marginBottom: "8px" }}>
-          Simple, predictable pricing.
-        </h2>
-        <p style={{ fontFamily: FONTS.display, fontSize: "14px", color: T.textSecondary, marginBottom: "40px", lineHeight: 1.6 }}>
-          Start free. Upgrade when your team grows.
-        </p>
+        <div style={{ marginBottom: "40px" }}>
+          <h2 style={{
+            fontFamily: FONTS.display, fontWeight: 700, fontSize: "38px",
+            color: T.textPrimary, letterSpacing: "-0.03em", lineHeight: 1.1,
+          }}>
+            Simple, predictable pricing.<br />
+            <span style={{ color: T.textMuted, fontWeight: 400 }}>
+              {pricingText}
+              <span className="hero-cursor" />
+            </span>
+          </h2>
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
           {TIERS.map(tier => (
             <Card key={tier.name} T={T} title={tier.name} accent={tier.highlight ? "green" : undefined} style={{ position: "relative" }}>
@@ -290,8 +339,12 @@ export function HomePage({ onNavigate }) {
             Start in 2 minutes. No credit card.
           </p>
           <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
-            <Btn T={T} variant="primary" size="lg">create free account →</Btn>
-            <Btn T={T} variant="secondary" size="lg">read the docs</Btn>
+            <a href={`${APP_URL}/signup`} style={{ textDecoration: "none" }}>
+              <Btn T={T} variant="primary" size="lg">create free account →</Btn>
+            </a>
+            <a href="#docs" style={{ textDecoration: "none" }}>
+              <Btn T={T} variant="secondary" size="lg">read the docs</Btn>
+            </a>
           </div>
         </Card>
       </section>
