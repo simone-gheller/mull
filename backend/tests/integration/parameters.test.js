@@ -1,6 +1,7 @@
 import { test, describe, afterEach, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { buildTestContext } from '../utils/builders.js';
+import { decryptParameterValue, encryptedParameterValueData } from '../../src/crypto/envelope.js';
 
 describe('Parameter Routes', () => {
   let ctx;
@@ -95,6 +96,74 @@ describe('Parameter Routes', () => {
     });
   });
 
+  describe('GET /orgs/:orgId/parameters/resolved', () => {
+    test('should resolve inherited definitions and fallback through unset overrides', async () => {
+      const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org);
+      const rootApp = await ctx.buildApp({ orgId: org.id, name: 'Root' });
+      const childApp = await ctx.buildApp({ orgId: org.id, parentId: rootApp.id, name: 'Child' });
+      const env = await ctx.buildEnv({ orgId: org.id, name: 'dev' });
+      const rootShared = await ctx.buildParam({ appId: rootApp.id, key: 'SHARED_KEY' });
+      const rootOnly = await ctx.buildParam({ appId: rootApp.id, key: 'ROOT_ONLY' });
+      const childShared = await ctx.buildParam({ appId: childApp.id, key: 'SHARED_KEY' });
+      await ctx.buildParam({ appId: childApp.id, key: 'LOCAL_ONLY' });
+
+      const setParamValue = async (parameterId, value) => {
+        const parameterValue = await ctx.prisma.parameterValue.findFirst({
+          where: { parameterId, environmentId: env.id }
+        });
+        await ctx.prisma.parameterValue.update({
+          where: { id: parameterValue.id },
+          data: {
+            isSet: value !== '',
+            ...encryptedParameterValueData({
+              value,
+              parameterValueId: parameterValue.id,
+              parameterId,
+              environmentId: env.id
+            })
+          }
+        });
+      };
+
+      await setParamValue(rootShared.id, 'root-shared');
+      await setParamValue(rootOnly.id, 'root-only');
+      await setParamValue(childShared.id, '');
+
+      const response = await ctx.injectAuth({
+        method: 'GET',
+        url: `/orgs/${org.id}/parameters/resolved?appId=${childApp.id}&environmentId=${env.id}`
+      }, user);
+
+      assert.strictEqual(response.statusCode, 200);
+      const resolved = JSON.parse(response.body);
+      assert.deepStrictEqual(resolved.summary, {
+        total: 3,
+        local: 1,
+        inherited: 1,
+        overrides: 1
+      });
+
+      const shared = resolved.items.find(item => item.key === 'SHARED_KEY');
+      assert.strictEqual(shared.relationship, 'override');
+      assert.strictEqual(shared.parameter.id, childShared.id);
+      assert.strictEqual(shared.overridden.parameterId, rootShared.id);
+      assert.strictEqual(shared.value.state, 'inherited');
+      assert.strictEqual(shared.value.value, 'root-shared');
+      assert.strictEqual(shared.value.sourceAppId, rootApp.id);
+
+      const inherited = resolved.items.find(item => item.key === 'ROOT_ONLY');
+      assert.strictEqual(inherited.relationship, 'inherited');
+      assert.strictEqual(inherited.value.state, 'inherited');
+      assert.strictEqual(inherited.value.value, 'root-only');
+
+      const local = resolved.items.find(item => item.key === 'LOCAL_ONLY');
+      assert.strictEqual(local.relationship, 'local');
+      assert.strictEqual(local.value.state, 'unset');
+      assert.strictEqual(local.value.value, null);
+    });
+  });
+
   describe('POST /orgs/:orgId/parameters', () => {
     test('should create parameter and sync values for all environments', async () => {
       const org = await ctx.buildOrg();
@@ -120,7 +189,10 @@ describe('Parameter Routes', () => {
         where: { parameterId: parameter.id }
       });
       assert.strictEqual(values.length, 2);
-      values.forEach(v => assert.strictEqual(v.value, ''));
+      values.forEach(v => {
+        assert.strictEqual(v.isSet, false);
+        assert.strictEqual(decryptParameterValue(v), '');
+      });
 
       const envIds = new Set(values.map(v => v.environmentId));
       assert.ok(envIds.has(env1.id));

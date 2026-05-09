@@ -44,7 +44,11 @@ export const getParameterValuesSchema = {
                 id: { type: 'string', format: 'uuid', description: 'ID del parameter value' },
                 parameterId: { type: 'string', format: 'uuid', description: 'ID del parametro' },
                 parameterKey: { type: 'string', description: 'Chiave del parametro' },
-                value: { type: 'string', description: 'Valore del parametro' }
+                isSet: { type: 'boolean', description: 'True quando il valore locale e impostato' },
+                value: {
+                  anyOf: [{ type: 'string' }, { type: 'null' }],
+                  description: 'Valore del parametro, null quando unset o redatto'
+                }
               }
             }
           }
@@ -88,6 +92,7 @@ export const getParameterValueByIdSchema = {
         id: { type: 'string', format: 'uuid' },
         parameterId: { type: 'string', format: 'uuid' },
         environmentId: { type: 'string', format: 'uuid' },
+        isSet: { type: 'boolean' },
         value: { type: 'string' },
         parameter: {
           type: 'object',
@@ -153,6 +158,7 @@ export const updateParameterValueSchema = {
         id: { type: 'string', format: 'uuid' },
         parameterId: { type: 'string', format: 'uuid' },
         environmentId: { type: 'string', format: 'uuid' },
+        isSet: { type: 'boolean' },
         value: { type: 'string' }
       }
     },

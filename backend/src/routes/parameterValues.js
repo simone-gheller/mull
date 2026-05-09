@@ -3,6 +3,7 @@ import {
   getParameterValueByIdSchema,
   updateParameterValueSchema
 } from '../openapi/parameterValueRoutes.js';
+import { decryptParameterValue, encryptedParameterValueData } from '../crypto/envelope.js';
 
 /**
  * @param {import('fastify').FastifyInstance} fastify
@@ -16,7 +17,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.get(
     '/parameters/:appId/values',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN', { onlyIfSecret: true })],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess],
       schema: getParameterValuesSchema
     },
     async (request, reply) => {
@@ -99,7 +100,8 @@ export default async function parameterValueRoutes(fastify) {
           id: pv.id,
           parameterId: pv.parameterId,
           parameterKey: pv.parameter.key,
-          value: isSecretValue && !isAdmin ? null : pv.value,
+          isSet: pv.isSet,
+          value: !pv.isSet || (isSecretValue && !isAdmin) ? null : decryptParameterValue(pv),
         });
       }
 
@@ -113,7 +115,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.get(
     '/parameters/values/:id',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN', { onlyIfSecret: true })],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess],
       schema: getParameterValueByIdSchema
     },
     async (request, reply) => {
@@ -127,14 +129,16 @@ export default async function parameterValueRoutes(fastify) {
             select: {
               id: true,
               key: true,
-              appId: true
+              appId: true,
+              isSecret: true
             }
           },
           environment: {
             select: {
               id: true,
               name: true,
-              orgId: true
+              orgId: true,
+              isSecret: true
             }
           }
         }
@@ -155,7 +159,25 @@ export default async function parameterValueRoutes(fastify) {
         });
       }
 
-      return reply.send(parameterValue);
+      const isSecretValue = parameterValue.environment.isSecret || parameterValue.parameter.isSecret;
+      const isAdmin = ['ADMIN', 'OWNER'].includes(request.orgRole);
+      if (isSecretValue && !isAdmin) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Requires ADMIN or higher',
+          statusCode: 403
+        });
+      }
+
+      return reply.send({
+        id: parameterValue.id,
+        parameterId: parameterValue.parameterId,
+        environmentId: parameterValue.environmentId,
+        isSet: parameterValue.isSet,
+        value: parameterValue.isSet ? decryptParameterValue(parameterValue) : '',
+        parameter: parameterValue.parameter,
+        environment: parameterValue.environment
+      });
     }
   );
 
@@ -165,7 +187,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.put(
     '/parameters/values/:id',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN', { onlyIfSecret: true })],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess],
       schema: updateParameterValueSchema
     },
     async (request, reply) => {
@@ -176,8 +198,11 @@ export default async function parameterValueRoutes(fastify) {
       const existingValue = await prisma.parameterValue.findUnique({
         where: { id: id },
         include: {
+          parameter: {
+            select: { id: true, isSecret: true }
+          },
           environment: {
-            select: { orgId: true }
+            select: { id: true, orgId: true, isSecret: true }
           }
         }
       });
@@ -197,19 +222,54 @@ export default async function parameterValueRoutes(fastify) {
         });
       }
 
+      const isSecretValue = existingValue.environment.isSecret || existingValue.parameter.isSecret;
+      const isAdmin = ['ADMIN', 'OWNER'].includes(request.orgRole);
+      if (isSecretValue && !isAdmin) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Requires ADMIN or higher',
+          statusCode: 403
+        });
+      }
+
+      const normalizedValue = value ?? '';
+      const isSet = normalizedValue !== '';
+
       // Update the parameter value
       const updatedValue = await prisma.parameterValue.update({
         where: { id: id },
-        data: { value: value },
+        data: {
+          isSet,
+          ...encryptedParameterValueData({
+            value: normalizedValue,
+            parameterValueId: id,
+            parameterId: existingValue.parameterId,
+            environmentId: existingValue.environmentId
+          })
+        },
         select: {
           id: true,
           parameterId: true,
           environmentId: true,
-          value: true
+          isSet: true,
+          valueCiphertext: true,
+          valueIv: true,
+          valueTag: true,
+          dekCiphertext: true,
+          dekIv: true,
+          dekTag: true,
+          kekVersion: true,
+          encryptionAlg: true
         }
       });
 
-      return reply.send(updatedValue);
+      return reply.send({
+        id: updatedValue.id,
+        parameterId: updatedValue.parameterId,
+        environmentId: updatedValue.environmentId,
+        isSet: updatedValue.isSet,
+        value: updatedValue.isSet ? decryptParameterValue(updatedValue) : ''
+      });
     }
   );
 }

@@ -4,6 +4,7 @@
  * Returns flat key-value configuration with hierarchical inheritance
  */
 import { getConfigSchema } from '../openapi/configRoutes.js';
+import { decryptParameterValue } from '../crypto/envelope.js';
 
 export default async function configRoutes(fastify, _options) {
   const prisma = fastify.prisma;
@@ -58,7 +59,22 @@ export default async function configRoutes(fastify, _options) {
 
       // 2. Query config_inheritance view
       const results = await prisma.$queryRaw`
-        SELECT key, value, priority, source_app_name, source_app_id
+        SELECT
+          key,
+          priority,
+          source_app_name,
+          source_app_id,
+          parameter_value_id,
+          parameter_id,
+          environment_id,
+          value_ciphertext,
+          value_iv,
+          value_tag,
+          dek_ciphertext,
+          dek_iv,
+          dek_tag,
+          kek_version,
+          encryption_alg
         FROM config_inheritance
         WHERE app_id = ${appId}::uuid
           AND environment_id = ${envId}::uuid
@@ -68,7 +84,7 @@ export default async function configRoutes(fastify, _options) {
       // 4. Build flat config object
       const config = {};
       for (const row of results) {
-        config[row.key] = row.value;
+        config[row.key] = decryptParameterValue(row);
       }
 
       // Log debug info server-side

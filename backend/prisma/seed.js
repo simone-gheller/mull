@@ -3,11 +3,28 @@ import { join } from 'path';
 import { PrismaClient } from '../src/generated/prisma/index.js';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { uuidv7 } from 'uuidv7';
+import { encryptedParameterValueData } from '../src/crypto/envelope.js';
 
 dotenv.config({ path: join(import.meta.dirname, '..', '.env') });
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
+
+function encryptedValue({ parameterId, environmentId, value }) {
+  const id = uuidv7();
+  return {
+    id,
+    parameterId,
+    environmentId,
+    isSet: value !== '',
+    ...encryptedParameterValueData({
+      value,
+      parameterValueId: id,
+      parameterId,
+      environmentId
+    })
+  };
+}
 
 async function main() {
   console.log('🌱 Starting seed...\n');
@@ -93,9 +110,9 @@ async function main() {
   });
   await prisma.parameterValue.createMany({
     data: [
-      { id: uuidv7(), parameterId: dbHostParam.id, environmentId: midCoEnvs[0].id, value: 'localhost' },
-      { id: uuidv7(), parameterId: dbHostParam.id, environmentId: midCoEnvs[1].id, value: 'staging.db.example.com' },
-      { id: uuidv7(), parameterId: dbHostParam.id, environmentId: midCoEnvs[2].id, value: 'prod.db.example.com' }
+      encryptedValue({ parameterId: dbHostParam.id, environmentId: midCoEnvs[0].id, value: 'localhost' }),
+      encryptedValue({ parameterId: dbHostParam.id, environmentId: midCoEnvs[1].id, value: 'staging.db.example.com' }),
+      encryptedValue({ parameterId: dbHostParam.id, environmentId: midCoEnvs[2].id, value: 'prod.db.example.com' })
     ]
   });
 
@@ -104,7 +121,7 @@ async function main() {
     data: { id: uuidv7(), appId: authService.id, key: 'DB_HOST' }
   });
   await prisma.parameterValue.create({
-    data: { id: uuidv7(), parameterId: authDbParam.id, environmentId: midCoEnvs[2].id, value: 'auth-prod.db.example.com' }
+    data: encryptedValue({ parameterId: authDbParam.id, environmentId: midCoEnvs[2].id, value: 'auth-prod.db.example.com' })
   });
   console.log(`   - Created parameters with inheritance (DB_HOST)\n`);
 
@@ -173,8 +190,8 @@ async function main() {
   });
   await prisma.parameterValue.createMany({
     data: [
-      { id: uuidv7(), parameterId: logLevelRoot.id, environmentId: entEnvs[0].id, value: 'debug' },
-      { id: uuidv7(), parameterId: logLevelRoot.id, environmentId: entEnvs[3].id, value: 'error' }
+      encryptedValue({ parameterId: logLevelRoot.id, environmentId: entEnvs[0].id, value: 'debug' }),
+      encryptedValue({ parameterId: logLevelRoot.id, environmentId: entEnvs[3].id, value: 'error' })
     ]
   });
 
@@ -183,7 +200,7 @@ async function main() {
     data: { id: uuidv7(), appId: services[2].id, key: 'LOG_LEVEL' }
   });
   await prisma.parameterValue.create({
-    data: { id: uuidv7(), parameterId: logLevelPayment.id, environmentId: entEnvs[3].id, value: 'warn' }
+    data: encryptedValue({ parameterId: logLevelPayment.id, environmentId: entEnvs[3].id, value: 'warn' })
   });
 
   // Override in platform
@@ -192,8 +209,8 @@ async function main() {
   });
   await prisma.parameterValue.createMany({
     data: [
-      { id: uuidv7(), parameterId: apiTimeout.id, environmentId: entEnvs[0].id, value: '5000' },
-      { id: uuidv7(), parameterId: apiTimeout.id, environmentId: entEnvs[3].id, value: '30000' }
+      encryptedValue({ parameterId: apiTimeout.id, environmentId: entEnvs[0].id, value: '5000' }),
+      encryptedValue({ parameterId: apiTimeout.id, environmentId: entEnvs[3].id, value: '30000' })
     ]
   });
 
@@ -213,34 +230,40 @@ async function main() {
   // ============================================
   const testUser = await prisma.user.create({
     data: {
+      id: uuidv7(),
       supabaseId: 'test-supabase-id-001',
       email: 'test@safeconfig.dev',
-      displayName: 'Test User',
-      role: 'USER',
-      organizationId: startup.id
+      displayName: 'Test User'
     }
+  });
+  await prisma.userOrganization.create({
+    data: { userId: testUser.id, orgId: startup.id, role: 'USER' }
   });
   console.log(`✅ Created test user: ${testUser.email} (org: ${startup.name})`);
 
   const adminUser = await prisma.user.create({
     data: {
+      id: uuidv7(),
       supabaseId: 'admin-supabase-id-001',
       email: 'admin@safeconfig.dev',
-      displayName: 'Admin User',
-      role: 'ADMIN',
-      organizationId: midCo.id
+      displayName: 'Admin User'
     }
+  });
+  await prisma.userOrganization.create({
+    data: { userId: adminUser.id, orgId: midCo.id, role: 'ADMIN' }
   });
   console.log(`✅ Created admin user: ${adminUser.email} (org: ${midCo.name})`);
 
   const ownerUser = await prisma.user.create({
     data: {
+      id: uuidv7(),
       supabaseId: 'owner-supabase-id-001',
       email: 'owner@safeconfig.dev',
-      displayName: 'Owner User',
-      role: 'OWNER',
-      organizationId: enterprise.id
+      displayName: 'Owner User'
     }
+  });
+  await prisma.userOrganization.create({
+    data: { userId: ownerUser.id, orgId: enterprise.id, role: 'OWNER' }
   });
   console.log(`✅ Created owner user: ${ownerUser.email} (org: ${enterprise.name})\n`);
 

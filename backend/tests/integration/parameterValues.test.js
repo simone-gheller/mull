@@ -1,6 +1,7 @@
 import { test, describe, afterEach, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { buildTestContext } from '../utils/builders.js';
+import { decryptParameterValue, encryptedParameterValueData } from '../../src/crypto/envelope.js';
 
 describe('ParameterValue Routes', () => {
   let ctx;
@@ -41,8 +42,14 @@ describe('ParameterValue Routes', () => {
       const devKeys = grouped.dev.values.map(v => v.parameterKey).sort();
       assert.deepStrictEqual(devKeys, ['KEY_1', 'KEY_2']);
 
-      grouped.dev.values.forEach(v => assert.strictEqual(v.value, ''));
-      grouped.prod.values.forEach(v => assert.strictEqual(v.value, ''));
+      grouped.dev.values.forEach(v => {
+        assert.strictEqual(v.isSet, false);
+        assert.strictEqual(v.value, null);
+      });
+      grouped.prod.values.forEach(v => {
+        assert.strictEqual(v.isSet, false);
+        assert.strictEqual(v.value, null);
+      });
     });
 
     test('should return 400 when appId is not a valid UUID', async () => {
@@ -110,6 +117,7 @@ describe('ParameterValue Routes', () => {
       assert.strictEqual(apiValue.id, paramValue.id);
       assert.strictEqual(apiValue.parameterId, param.id);
       assert.strictEqual(apiValue.environmentId, env.id);
+      assert.strictEqual(apiValue.isSet, false);
       assert.strictEqual(apiValue.value, '');
       assert.ok(apiValue.parameter);
       assert.strictEqual(apiValue.parameter.key, 'TEST_KEY');
@@ -176,10 +184,12 @@ describe('ParameterValue Routes', () => {
       assert.strictEqual(response.statusCode, 200);
       const updatedValue = JSON.parse(response.body);
       assert.strictEqual(updatedValue.id, paramValue.id);
+      assert.strictEqual(updatedValue.isSet, true);
       assert.strictEqual(updatedValue.value, 'secret-api-key-12345');
 
       const dbValue = await ctx.prisma.parameterValue.findUnique({ where: { id: paramValue.id } });
-      assert.strictEqual(dbValue.value, 'secret-api-key-12345');
+      assert.strictEqual(dbValue.isSet, true);
+      assert.strictEqual(decryptParameterValue(dbValue), 'secret-api-key-12345');
     });
 
     test('should update parameter value to empty string', async () => {
@@ -193,7 +203,18 @@ describe('ParameterValue Routes', () => {
         where: { parameterId: param.id, environmentId: env.id }
       });
 
-      await ctx.prisma.parameterValue.update({ where: { id: paramValue.id }, data: { value: 'some-value' } });
+      await ctx.prisma.parameterValue.update({
+        where: { id: paramValue.id },
+        data: {
+          isSet: true,
+          ...encryptedParameterValueData({
+            value: 'some-value',
+            parameterValueId: paramValue.id,
+            parameterId: paramValue.parameterId,
+            environmentId: paramValue.environmentId
+          })
+        }
+      });
 
       const response = await ctx.injectAuth({
         method: 'PUT',
@@ -204,7 +225,12 @@ describe('ParameterValue Routes', () => {
 
       assert.strictEqual(response.statusCode, 200);
       const updatedValue = JSON.parse(response.body);
+      assert.strictEqual(updatedValue.isSet, false);
       assert.strictEqual(updatedValue.value, '');
+
+      const dbValue = await ctx.prisma.parameterValue.findUnique({ where: { id: paramValue.id } });
+      assert.strictEqual(dbValue.isSet, false);
+      assert.strictEqual(decryptParameterValue(dbValue), '');
     });
 
     test('should return 400 when value is missing from body', async () => {

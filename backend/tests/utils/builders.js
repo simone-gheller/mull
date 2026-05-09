@@ -17,6 +17,7 @@
 import { uuidv7 } from 'uuidv7';
 import { buildApp as buildFastifyApp } from '../../src/server.js';
 import { syncParameterEnvironmentValues } from '../../src/lib/syncParameterValues.js';
+import { encryptedParameterValueData } from '../../src/crypto/envelope.js';
 
 /**
  * Generate unique identifier for test resources
@@ -258,25 +259,31 @@ export async function buildTestContext() {
         throw new Error('buildParamValue requires parameterId and environmentId');
       }
 
+      const id = uuidv7();
       const paramValue = await prisma.parameterValue.create({
         data: {
-          id: uuidv7(),
+          id,
           parameterId: parameterId,
           environmentId: environmentId,
-          value
+          isSet: value !== '',
+          ...encryptedParameterValueData({
+            value,
+            parameterValueId: id,
+            parameterId,
+            environmentId
+          })
         },
         select: {
           id: true,
           parameterId: true,
-          environmentId: true,
-          value: true
+          environmentId: true
         }
       });
 
       // Auto-track
       this.track('paramValues', paramValue.id);
 
-      return paramValue;
+      return { ...paramValue, value };
     },
 
     /**

@@ -10,10 +10,12 @@
     "supabase:stop": "cd .. && npx supabase stop",
     "supabase:status": "cd .. && npx supabase status",
     "db:generate": "npx prisma generate",
-    "db:migrate": "npx prisma migrate dev",
+    "db:migrate": "npx prisma migrate deploy",
+    "db:migrate:dev": "npx prisma migrate dev",
     "db:reset": "npx prisma migrate reset",
     "db:push": "npx prisma db push",
-    "db:seed": "node prisma/seed.js"
+    "db:seed": "node prisma/seed.js",
+    "db:backfill:is-set": "node --env-file=.env scripts/backfill-parameter-value-is-set.js"
   },
   "author": "",
   "license": "ISC",

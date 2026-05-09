@@ -86,7 +86,17 @@ model ParameterValue {
   id            String @id @db.Uuid
   parameterId   String @map("parameter_id") @db.Uuid
   environmentId String @map("environment_id") @db.Uuid
-  value         String @db.Text // Plain text (encryption optional for later)
+
+  valueCiphertext Bytes    @map("value_ciphertext")
+  valueIv         Bytes    @map("value_iv")
+  valueTag        Bytes    @map("value_tag")
+  dekCiphertext   Bytes    @map("dek_ciphertext")
+  dekIv           Bytes    @map("dek_iv")
+  dekTag          Bytes    @map("dek_tag")
+  kekVersion      Int      @map("kek_version")
+  encryptionAlg   String   @default("AES-256-GCM") @map("encryption_alg")
+  encryptedAt     DateTime @map("encrypted_at")
+  isSet           Boolean  @default(false) @map("is_set")
 
   // Relations
   parameter   Parameter   @relation(fields: [parameterId], references: [id], onDelete: Cascade, onUpdate: Cascade)

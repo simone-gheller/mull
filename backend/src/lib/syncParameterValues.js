@@ -1,5 +1,6 @@
 import { uuidv7 } from 'uuidv7';
 import { getPrisma } from './prisma.js';
+import { encryptedParameterValueData } from '../crypto/envelope.js';
 
 /**
  * Sync ParameterValues for a newly created Environment
@@ -29,12 +30,21 @@ export async function syncEnvironmentParameterValues(environmentId, orgId) {
 
   // Create ParameterValue for each parameter with empty string
   await prisma.parameterValue.createMany({
-    data: parameters.map(param => ({
-      id: uuidv7(),
-      parameterId: param.id,
-      environmentId: environmentId,
-      value: ''
-    })),
+    data: parameters.map(param => {
+      const id = uuidv7();
+      return {
+        id,
+        parameterId: param.id,
+        environmentId: environmentId,
+        isSet: false,
+        ...encryptedParameterValueData({
+          value: '',
+          parameterValueId: id,
+          parameterId: param.id,
+          environmentId
+        })
+      };
+    }),
     skipDuplicates: true // In case some values already exist
   });
 
@@ -65,12 +75,21 @@ export async function syncParameterEnvironmentValues(parameterId, orgId) {
 
   // Create ParameterValue for each environment with empty string
   await prisma.parameterValue.createMany({
-    data: environments.map(env => ({
-      id: uuidv7(),
-      parameterId: parameterId,
-      environmentId: env.id,
-      value: ''
-    })),
+    data: environments.map(env => {
+      const id = uuidv7();
+      return {
+        id,
+        parameterId: parameterId,
+        environmentId: env.id,
+        isSet: false,
+        ...encryptedParameterValueData({
+          value: '',
+          parameterValueId: id,
+          parameterId,
+          environmentId: env.id
+        })
+      };
+    }),
     skipDuplicates: true // In case some values already exist
   });
 

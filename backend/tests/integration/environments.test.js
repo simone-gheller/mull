@@ -1,6 +1,7 @@
 import { test, describe, afterEach, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { buildTestContext } from '../utils/builders.js';
+import { decryptParameterValue } from '../../src/crypto/envelope.js';
 
 describe('Environment Routes', () => {
   let ctx;
@@ -107,7 +108,10 @@ describe('Environment Routes', () => {
         where: { environmentId: environment.id }
       });
       assert.strictEqual(values.length, 2);
-      values.forEach(v => assert.strictEqual(v.value, ''));
+      values.forEach(v => {
+        assert.strictEqual(v.isSet, false);
+        assert.strictEqual(decryptParameterValue(v), '');
+      });
     });
 
     test('should return 400 when name is missing', async () => {

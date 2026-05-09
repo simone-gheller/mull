@@ -57,16 +57,16 @@ async function authPlugin(fastify, options) {
               // Grouped-values route: no app-level secret anymore — skip.
               return;
             } else if (request.params.id) {
-              // Single-value routes: gate on app OR env secret (cleartext value exposed here).
+              // Single-value routes: gate on parameter OR env secret.
               const pv = await fastify.prisma.parameterValue.findUnique({
                 where: { id: request.params.id },
                 include: {
-                  parameter: { select: { appId: true } },
+                  parameter: { select: { isSecret: true } },
                   environment: { select: { isSecret: true } }
                 }
               });
               if (pv) {
-                isSecret = !!pv.environment?.isSecret;
+                isSecret = !!(pv.parameter?.isSecret || pv.environment?.isSecret);
               }
             }
             if (!isSecret) return;
@@ -186,19 +186,19 @@ fastify.decorate('authenticate', async function (request, reply) {
           let isSecret = false;
           const appId = request.params.appId;
           if (appId) {
-            const app = await fastify.prisma.app.findUnique({ where: { id: appId }, select: { isSecret: true } });
-            isSecret = !!app?.isSecret;
+            // Grouped-value routes can contain both secret and non-secret rows.
+            // The route handler should redact row-by-row instead of gating the whole app.
+            return;
           } else if (request.params.id) {
             const pv = await fastify.prisma.parameterValue.findUnique({
               where: { id: request.params.id },
               include: {
-                parameter: { select: { appId: true } },
+                parameter: { select: { isSecret: true } },
                 environment: { select: { isSecret: true } }
               }
             });
             if (pv) {
-              const app = await fastify.prisma.app.findUnique({ where: { id: pv.parameter.appId }, select: { isSecret: true } });
-              isSecret = !!(app?.isSecret || pv.environment?.isSecret);
+              isSecret = !!(pv.parameter?.isSecret || pv.environment?.isSecret);
             }
           }
           if (!isSecret) return;
