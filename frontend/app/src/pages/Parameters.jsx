@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -122,8 +122,6 @@ export default function Parameters() {
   const [apps, setApps] = useState([]);
   const [tree, setTree] = useState([]);
   const [parameters, setParameters] = useState([]);
-  const parametersRef = useRef([]);
-  useEffect(() => { parametersRef.current = parameters; }, [parameters]);
   const loadVersionRef = useRef(0);
   const isUserEnvSwitch = useRef(false);
   const [envSwitching, setEnvSwitching] = useState(false);
@@ -144,7 +142,6 @@ export default function Parameters() {
   // Environment selector
   const [environments, setEnvironments] = useState([]);
   const [selectedEnvId, setSelectedEnvId] = useState(null);
-  const [paramValues, setParamValues] = useState({}); // { [parameterId]: value }
   const [revealedIds, setRevealedIds] = useState(new Set());
 
   useEffect(() => {
@@ -152,7 +149,6 @@ export default function Parameters() {
     setTree([]);
     setParameters([]);
     setCurrentApp(null);
-    setParamValues({});
     setEnvironments([]);
     setSelectedEnvId(null);
     setRevealedIds(new Set());
@@ -161,7 +157,8 @@ export default function Parameters() {
     Promise.all([apiService.getEnvironments(), apiService.getProjects(), new Promise(r => setTimeout(r, 500))])
       .then(async ([envs, data]) => {
         setEnvironments(envs);
-        if (envs.length > 0) setSelectedEnvId(envs[0].id);
+        const activeEnvId = envs[0]?.id ?? null;
+        if (activeEnvId) setSelectedEnvId(activeEnvId);
         setApps(data);
         setTree(buildAppTree(data));
         const target = selectedProjectId
@@ -169,47 +166,29 @@ export default function Parameters() {
           : data[0];
         if (target) {
           setCurrentApp(target);
-          const resolved = await apiService.getResolvedParameters(target.id);
-          setParameters(resolved);
+          const resolved = await apiService.getResolvedParameters(target.id, activeEnvId);
+          setParameters(resolved.items ?? []);
         }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [orgId, selectedProjectId]);
 
-  const loadParamValues = useCallback(async (appId, envId, resolvedParams) => {
-    if (!appId || !envId) return;
-    const version = ++loadVersionRef.current;
-    const params = resolvedParams ?? parametersRef.current;
-    const sourceAppIds = [...new Set([appId, ...params.filter(p => !p.isOwn).map(p => p.appId)])];
-    try {
-      const results = await Promise.all(
-        sourceAppIds.map(id => apiService.getParameterValues(id).catch(() => null))
-      );
-      if (version !== loadVersionRef.current) return;
-      const map = {};
-      for (const grouped of results) {
-        if (!grouped) continue;
-        const envGroup = Object.values(grouped).find(g => g.environmentId === envId);
-        if (envGroup) for (const v of envGroup.values) map[v.parameterId] = v.value;
-      }
-      setParamValues(map);
-    } catch {
-      if (version !== loadVersionRef.current) return;
-      setParamValues({});
-    }
-  }, []);
-
   useEffect(() => {
+    if (!currentApp?.id || !selectedEnvId) return;
     setRevealedIds(new Set());
+    const version = ++loadVersionRef.current;
     const showSkeleton = isUserEnvSwitch.current;
     isUserEnvSwitch.current = false;
     if (showSkeleton) setEnvSwitching(true);
     Promise.all([
-      loadParamValues(currentApp?.id, selectedEnvId),
+      apiService.getResolvedParameters(currentApp.id, selectedEnvId)
+        .then(resolved => {
+          if (version === loadVersionRef.current) setParameters(resolved.items ?? []);
+        }),
       showSkeleton ? new Promise(r => setTimeout(r, 400)) : Promise.resolve(),
     ]).then(() => { if (showSkeleton) setEnvSwitching(false); });
-  }, [currentApp?.id, selectedEnvId, loadParamValues]);
+  }, [currentApp?.id, selectedEnvId]);
 
   useEffect(() => {
     const handler = () => { if (currentApp) setShowModal(true); };
@@ -221,15 +200,13 @@ export default function Parameters() {
     if (currentApp?.id === node.id) return;
     setCurrentApp(node);
     setParamsLoading(true);
-    setParamValues({});
     setRevealedIds(new Set());
     try {
       const [resolved] = await Promise.all([
-        apiService.getResolvedParameters(node.id),
+        apiService.getResolvedParameters(node.id, selectedEnvId),
         new Promise(r => setTimeout(r, 300)),
       ]);
-      setParameters(resolved);
-      await loadParamValues(node.id, selectedEnvId, resolved);
+      setParameters(resolved.items ?? []);
     } catch (e) { console.error(e); } finally { setParamsLoading(false); }
   };
 
@@ -253,7 +230,8 @@ export default function Parameters() {
         );
       }
 
-      setParameters(prev => [...prev, { ...created, appName: currentApp.name, isOwn: true }]);
+      const resolved = await apiService.getResolvedParameters(currentApp.id, selectedEnvId);
+      setParameters(resolved.items ?? []);
       toast('parameter created', 'success', created.key);
       setShowModal(false);
       setNewKey(''); setNewDesc(''); setNewDefault('');
@@ -278,7 +256,6 @@ export default function Parameters() {
   const filtered = parameters.filter(p => (p.key ?? '').toLowerCase().includes(search.toLowerCase()));
 
   const envIsSecret = environments.find(e => e.id === selectedEnvId)?.isSecret ?? false;
-  const valuesBlocked = envIsSecret;
 
   return (
     <div>
@@ -414,30 +391,38 @@ export default function Parameters() {
                   )}
                 </div>
               ) : filtered.map(param => {
-                const value = paramValues[param.id];
-                const hasValue = value !== undefined && value !== '';
-                const isEmpty = value === '';
-                const isRevealed = revealedIds.has(param.id);
-                const isEffectivelySecret = param.isSecret || envIsSecret;
-                const canReveal = !envIsSecret && !(param.isSecret && !isAdmin) && hasValue;
+                const valueInfo = param.value;
+                const rowId = param.parameter.id;
+                const value = valueInfo?.value;
+                const hasValue = ['set', 'inherited'].includes(valueInfo?.state) && value !== null && value !== undefined;
+                const isUnset = !valueInfo || valueInfo.state === 'unset';
+                const isRedacted = valueInfo?.state === 'redacted';
+                const isRevealed = revealedIds.has(rowId);
+                const isEffectivelySecret = valueInfo?.isSecret ?? (param.parameter.isSecret || envIsSecret);
+                const canReveal = !!valueInfo?.canRead && hasValue;
+                const sourceName = valueInfo?.state === 'inherited'
+                  ? valueInfo.sourceAppName
+                  : param.relationship === 'inherited'
+                    ? param.parameter.appName
+                    : null;
 
                 return (
-                  <div key={param.id} style={{
+                  <div key={rowId} style={{
                     display: 'grid', gridTemplateColumns: '1fr 160px 160px 120px',
                     alignItems: 'center', padding: '9px 14px',
                     borderBottom: `1px solid ${T.border}`,
                     fontFamily: FONTS.mono, fontSize: '12px',
-                    opacity: param.isOwn ? 1 : 0.85,
+                    opacity: param.relationship === 'inherited' ? 0.85 : 1,
                   }}>
                     {/* Key */}
                     <span style={{ color: T.textPrimary }}>{param.key}</span>
 
                     {/* Value */}
                     <span style={{ fontFamily: FONTS.mono, fontSize: '11px' }}>
-                      {isEmpty ? (
-                        <span style={{ color: T.textMuted, fontStyle: 'italic' }}>(empty)</span>
-                      ) : value === undefined ? (
-                        <span style={{ color: T.textMuted }}>—</span>
+                      {isRedacted ? (
+                        <span style={{ color: T.amber, fontStyle: 'italic' }}>restricted</span>
+                      ) : isUnset ? (
+                        <span style={{ color: T.textMuted, fontStyle: 'italic' }}>unset</span>
                       ) : isRevealed ? (
                         <span style={{
                           color: T.textPrimary,
@@ -453,15 +438,15 @@ export default function Parameters() {
 
                     {/* Inherited from */}
                     <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      {!param.isOwn ? (
+                      {sourceName ? (
                         <span style={{
                           fontFamily: FONTS.mono, fontSize: '10px', color: T.amber,
                           background: `${T.amber}18`, border: `1px solid ${T.amber}40`,
                           padding: '1px 7px', borderRadius: '2px',
                         }}>
-                          {param.appName}
+                          {sourceName}
                         </span>
-                      ) : param.isOverride ? (
+                      ) : param.relationship === 'override' ? (
                         <>
                           <span style={{
                             fontFamily: FONTS.mono, fontSize: '9px', color: T.blue,
@@ -471,7 +456,7 @@ export default function Parameters() {
                             OVERRIDE
                           </span>
                           <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted }}>
-                            {param.overriddenFromAppName}
+                            {param.overridden?.appName}
                           </span>
                         </>
                       ) : (
@@ -479,86 +464,86 @@ export default function Parameters() {
                       )}
                     </span>
 
-                    {/* Actions: eye + view */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {(() => {
-                        const isInteractive = canReveal || isRevealed;
-                        // Option A: no tooltip on the eye when secret — the lock already explains it
-                        const tooltipText =
-                          isEffectivelySecret  ? null :
-                          !param.isOwn         ? 'inherited' :
-                          !hasValue && !isEmpty ? 'no value' :
-                          isRevealed           ? 'hide value' : 'reveal value';
-                        const eyeAriaLabel =
-                          isRevealed           ? 'Hide value' :
-                          canReveal            ? 'Reveal value' :
-                          isEffectivelySecret  ? 'Value hidden — secret parameter' :
-                                                 'No value set';
-                        return (
-                          <div style={{ position: 'relative', display: 'inline-flex' }}>
-                            {hoveredEyeId === param.id && tooltipText && (
-                              <div style={{
-                                position: 'absolute',
-                                bottom: 'calc(100% + 7px)',
-                                left: '50%', transform: 'translateX(-50%)',
-                                background: T.elevated,
-                                border: `1px solid ${T.border}`,
-                                borderRadius: '4px',
-                                padding: '3px 8px',
-                                fontFamily: FONTS.mono, fontSize: '10px', color: T.textSecondary,
-                                whiteSpace: 'nowrap', zIndex: 50, pointerEvents: 'none',
-                              }}>
-                                {tooltipText}
-                                <div style={{
-                                  position: 'absolute',
-                                  top: '100%', left: '50%', transform: 'translateX(-50%)',
-                                  width: 0, height: 0,
-                                  borderLeft: '5px solid transparent',
-                                  borderRight: '5px solid transparent',
-                                  borderTop: `5px solid ${T.border}`,
-                                }} />
-                              </div>
-                            )}
-                            <button
-                              aria-label={eyeAriaLabel}
-                              aria-disabled={!isInteractive ? 'true' : undefined}
-                              onClick={() => isInteractive && toggleReveal(param.id)}
-                              onMouseEnter={() => setHoveredEyeId(param.id)}
-                              onMouseLeave={() => setHoveredEyeId(null)}
-                              style={{
-                                background: hoveredEyeId === param.id ? T.overlay : 'transparent',
-                                border: `1px solid ${hoveredEyeId === param.id ? T.border : 'transparent'}`,
-                                borderRadius: '4px', padding: '4px',
-                                cursor: isInteractive ? 'pointer' : 'default',
-                                display: 'flex', alignItems: 'center',
-                                opacity: isInteractive ? 1 : 0.35,
-                                transition: 'background 0.12s, border-color 0.12s',
-                              }}
-                            >
-                              {isEffectivelySecret && !isRevealed ? (
-                                <EyeOff size={14} color={T.textMuted} strokeWidth={1.5} />
-                              ) : isRevealed ? (
-                                <EyeOff size={14} color={T.amber} strokeWidth={1.5} />
-                              ) : (
-                                <Eye size={14} color={T.textMuted} strokeWidth={1.5} />
-                              )}
-                            </button>
-                          </div>
-                        );
-                      })()}
+                            {/* Actions: eye + view */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {(() => {
+                                const isInteractive = canReveal || isRevealed;
+                                // No tooltip on the eye when secret: the lock already carries that meaning.
+                                const tooltipText =
+                                  isEffectivelySecret ? null :
+                                  valueInfo?.state === 'inherited' ? 'inherited' :
+                                  !hasValue && !isUnset ? 'no value' :
+                                  isRevealed ? 'hide value' : 'reveal value';
+                                const eyeAriaLabel =
+                                  isRevealed ? 'Hide value' :
+                                  canReveal ? 'Reveal value' :
+                                  isEffectivelySecret ? 'Value hidden — secret parameter' :
+                                  'No value set';
+                                return (
+                                  <div style={{ position: 'relative', display: 'inline-flex' }}>
+                                    {hoveredEyeId === rowId && tooltipText && (
+                                      <div style={{
+                                        position: 'absolute',
+                                        bottom: 'calc(100% + 7px)',
+                                        left: '50%', transform: 'translateX(-50%)',
+                                        background: T.elevated,
+                                        border: `1px solid ${T.border}`,
+                                        borderRadius: '4px',
+                                        padding: '3px 8px',
+                                        fontFamily: FONTS.mono, fontSize: '10px', color: T.textSecondary,
+                                        whiteSpace: 'nowrap', zIndex: 50, pointerEvents: 'none',
+                                      }}>
+                                        {tooltipText}
+                                        <div style={{
+                                          position: 'absolute',
+                                          top: '100%', left: '50%', transform: 'translateX(-50%)',
+                                          width: 0, height: 0,
+                                          borderLeft: '5px solid transparent',
+                                          borderRight: '5px solid transparent',
+                                          borderTop: `5px solid ${T.border}`,
+                                        }} />
+                                      </div>
+                                    )}
+                                    <button
+                                      aria-label={eyeAriaLabel}
+                                      aria-disabled={!isInteractive ? 'true' : undefined}
+                                      onClick={() => isInteractive && toggleReveal(rowId)}
+                                      onMouseEnter={() => setHoveredEyeId(rowId)}
+                                      onMouseLeave={() => setHoveredEyeId(null)}
+                                      style={{
+                                        background: hoveredEyeId === rowId ? T.overlay : 'transparent',
+                                        border: `1px solid ${hoveredEyeId === rowId ? T.border : 'transparent'}`,
+                                        borderRadius: '4px', padding: '4px',
+                                        cursor: isInteractive ? 'pointer' : 'default',
+                                        display: 'flex', alignItems: 'center',
+                                        opacity: isInteractive ? 1 : 0.35,
+                                        transition: 'background 0.12s, border-color 0.12s',
+                                      }}
+                                    >
+                                      {isEffectivelySecret && !isRevealed ? (
+                                        <EyeOff size={14} color={T.textMuted} strokeWidth={1.5} />
+                                      ) : isRevealed ? (
+                                        <EyeOff size={14} color={T.amber} strokeWidth={1.5} />
+                                      ) : (
+                                        <Eye size={14} color={T.textMuted} strokeWidth={1.5} />
+                                      )}
+                                    </button>
+                                  </div>
+                                );
+                              })()}
 
-                      <div
-                        style={{ position: 'relative', display: 'inline-flex' }}
-                        onMouseEnter={() => isEffectivelySecret && setHoveredLockId(param.id)}
-                        onMouseLeave={() => setHoveredLockId(null)}
-                        aria-label={isEffectivelySecret ? 'Secret parameter' : undefined}
-                        aria-hidden={!isEffectivelySecret}
-                        role={isEffectivelySecret ? 'img' : undefined}
-                      >
-                        {hoveredLockId === param.id && (
-                          <div style={{
-                            position: 'absolute',
-                            bottom: 'calc(100% + 7px)',
+                              <div
+                                style={{ position: 'relative', display: 'inline-flex' }}
+                                onMouseEnter={() => isEffectivelySecret && setHoveredLockId(rowId)}
+                                onMouseLeave={() => setHoveredLockId(null)}
+                                aria-label={isEffectivelySecret ? 'Secret parameter' : undefined}
+                                aria-hidden={!isEffectivelySecret}
+                                role={isEffectivelySecret ? 'img' : undefined}
+                              >
+                                {hoveredLockId === rowId && (
+                                  <div style={{
+                                    position: 'absolute',
+                                    bottom: 'calc(100% + 7px)',
                             left: '50%', transform: 'translateX(-50%)',
                             background: T.elevated,
                             border: `1px solid ${T.border}`,
@@ -583,13 +568,13 @@ export default function Parameters() {
                           strokeWidth={1.5}
                           color={isEffectivelySecret ? T.amber : T.textMuted}
                           style={{ opacity: isEffectivelySecret ? 1 : 0.35 }}
-                        />
-                      </div>
+                                />
+                              </div>
 
-                      <Link
-                        to={`/dashboard/${orgSlug}/${slugify(currentApp.name)}/parameters/${encodeURIComponent(param.key)}`}
-                        style={{ textDecoration: 'none' }}
-                      >
+                              <Link
+                                to={`/dashboard/${orgSlug}/${slugify(currentApp.name)}/parameters/${encodeURIComponent(param.key)}`}
+                                style={{ textDecoration: 'none' }}
+                              >
                         <Btn T={T} variant="secondary" size="sm">view</Btn>
                       </Link>
                     </div>

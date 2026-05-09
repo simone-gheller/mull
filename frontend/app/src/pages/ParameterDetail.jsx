@@ -14,8 +14,10 @@ function EnvRow({ row, editLabel, T, onEdit }) {
   const [revealHovered, setRevealHovered] = useState(false);
 
   const handleCopy = async () => {
+    if (row.isRedacted || !row.value) return;
     try { await navigator.clipboard.writeText(row.value); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
   };
+  const canReveal = row.isSet && !row.isRedacted;
 
   return (
     <div role="row" style={{
@@ -39,14 +41,18 @@ function EnvRow({ row, editLabel, T, onEdit }) {
       <div style={{ minWidth: 0 }}>
         <span style={{
           fontFamily: FONTS.mono, fontSize: '12px',
-          color: !visible ? T.textMuted : !row.value ? T.textMuted : row.isInherited ? T.textSecondary : T.amber,
+          color: row.isRedacted ? T.amber : !visible ? T.textMuted : !row.isSet ? T.textMuted : row.isInherited ? T.textSecondary : T.amber,
           letterSpacing: visible ? 'normal' : '0.1em',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
-          fontStyle: visible && !row.value ? 'italic' : 'normal',
+          fontStyle: row.isRedacted || !row.isSet ? 'italic' : 'normal',
         }}>
-          {visible
-            ? (row.value || '(empty)')
-            : '•'.repeat(Math.min(row.value?.length || 16, 20))}
+          {row.isRedacted
+            ? 'restricted'
+            : !row.isSet
+              ? 'unset'
+              : visible
+                ? row.value
+                : '•'.repeat(Math.min(row.value?.length || 16, 20))}
         </span>
       </div>
 
@@ -57,10 +63,10 @@ function EnvRow({ row, editLabel, T, onEdit }) {
           onMouseEnter={() => { if (!visible) setRevealHovered(true); }}
           onMouseLeave={() => setRevealHovered(false)}
         >
-          <Btn T={T} variant="secondary" size="sm" onClick={() => { setVisible(v => !v); setRevealHovered(false); }}>
+          <Btn T={T} variant="secondary" size="sm" disabled={!canReveal} onClick={() => { if (canReveal) setVisible(v => !v); setRevealHovered(false); }}>
             {visible ? 'hide' : 'show'}
           </Btn>
-          {revealHovered && (
+          {revealHovered && canReveal && (
             <div style={{
               position: 'absolute', bottom: 'calc(100% + 5px)', right: 0,
               fontFamily: FONTS.mono, fontSize: '9px', color: T.textMuted,
@@ -72,7 +78,7 @@ function EnvRow({ row, editLabel, T, onEdit }) {
             </div>
           )}
         </div>
-        <Btn T={T} variant="secondary" size="sm" onClick={handleCopy} disabled={!visible || !row.value}>
+        <Btn T={T} variant="secondary" size="sm" onClick={handleCopy} disabled={!visible || !row.value || row.isRedacted}>
           {copied ? 'copied!' : 'copy'}
         </Btn>
         <Btn T={T} variant="secondary" size="sm" onClick={() => onEdit(row)}>
@@ -220,20 +226,21 @@ export default function ParameterDetail() {
 
       // 2. Resolve parameter by key within that app
       const resolvedParams = await apiService.getResolvedParameters(app.id);
-      const param = resolvedParams.find(p => p.key === paramKey);
+      const param = (resolvedParams.items ?? []).find(p => p.key === paramKey);
       if (!param) return;
 
       const r = {
-        parameterId:          param.id,
+        parameterId:          param.parameter.id,
         appId:                app.id,
         currentAppName:       app.name,
-        sourceAppId:          param.appId,
-        sourceAppName:        param.appName,
-        isOwn:                param.isOwn,
-        isOverride:           param.isOverride ?? false,
-        overrideSourceAppId:  param.overrideSourceAppId ?? '',
-        overrideSourceParamId: param.overrideSourceParamId ?? '',
-        overrideFromAppName:  param.overriddenFromAppName ?? '',
+        sourceAppId:          param.parameter.appId,
+        sourceAppName:        param.parameter.appName,
+        isOwn:                param.relationship !== 'inherited',
+        isOverride:           param.relationship === 'override',
+        overrideSourceAppId:  param.overridden?.appId ?? '',
+        overrideSourceParamId: param.overridden?.parameterId ?? '',
+        overrideFromAppName:  param.overridden?.appName ?? '',
+        isSecret:             param.parameter.isSecret,
       };
       setResolved(r);
 
@@ -256,13 +263,20 @@ export default function ParameterDetail() {
         const ownMatch = envData.values.find(v => v.parameterId === r.parameterId);
         if (!ownMatch) continue;
 
-        let value = ownMatch.value ?? '';
+        let isSet = ownMatch.isSet;
+        let isRedacted = ownMatch.isSet && ownMatch.value === null;
+        let value = ownMatch.isSet && !isRedacted ? (ownMatch.value ?? '') : '';
         let isInherited = false;
 
-        if (!value && sourceGrouped) {
+        if (!ownMatch.isSet && sourceGrouped) {
           const sourceEnvData = sourceGrouped[envName];
           const sourceMatch = sourceEnvData?.values.find(v => v.parameterId === r.overrideSourceParamId);
-          if (sourceMatch?.value) { value = sourceMatch.value; isInherited = true; }
+          if (sourceMatch?.isSet) {
+            isSet = true;
+            isRedacted = sourceMatch.value === null;
+            value = isRedacted ? '' : sourceMatch.value ?? '';
+            isInherited = true;
+          }
         }
 
         rows.push({
@@ -270,9 +284,11 @@ export default function ParameterDetail() {
           environmentId: envData.environmentId,
           valueId: ownMatch.id,
           value,
+          isSet,
+          isRedacted,
           isInherited,
           inheritedFrom: isInherited ? r.overrideFromAppName : null,
-          isSecret: envSecretById[envData.environmentId] ?? false,
+          isSecret: r.isSecret || (envSecretById[envData.environmentId] ?? false),
         });
       }
 
@@ -294,11 +310,9 @@ export default function ParameterDetail() {
         setEditingRow(null);
         setLoadKey(k => k + 1);
       } else {
-        const updated = await apiService.updateParameterValue(editingRow.valueId, { value: newValue });
-        setEnvValues(prev => prev.map(r =>
-          r.valueId !== editingRow.valueId ? r : { ...r, value: updated.value ?? newValue, isInherited: false, inheritedFrom: null }
-        ));
+        await apiService.updateParameterValue(editingRow.valueId, { value: newValue });
         setEditingRow(null);
+        setLoadKey(k => k + 1);
       }
     } catch (e) { console.error(e); } finally { setSaving(false); }
   };

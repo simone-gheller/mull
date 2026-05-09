@@ -89,8 +89,10 @@ class ApiService {
     return response.data;
   }
 
-  async getResolvedParameters(appId) {
-    const response = await apiClient.get(`/orgs/${this.orgId}/parameters/resolved?appId=${appId}`);
+  async getResolvedParameters(appId, environmentId) {
+    const params = new URLSearchParams({ appId });
+    if (environmentId) params.set('environmentId', environmentId);
+    const response = await apiClient.get(`/orgs/${this.orgId}/parameters/resolved?${params.toString()}`);
     return response.data;
   }
 

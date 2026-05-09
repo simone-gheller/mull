@@ -98,10 +98,11 @@ export default function Apps() {
     setDetailLoading(true);
     try {
       const resolved = await apiService.getResolvedParameters(node.id);
-      const ownCount = resolved.filter(p => p.isOwn && !p.isOverride).length;
-      const inheritedCount = resolved.filter(p => !p.isOwn).length;
-      const overrideCount = resolved.filter(p => p.isOverride).length;
-      setDetail({ ownCount, inheritedCount, overrideCount });
+      setDetail({
+        ownCount: resolved.summary?.local ?? 0,
+        inheritedCount: resolved.summary?.inherited ?? 0,
+        overrideCount: resolved.summary?.overrides ?? 0,
+      });
     } catch (e) {
       console.error(e);
     } finally {
