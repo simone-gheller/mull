@@ -3,8 +3,17 @@ import { ChevronDown } from 'lucide-react';
 import { useTheme, FONTS, Btn, Badge, Input } from '@mull/ui';
 import { useOrg } from '../hooks/useOrg';
 import { useMembers } from '../hooks/useMembers';
+import { useInvites } from '../hooks/useInvites';
 import { useAuth } from '../context/AuthContext';
 import { Avatar } from '../components/settings/Avatar';
+
+function relativeExpiry(dateStr) {
+  const diff = new Date(dateStr) - Date.now();
+  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  if (days <= 0) return 'expired';
+  if (days === 1) return 'expires tomorrow';
+  return `expires in ${days}d`;
+}
 
 // ── Shared primitives ────────────────────────────────────────
 
@@ -178,33 +187,118 @@ function MemberRow({ member, isYou, T }) {
   );
 }
 
-function InviteBar({ T }) {
+function InviteBar({ onSendInvite, T }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('USER');
+  const [sending, setSending] = useState(false);
+  const [feedback, setFeedback] = useState(null); // { type: 'success'|'error', msg }
+
+  const handleSend = async () => {
+    if (!email.trim()) return;
+    setSending(true);
+    setFeedback(null);
+    try {
+      const result = await onSendInvite({ email: email.trim(), role });
+      setEmail('');
+      setRole('USER');
+      setFeedback({ type: 'success', msg: 'Invite sent' });
+      setTimeout(() => setFeedback(null), 3500);
+    } catch (e) {
+      setFeedback({ type: 'error', msg: e.response?.data?.message || 'Failed to send invite' });
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
-    <div style={{
-      display: 'flex', gap: '10px',
-      background: T.surface, border: `1px solid ${T.border}`,
-      borderRadius: '6px', padding: '16px', marginBottom: '20px',
-    }}>
-      <div style={{ flex: 1 }}>
-        <Input
-          T={T}
-          placeholder="colleague@company.com"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-        />
+    <div style={{ marginBottom: '20px' }}>
+      <div style={{
+        display: 'flex', gap: '10px',
+        background: T.surface, border: `1px solid ${T.border}`,
+        borderRadius: '6px', padding: '16px',
+      }}>
+        <div style={{ flex: 1 }}>
+          <Input
+            T={T}
+            placeholder="colleague@company.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSend()}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+          <RoleSelect value={role} onChange={setRole} T={T} />
+          <Btn T={T} variant="primary" size="md" onClick={handleSend} disabled={sending || !email.trim()}>
+            {sending ? 'sending…' : 'send invite'}
+          </Btn>
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-        <RoleSelect value={role} onChange={setRole} T={T} />
-        <Btn T={T} variant="primary" size="md" disabled title="Invite system coming soon">send invite</Btn>
+      {feedback && (
+        <div style={{
+          marginTop: '8px', fontFamily: FONTS.mono, fontSize: '11px',
+          color: feedback.type === 'success' ? T.termGreen : T.red,
+        }}>
+          {feedback.type === 'success' ? '✓' : '✗'} {feedback.msg}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InviteRow({ invite, onCancel, T }) {
+  const [hover, setHover] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [revokeError, setRevokeError] = useState(null);
+  const roleVariant = ROLE_VARIANT[invite.role] ?? 'default';
+
+  const handleCancel = async () => {
+    setCancelling(true);
+    setRevokeError(null);
+    try {
+      await onCancel(invite.id);
+    } catch (e) {
+      setRevokeError(e.response?.data?.message || 'Failed to revoke');
+      setCancelling(false);
+    }
+  };
+
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'grid', gridTemplateColumns: '1fr auto auto auto',
+        gap: '16px', alignItems: 'center',
+        padding: '10px 0', borderBottom: `1px solid ${T.border}`,
+      }}
+    >
+      <div>
+        <div style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.textPrimary }}>{invite.email}</div>
+        <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: revokeError ? T.red : T.textMuted }}>
+          {revokeError ?? relativeExpiry(invite.expiresAt)}
+        </div>
+      </div>
+      <div />
+      <Badge T={T} variant={roleVariant}>{invite.role.toLowerCase()}</Badge>
+      <div style={{ width: '60px', display: 'flex', justifyContent: 'flex-end' }}>
+        {(hover || cancelling) && (
+          <button
+            onClick={handleCancel}
+            disabled={cancelling}
+            style={{
+              background: 'none', border: 'none', cursor: cancelling ? 'default' : 'pointer',
+              fontFamily: FONTS.mono, fontSize: '11px', color: T.red, padding: '3px 6px',
+            }}
+          >
+            {cancelling ? '…' : 'revoke'}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function MembersTab({ org, members, membersLoading, membersError, currentUserId, T }) {
+function MembersTab({ org, members, membersLoading, membersError, currentUserId, invites, invitesLoading, onSendInvite, onCancelInvite, T }) {
   if (membersLoading) {
     return <><Skeleton height={56} T={T} /><Skeleton height={200} T={T} /></>;
   }
@@ -218,7 +312,7 @@ function MembersTab({ org, members, membersLoading, membersError, currentUserId,
 
   return (
     <div>
-      <InviteBar T={T} />
+      <InviteBar onSendInvite={onSendInvite} T={T} />
 
       <UsageBar T={T} label="seats" used={members.length} total={25} unit="members" />
 
@@ -228,10 +322,18 @@ function MembersTab({ org, members, membersLoading, membersError, currentUserId,
         ))}
       </Section>
 
-      <Section T={T} title="Pending Invites" description="Invite system coming soon">
-        <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>
-          // invitations — coming soon
-        </div>
+      <Section T={T} title="Pending Invites">
+        {invitesLoading ? (
+          <Skeleton height={40} T={T} />
+        ) : invites.length === 0 ? (
+          <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>
+            // no pending invites
+          </div>
+        ) : (
+          invites.map(inv => (
+            <InviteRow key={inv.id} invite={inv} onCancel={onCancelInvite} T={T} />
+          ))
+        )}
       </Section>
     </div>
   );
@@ -473,6 +575,9 @@ export default function OrgSettingsPage() {
   const { user } = useAuth();
   const { org, loading: orgLoading, error: orgError, update: updateOrg } = useOrg();
   const { members, loading: membersLoading, error: membersError } = useMembers();
+  const { invites, loading: invitesLoading, sendInvite: _sendInvite, revokeInvite } = useInvites();
+
+  const sendInvite = _sendInvite;
   const [tab, setTab] = useState('members');
 
   const orgName = org?.name ?? user?.organization?.name ?? 'organization';
@@ -563,6 +668,10 @@ export default function OrgSettingsPage() {
             membersLoading={membersLoading}
             membersError={membersError}
             currentUserId={user?.id}
+            invites={invites}
+            invitesLoading={invitesLoading}
+            onSendInvite={sendInvite}
+            onCancelInvite={revokeInvite}
           />
         )}
         {tab === 'tokens'  && <TokensTab T={T} />}

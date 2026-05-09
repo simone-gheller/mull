@@ -15,6 +15,7 @@ import ProfilePage from './pages/ProfilePage';
 import SecurityPage from './pages/SecurityPage';
 import OrgSettingsPage from './pages/OrgSettingsPage';
 import ComingSoon from './components/ui/ComingSoon';
+import InviteAcceptPage from './pages/InviteAcceptPage';
 
 function Spinner() {
   const { T } = useTheme();
@@ -46,6 +47,7 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
+      <Route path="/invite/accept" element={<InviteAcceptPage />} />
 
       <Route path="/dashboard" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />

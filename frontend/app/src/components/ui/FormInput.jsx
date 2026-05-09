@@ -2,7 +2,7 @@ import { forwardRef, useState } from 'react';
 import { useTheme, FONTS } from '@mull/ui';
 
 const FormInput = forwardRef(function FormInput(
-  { label, type = 'text', placeholder, error, prefix, suffix, ...rest },
+  { label, type = 'text', placeholder, error, prefix, suffix, readOnly, ...rest },
   ref
 ) {
   const { T } = useTheme();
@@ -20,7 +20,7 @@ const FormInput = forwardRef(function FormInput(
       )}
       <div style={{
         display: 'flex', alignItems: 'stretch',
-        background: T.surface, borderRadius: '4px',
+        background: readOnly ? T.overlay : T.surface, borderRadius: '4px',
         border: `1px solid ${error ? T.red : focused ? T.termGreen : T.border}`,
         boxShadow: focused && !error ? `0 0 0 3px ${T.termGreenBg}` : 'none',
         transition: 'all 0.13s', overflow: 'hidden',
@@ -38,12 +38,14 @@ const FormInput = forwardRef(function FormInput(
           ref={ref}
           type={type}
           placeholder={placeholder}
-          onFocus={() => setFocused(true)}
+          readOnly={readOnly}
+          onFocus={() => !readOnly && setFocused(true)}
           onBlur={() => setFocused(false)}
           style={{
             flex: 1, background: 'transparent', border: 'none', outline: 'none',
             padding: '8px 12px', fontFamily: FONTS.mono, fontSize: '12px',
-            color: T.textPrimary,
+            color: readOnly ? T.textMuted : T.textPrimary,
+            cursor: readOnly ? 'default' : 'text',
           }}
           {...rest}
         />

@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTheme, Btn, FONTS } from '@mull/ui';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import apiService from '../services/api';
 import FormInput from '../components/ui/FormInput';
 
 const schema = z.object({
@@ -15,10 +16,21 @@ const schema = z.object({
 
 export default function Login() {
   const { T } = useTheme();
-  const { login, loading, error } = useAuth();
+  const { login, loading, error, switchOrg } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const inviteToken = searchParams.get('invite');
   const from = location.state?.from?.pathname || '/dashboard';
+
+  const [inviteInfo, setInviteInfo] = useState(null);
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    apiService.getInviteByToken(inviteToken)
+      .then(data => setInviteInfo(data))
+      .catch(() => {});
+  }, [inviteToken]);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema),
@@ -26,7 +38,21 @@ export default function Login() {
 
   const onSubmit = async (data) => {
     const result = await login(data);
-    if (result.success) navigate(from, { replace: true });
+    if (!result.success) return;
+    if (inviteToken) {
+      try {
+        const accepted = await apiService.acceptInvite(inviteToken);
+        sessionStorage.setItem('pending_toast', JSON.stringify({
+          msg: `You've joined ${accepted.orgName}`,
+          sub: accepted.role.toLowerCase(),
+          variant: 'success',
+        }));
+        switchOrg(accepted.orgId);
+      } catch {
+        // ignore — user lands on dashboard in their existing org
+      }
+    }
+    navigate(from, { replace: true });
   };
 
   const handleGoogle = () => {
@@ -65,6 +91,19 @@ export default function Login() {
             Secure secrets management
           </p>
         </div>
+
+        {/* Invite banner */}
+        {inviteInfo && (
+          <div style={{
+            padding: '10px 14px', marginBottom: '16px',
+            background: T.termGreenBg, border: `1px solid ${T.termGreenBorder}`,
+            borderLeft: `3px solid ${T.termGreen}`, borderRadius: '4px',
+            fontFamily: FONTS.display, fontSize: '12px', color: T.textSecondary,
+          }}>
+            You're joining <strong style={{ color: T.textPrimary }}>{inviteInfo.orgName}</strong> as{' '}
+            <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textPrimary }}>{inviteInfo.role.toLowerCase()}</span>
+          </div>
+        )}
 
         {/* Card */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '6px', padding: '24px' }}>

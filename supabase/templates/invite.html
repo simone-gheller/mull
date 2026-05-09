@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>you've been invited — mull</title>
+</head>
+<body style="margin:0;padding:0;background-color:#08090c;font-family:'DM Sans','Outfit',-apple-system,'Segoe UI',sans-serif;">
+
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#08090c;padding:48px 16px;">
+    <tr>
+      <td align="center">
+
+        <!-- Card -->
+        <table width="480" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;width:100%;background-color:#0e1015;border:1px solid #1e232e;border-radius:8px;overflow:hidden;">
+
+          <!-- Green accent bar -->
+          <tr>
+            <td style="background-color:#22c55e;height:2px;padding:0;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Logo row -->
+          <tr>
+            <td style="padding:20px 28px 18px;border-bottom:1px solid #1e232e;">
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="background-color:#1a1e26;border:1px solid #1e232e;border-radius:5px;width:24px;height:24px;text-align:center;vertical-align:middle;font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace;font-size:12px;color:#f5f7fa;">▣</td>
+                  <td style="padding-left:9px;">
+                    <span style="font-family:'DM Sans','Outfit',sans-serif;font-size:14px;font-weight:700;color:#f5f7fa;letter-spacing:-0.01em;">mull</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 28px 28px;">
+
+              <!-- Heading -->
+              <p style="margin:0 0 6px;font-family:'DM Sans','Outfit',sans-serif;font-size:20px;font-weight:700;color:#f5f7fa;letter-spacing:-0.02em;">you've been invited</p>
+              <p style="margin:0 0 28px;font-family:'DM Sans','Outfit',sans-serif;font-size:13px;color:#8a95a8;line-height:1.6;">open the link below and enter this code to join the workspace</p>
+
+              <!-- Code box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="background-color:#0a1f10;border:1px solid #14401e;border-radius:6px;padding:24px 20px;text-align:center;">
+                    <p style="margin:0 0 8px;font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace;font-size:10px;color:#3d4555;letter-spacing:0.12em;text-transform:uppercase;">// invite code</p>
+                    <p style="margin:0;font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace;font-size:38px;font-weight:700;color:#22c55e;letter-spacing:0.25em;line-height:1;">{{ .Token }}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Link -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="background-color:#111318;border:1px solid #1e232e;border-radius:6px;padding:14px 16px;">
+                    <p style="margin:0 0 4px;font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace;font-size:9px;color:#3d4555;letter-spacing:0.12em;text-transform:uppercase;">// accept invite</p>
+                    <a href="{{ .RedirectTo }}" style="font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace;font-size:11px;color:#8a95a8;word-break:break-all;text-decoration:none;">{{ .RedirectTo }}</a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Expiry note -->
+              <p style="margin:0;font-family:'DM Sans','Outfit',sans-serif;font-size:12px;color:#3d4555;line-height:1.6;">this code expires in <span style="color:#8a95a8;">7 days</span>. if you weren't expecting this invite, you can safely ignore this email.</p>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:14px 28px;border-top:1px solid #1e232e;">
+              <p style="margin:0;font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace;font-size:9px;color:#3d4555;letter-spacing:0.05em;">mull — secure configuration management</p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Card -->
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

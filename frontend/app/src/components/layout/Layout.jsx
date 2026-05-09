@@ -2,16 +2,31 @@ import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useTheme, FONTS } from '@mull/ui';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { CommandPalette } from '../CommandPalette';
 import { ShortcutsModal } from '../ShortcutsModal';
 
+const PENDING_TOAST_KEY = 'pending_toast';
+
 export default function Layout() {
   const { T } = useTheme();
   const { orgId } = useAuth();
+  const { toast } = useToast();
   const [cmdOpen,      setCmdOpen]      = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  useEffect(() => {
+    const pending = sessionStorage.getItem(PENDING_TOAST_KEY);
+    if (pending) {
+      sessionStorage.removeItem(PENDING_TOAST_KEY);
+      try {
+        const { msg, variant, sub } = JSON.parse(pending);
+        toast(msg, variant, sub);
+      } catch {}
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handler = (e) => {

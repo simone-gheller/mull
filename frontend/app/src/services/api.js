@@ -134,6 +134,31 @@ class ApiService {
     const response = await apiClient.get(`/orgs/${this.orgId}/users`);
     return response.data;
   }
+
+  // Invites
+  async getInvites() {
+    const response = await apiClient.get(`/orgs/${this.orgId}/invites`);
+    return response.data;
+  }
+
+  async sendInvite({ email, role }) {
+    const response = await apiClient.post(`/orgs/${this.orgId}/invites`, { email, role });
+    return response.data;
+  }
+
+  async revokeInvite(id) {
+    await apiClient.delete(`/orgs/${this.orgId}/invites/${id}`);
+  }
+
+  async getInviteByToken(token) {
+    const response = await apiClient.get(`/invites/${token}`);
+    return response.data;
+  }
+
+  async acceptInvite(token) {
+    const response = await apiClient.post('/invites/accept', { token });
+    return response.data;
+  }
 }
 
 export default new ApiService();

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
@@ -8,14 +8,19 @@ export function useMembers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const fetchMembers = useCallback(async () => {
     if (!orgId) return;
-    let cancelled = false;
-    api.getMembers()
-      .then(data => { if (!cancelled) { setMembers(data); setLoading(false); } })
-      .catch(e => { if (!cancelled) { setError(e.message); setLoading(false); } });
-    return () => { cancelled = true; };
+    try {
+      const data = await api.getMembers();
+      setMembers(data);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }, [orgId]);
 
-  return { members, loading, error };
+  useEffect(() => { fetchMembers(); }, [fetchMembers]);
+
+  return { members, loading, error, refetch: fetchMembers };
 }
