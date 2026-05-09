@@ -11,6 +11,7 @@ backend/src/generated/
 # Supabase local-only runtime files (config.toml and templates/ are tracked)
 supabase/.branches/
 supabase/.temp/
+supabase/.env
 supabase/signing_keys.json
 supabase/snippets/
 
