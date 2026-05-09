@@ -9,6 +9,7 @@ import { swaggerConfig, swaggerUiConfig } from './openapi/config.js';
 import { healthCheckSchema } from './openapi/health.js';
 import authPlugin from './plugins/auth.js';
 import supabasePlugin from './plugins/supabase.js';
+import mailerPlugin from './plugins/mailer.js';
 import authRoutes from './routes/auth.js';
 import configRoutes from './routes/config.js';
 import environmentRoutes from './routes/environments.js';
@@ -16,6 +17,7 @@ import appRoutes from './routes/apps.js';
 import parameterRoutes from './routes/parameters.js';
 import parameterValueRoutes from './routes/parameterValues.js';
 import orgRoutes from './routes/orgs.js';
+import invitationRoutes from './routes/invitations.js';
 import { envSchema } from './config.js';
 
 /**
@@ -74,6 +76,7 @@ export function buildApp(options = {}) {
   fastify.decorate('prisma', prisma);
 
   fastify.register(supabasePlugin);
+  fastify.register(mailerPlugin);
   fastify.register(authPlugin, { testMode });
 
   // Register Swagger documentation
@@ -90,6 +93,7 @@ export function buildApp(options = {}) {
   // Register routes
   // Auth routes - no prefix (no org context)
   fastify.register(authRoutes);
+  fastify.register(invitationRoutes);
 
   // Org-scoped routes - all use /orgs/:orgId prefix
   fastify.register(configRoutes, { prefix: '/orgs/:orgId' });

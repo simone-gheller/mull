@@ -7,9 +7,21 @@ export default fp(async function(fastify) {
     fastify.config.SUPABASE_PUBLISHABLE_KEY,
     {
       auth: {
-        autoRefreshToken: false,   // ← nessun timer in background
-        persistSession: false,     // ← nessuno stato interno di sessione
-        detectSessionInUrl: false  // ← siamo server-side, non ha senso
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
+      }
+    }
+  ))
+
+  fastify.decorate('supabaseAdmin', createClient(
+    fastify.config.SUPABASE_URL,
+    fastify.config.SUPABASE_SECRET_KEY,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
       }
     }
   ))
