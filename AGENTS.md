@@ -53,6 +53,23 @@ npx supabase stop
 # Studio: http://localhost:54323
 ```
 
+## Commit Style
+
+Use Conventional Commit messages matching the existing repository history:
+
+```
+type(scope): concise summary
+type(scope): concise summary — specific detail
+```
+
+Common scopes: `backend`, `frontend`, `auth`, `app`, `repo`.
+Common types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`.
+
+Examples:
+- `feat(backend): parameter values — encrypted history and rollback`
+- `feat(frontend): parameter detail — history and rollback UI`
+- `docs(repo): refresh review backlog and architecture notes`
+
 ## Environment Setup
 
 Backend `.env` requires:
