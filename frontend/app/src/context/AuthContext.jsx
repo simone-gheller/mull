@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import apiClient, { setToken } from '../lib/api';
+import apiClient, { onBackendStatusChange, setToken } from '../lib/api';
 import apiService from '../services/api';
 
 const AuthContext = createContext();
@@ -23,6 +23,8 @@ const authReducer = (state, action) => {
       return { ...state, loading: action.payload };
     case 'SET_ERROR':
       return { ...state, error: action.payload, loading: false };
+    case 'SET_BACKEND_DOWN':
+      return { ...state, backendDown: action.payload };
     case 'CLEAR_ERROR':
       return { ...state, error: null };
     default:
@@ -37,6 +39,15 @@ const initialState = {
   isAuthenticated: false,
   loading: true,
   error: null,
+  backendDown: false,
+};
+
+const resolveActiveOrgId = (orgs) => {
+  const storedOrgId = localStorage.getItem('active_org_id');
+  return orgs.find(o => o.id === storedOrgId)?.id
+    ?? orgs.find(o => o.role === 'OWNER')?.id
+    ?? orgs[0]?.id
+    ?? null;
 };
 
 const fetchUserData = async () => {
@@ -51,31 +62,33 @@ const fetchUserData = async () => {
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
+  const loadSession = useCallback(async (session) => {
+    if (!session) {
+      setToken(null);
+      apiService.setOrgId(null);
+      dispatch({ type: 'SET_SESSION', payload: { user: null, orgs: [], orgId: null } });
+      return;
+    }
+
+    setToken(session.access_token);
+    const userData = await fetchUserData();
+    const orgs = userData?.organizations ?? [];
+    const activeOrgId = resolveActiveOrgId(orgs);
+    apiService.setOrgId(activeOrgId);
+    dispatch({ type: 'SET_SESSION', payload: { user: session.user, orgs, orgId: activeOrgId } });
+  }, []);
+
   useEffect(() => {
     const initAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setToken(session.access_token);
-        const userData = await fetchUserData();
-        const orgs = userData?.organizations ?? [];
-        const storedOrgId = localStorage.getItem('active_org_id');
-        const activeOrgId = orgs.find(o => o.id === storedOrgId)?.id
-          ?? orgs.find(o => o.role === 'OWNER')?.id
-          ?? orgs[0]?.id ?? null;
-        apiService.setOrgId(activeOrgId);
-        dispatch({ type: 'SET_SESSION', payload: { user: session.user, orgs, orgId: activeOrgId } });
-      } else {
-        dispatch({ type: 'SET_SESSION', payload: { user: null, orgs: [], orgId: null } });
-      }
+      await loadSession(session);
     };
 
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!session) {
-        setToken(null);
-        apiService.setOrgId(null);
-        dispatch({ type: 'SET_SESSION', payload: { user: null, orgs: [], orgId: null } });
+        await loadSession(null);
         return;
       }
 
@@ -85,18 +98,43 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
-      const userData = await fetchUserData();
-      const orgs = userData?.organizations ?? [];
-      const storedOrgId = localStorage.getItem('active_org_id');
-      const activeOrgId = orgs.find(o => o.id === storedOrgId)?.id
-        ?? orgs.find(o => o.role === 'OWNER')?.id
-        ?? orgs[0]?.id ?? null;
-      apiService.setOrgId(activeOrgId);
-      dispatch({ type: 'SET_SESSION', payload: { user: session.user, orgs, orgId: activeOrgId } });
+      await loadSession(session);
     });
 
     return () => subscription.unsubscribe();
+  }, [loadSession]);
+
+  useEffect(() => {
+    return onBackendStatusChange(isDown => {
+      dispatch({ type: 'SET_BACKEND_DOWN', payload: isDown });
+    });
   }, []);
+
+  useEffect(() => {
+    if (!state.backendDown) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        await apiClient.get('/health');
+        if (cancelled) return;
+        const { data: { session } } = await supabase.auth.getSession();
+        await loadSession(session);
+        if (!cancelled) {
+          dispatch({ type: 'SET_BACKEND_DOWN', payload: false });
+        }
+      } catch {
+        // Keep polling until the API answers again.
+      }
+    };
+
+    const interval = setInterval(poll, 10000);
+    poll();
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [loadSession, state.backendDown]);
 
   const login = async ({ email, password }) => {
     dispatch({ type: 'SET_LOADING', payload: true });
@@ -155,6 +193,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: state.isAuthenticated,
     loading: state.loading,
     error: state.error,
+    backendDown: state.backendDown,
     login,
     register,
     verifyOtp,

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@mull/ui';
 import { Download } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import apiService from '../services/api';
 import Modal from '../components/ui/Modal';
 import FormInput from '../components/ui/FormInput';
@@ -12,7 +12,7 @@ import DeleteConfirmModal from '../components/ui/DeleteConfirmModal';
 export default function Apps() {
   const { T } = useTheme();
   const navigate = useNavigate();
-  const { orgs, orgId } = useAuth();
+  const { toast } = useToast();
 
   const [apps, setApps] = useState([]);
   const [tree, setTree] = useState([]);
@@ -30,6 +30,7 @@ export default function Apps() {
 
   // Hover state for export icon button
   const [hoveredIcon, setHoveredIcon] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   // Modal form
   const [showModal, setShowModal] = useState(false);
@@ -76,8 +77,11 @@ export default function Apps() {
       setTree(buildAppTree(next));
       setShowModal(false);
       resetForm();
+      toast('app created', 'success', created.name);
     } catch (e) {
-      setCreateError(e.response?.data?.message || e.message || 'Failed to create app');
+      const message = e.response?.data?.message || e.message || 'Failed to create app';
+      setCreateError(message);
+      toast('app creation failed', 'error', message);
     } finally {
       setCreating(false);
     }
@@ -121,15 +125,61 @@ export default function Apps() {
       setSelectedApp(null);
       setDetail(null);
       setShowDeleteModal(false);
+      toast('app deleted');
     } catch (e) {
-      setDeleteError(e.response?.data?.message || e.message || 'Failed to delete app');
+      const message = e.response?.data?.message || e.message || 'Failed to delete app';
+      setDeleteError(message);
+      toast('delete failed', 'error', message);
     } finally {
       setDeleting(false);
     }
   };
 
-  const handleExport = () => {
-    // TODO: implement export
+  const handleExport = async () => {
+    if (!selectedApp || exporting) return;
+
+    setExporting(true);
+    try {
+      const { parameters: resolved, values } = await apiService.exportProjectParameters(selectedApp.id);
+      const valuesByParameterKey = new Map();
+
+      for (const [envName, group] of Object.entries(values ?? {})) {
+        for (const row of group.values ?? []) {
+          if (!valuesByParameterKey.has(row.parameterKey)) {
+            valuesByParameterKey.set(row.parameterKey, {});
+          }
+          valuesByParameterKey.get(row.parameterKey)[envName] = row.value;
+        }
+      }
+
+      const exported = {
+        app: { id: selectedApp.id, name: selectedApp.name },
+        exportedAt: new Date().toISOString(),
+        parameters: (resolved.items ?? []).map(item => ({
+          key: item.key,
+          description: item.parameter?.description ?? null,
+          isSecret: Boolean(item.parameter?.isSecret),
+          values: valuesByParameterKey.get(item.key) ?? {},
+        })),
+      };
+
+      const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const safeName = selectedApp.name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-|-$/g, '') || 'app';
+      link.href = url;
+      link.download = `${safeName}-parameters.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast('parameters exported');
+    } catch (e) {
+      console.error(e);
+      toast('export failed', 'error', e.response?.data?.message || e.message || 'Could not export parameters');
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -228,13 +278,15 @@ export default function Apps() {
                   )}
                   <button
                     onClick={handleExport}
+                    disabled={exporting}
                     onMouseEnter={() => setHoveredIcon('export')}
                     onMouseLeave={() => setHoveredIcon(null)}
                     style={{
                       background: hoveredIcon === 'export' ? T.overlay : 'transparent',
                       border: `1px solid ${hoveredIcon === 'export' ? T.border : 'transparent'}`,
-                      borderRadius: '4px', cursor: 'pointer',
+                      borderRadius: '4px', cursor: exporting ? 'wait' : 'pointer',
                       padding: '4px', display: 'flex', alignItems: 'center',
+                      opacity: exporting ? 0.55 : 1,
                       transition: 'all 0.12s',
                     }}
                   >

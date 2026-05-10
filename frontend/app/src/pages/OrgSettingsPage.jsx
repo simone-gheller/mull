@@ -5,6 +5,7 @@ import { useOrg } from '../hooks/useOrg';
 import { useMembers } from '../hooks/useMembers';
 import { useInvites } from '../hooks/useInvites';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { Avatar } from '../components/settings/Avatar';
 
 function relativeExpiry(dateStr) {
@@ -339,48 +340,18 @@ function MembersTab({ org, members, membersLoading, membersError, currentUserId,
   );
 }
 
-// ── Tokens tab ───────────────────────────────────────────────
-
-function TokenRow({ name, prefix, scope, lastUsed, created, T }) {
-  const [hover, setHover] = useState(false);
-  return (
-    <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'grid', gridTemplateColumns: '1fr auto auto',
-        gap: '16px', alignItems: 'center',
-        padding: '10px 0', borderBottom: `1px solid ${T.border}`,
-      }}
-    >
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2px' }}>
-          <span style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.textPrimary }}>{name}</span>
-          <code style={{
-            fontFamily: FONTS.mono, fontSize: '11px', color: T.amber,
-            background: T.amberBg, border: `1px solid ${T.amberBorder}`,
-            padding: '1px 6px', borderRadius: '3px',
-          }}>{prefix}…</code>
-        </div>
-        <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>
-          created {created} · last used {lastUsed}
-        </div>
-      </div>
-      <Badge T={T} variant="info">{scope}</Badge>
-      {hover
-        ? <Btn T={T} variant="danger" size="sm">revoke</Btn>
-        : <div style={{ width: '60px' }} />}
-    </div>
-  );
-}
-
 function TokensTab({ T }) {
   return (
     <Section T={T} title="Organization API Tokens" description="Shared tokens scoped to this org — visible to admins">
-      <TokenRow T={T} name="github-actions-prod" prefix="mull_sk_7pR3" scope="read:secrets" lastUsed="10m ago" created="3mo ago" />
-      <TokenRow T={T} name="vercel-deploy" prefix="mull_sk_2qN8" scope="read:secrets" lastUsed="1h ago" created="2mo ago" />
-      <div style={{ marginTop: '16px' }}>
-        <Btn T={T} variant="terminal" size="sm" icon="+">new org token</Btn>
+      <div style={{ textAlign: 'center', padding: '24px 0 20px' }}>
+        <div style={{ fontFamily: FONTS.mono, fontSize: '22px', color: T.textMuted, marginBottom: '10px' }}>▷</div>
+        <div style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: '13px', color: T.textSecondary, marginBottom: '4px' }}>
+          Org tokens are not available yet.
+        </div>
+        <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted, marginBottom: '16px' }}>
+          Scoped machine credentials will appear here once token management ships.
+        </div>
+        <Btn T={T} variant="terminal" size="sm" icon="+" disabled>new org token</Btn>
       </div>
     </Section>
   );
@@ -389,12 +360,6 @@ function TokensTab({ T }) {
 // ── Billing tab ──────────────────────────────────────────────
 
 function BillingTab({ memberCount, T }) {
-  const invoices = [
-    { date: 'May 1, 2026', amount: '$0.00', status: 'paid' },
-    { date: 'Apr 1, 2026', amount: '$0.00', status: 'paid' },
-    { date: 'Mar 1, 2026', amount: '$0.00', status: 'paid' },
-  ];
-
   return (
     <div>
       <div style={{
@@ -424,22 +389,18 @@ function BillingTab({ memberCount, T }) {
 
       <Section T={T} title="Usage This Period">
         <UsageBar T={T} label="members" used={memberCount} total={3} unit="members" />
-        <UsageBar T={T} label="api calls" used={0} total={10000} unit="calls/mo" />
-      </Section>
-
-      <Section T={T} title="Invoice History">
-        {invoices.map(inv => (
-          <div key={inv.date} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '9px 0', borderBottom: `1px solid ${T.border}`,
-          }}>
-            <span style={{ fontFamily: FONTS.display, fontSize: '12px', color: T.textSecondary }}>{inv.date}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.textPrimary }}>{inv.amount}</span>
-              <Badge T={T} variant="success">{inv.status}</Badge>
-            </div>
-          </div>
-        ))}
+        <div style={{
+          marginTop: '14px',
+          padding: '12px 14px',
+          background: T.overlay,
+          border: `1px solid ${T.border}`,
+          borderRadius: '4px',
+          fontFamily: FONTS.display,
+          fontSize: '12px',
+          color: T.textMuted,
+        }}>
+          API usage metrics coming soon.
+        </div>
       </Section>
     </div>
   );
@@ -573,11 +534,46 @@ function SettingsTab({ org, onUpdateOrg, T }) {
 export default function OrgSettingsPage() {
   const { T } = useTheme();
   const { user } = useAuth();
+  const { toast } = useToast();
   const { org, loading: orgLoading, error: orgError, update: updateOrg } = useOrg();
   const { members, loading: membersLoading, error: membersError } = useMembers();
   const { invites, loading: invitesLoading, sendInvite: _sendInvite, revokeInvite } = useInvites();
 
-  const sendInvite = _sendInvite;
+  const sendInvite = async ({ email, role }) => {
+    try {
+      const result = await _sendInvite({ email, role });
+      toast('invite sent', 'success', email);
+      return result;
+    } catch (e) {
+      const message = e.response?.data?.message || 'Failed to send invite';
+      toast('invite failed', 'error', message);
+      throw e;
+    }
+  };
+
+  const cancelInvite = async (id) => {
+    try {
+      await revokeInvite(id);
+      toast('invite revoked');
+    } catch (e) {
+      const message = e.response?.data?.message || 'Failed to revoke invite';
+      toast('revoke failed', 'error', message);
+      throw e;
+    }
+  };
+
+  const updateOrgWithToast = async (data) => {
+    try {
+      const updated = await updateOrg(data);
+      toast('organization saved');
+      return updated;
+    } catch (e) {
+      const message = e.response?.data?.message || 'Failed to save organization';
+      toast('save failed', 'error', message);
+      throw e;
+    }
+  };
+
   const [tab, setTab] = useState('members');
 
   const orgName = org?.name ?? user?.organization?.name ?? 'organization';
@@ -671,13 +667,13 @@ export default function OrgSettingsPage() {
             invites={invites}
             invitesLoading={invitesLoading}
             onSendInvite={sendInvite}
-            onCancelInvite={revokeInvite}
+            onCancelInvite={cancelInvite}
           />
         )}
         {tab === 'tokens'  && <TokensTab T={T} />}
         {tab === 'billing' && <BillingTab T={T} memberCount={org?.memberCount ?? members.length} />}
         {tab === 'audit'   && <AuditTab T={T} />}
-        {tab === 'settings' && <SettingsTab T={T} org={org} onUpdateOrg={updateOrg} />}
+        {tab === 'settings' && <SettingsTab T={T} org={org} onUpdateOrg={updateOrgWithToast} />}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { useTheme, Btn, FONTS } from '@mull/ui';
 import apiService from '../services/api';
+import { useToast } from '../context/ToastContext';
 import Modal from '../components/ui/Modal';
 import FormInput from '../components/ui/FormInput';
 import TrashButton from '../components/ui/TrashButton';
@@ -9,6 +10,7 @@ import DeleteConfirmModal from '../components/ui/DeleteConfirmModal';
 
 export default function Environments() {
   const { T } = useTheme();
+  const { toast } = useToast();
   const [environments, setEnvironments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -41,8 +43,11 @@ export default function Environments() {
       await apiService.deleteEnvironment(confirmEnv.id);
       setEnvironments(envs => envs.filter(e => e.id !== confirmEnv.id));
       setConfirmEnv(null);
+      toast('environment deleted');
     } catch (e) {
-      setDeleteError(e.response?.data?.message || 'Failed to delete environment');
+      const message = e.response?.data?.message || 'Failed to delete environment';
+      setDeleteError(message);
+      toast('delete failed', 'error', message);
     } finally { setDeleting(false); }
   };
 
@@ -55,8 +60,11 @@ export default function Environments() {
       const created = await apiService.createEnvironment(payload);
       setEnvironments([...environments, created]);
       setShowModal(false); setNewName(''); setNewSecret(false);
+      toast('environment created', 'success', created.name);
     } catch (e) {
-      setCreateError(e.response?.data?.message || 'Failed to create environment');
+      const message = e.response?.data?.message || 'Failed to create environment';
+      setCreateError(message);
+      toast('environment creation failed', 'error', message);
     } finally { setCreating(false); }
   };
 
