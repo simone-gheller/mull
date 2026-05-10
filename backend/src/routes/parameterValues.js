@@ -187,7 +187,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.put(
     '/parameters/values/:id',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
       schema: updateParameterValueSchema
     },
     async (request, reply) => {

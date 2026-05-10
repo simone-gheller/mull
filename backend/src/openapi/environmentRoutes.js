@@ -2,7 +2,7 @@
  * OpenAPI schemas for environment routes
  */
 import { errorResponse } from './common.js';
-import { UUID_V7_PATTERN } from '../schemas/common.js';
+import { uuidV7Param } from '../schemas/common.js';
 
 export const listEnvironmentsSchema = {
   tags: ['environments'],
@@ -12,12 +12,7 @@ export const listEnvironmentsSchema = {
     type: 'object',
     required: ['orgId'],
     properties: {
-      orgId: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        format: 'uuid',
-        description: 'Organization ID'
-      }
+      orgId: uuidV7Param('Organization ID'),
     }
   },
   response: {
@@ -46,12 +41,7 @@ export const createEnvironmentSchema = {
     type: 'object',
     required: ['orgId'],
     properties: {
-      orgId: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        format: 'uuid',
-        description: 'Organization ID'
-      }
+      orgId: uuidV7Param('Organization ID'),
     }
   },
   body: {
@@ -84,4 +74,25 @@ export const createEnvironmentSchema = {
     409: errorResponse,
     500: errorResponse
   }
+};
+
+export const deleteEnvironmentSchema = {
+  tags: ['environments'],
+  summary: 'Delete environment',
+  description: 'Delete an environment and its parameter values',
+  params: {
+    type: 'object',
+    required: ['orgId', 'envId'],
+    properties: {
+      orgId: uuidV7Param('Organization ID'),
+      envId: uuidV7Param('Environment ID'),
+    },
+  },
+  response: {
+    204: { type: 'null' },
+    400: errorResponse,
+    403: errorResponse,
+    404: errorResponse,
+    500: errorResponse,
+  },
 };

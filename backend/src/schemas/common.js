@@ -10,6 +10,19 @@
  */
 export const UUID_V7_PATTERN = '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
 
+export function uuidV7Param(description = 'UUID v7') {
+  return {
+    type: 'string',
+    pattern: UUID_V7_PATTERN,
+    format: 'uuid',
+    description,
+  };
+}
+
+export function isUuidV7(value) {
+  return typeof value === 'string' && new RegExp(UUID_V7_PATTERN).test(value);
+}
+
 /**
  * Schema for validating orgId from header or query param
  * Accepts either X-Org-Id header or ?orgId query parameter
@@ -20,11 +33,7 @@ export const orgIdSchema = {
     {
       type: 'object',
       properties: {
-        'x-org-id': {
-          type: 'string',
-          pattern: UUID_V7_PATTERN,
-          description: 'Organization UUID v7'
-        }
+        'x-org-id': uuidV7Param('Organization UUID v7'),
       },
       required: ['x-org-id']
     },
@@ -41,10 +50,6 @@ export const orgIdSchema = {
 export const orgIdQuerySchema = {
   type: 'object',
   properties: {
-    orgId: {
-      type: 'string',
-      pattern: UUID_V7_PATTERN,
-      description: 'Organization UUID v7'
-    }
+    orgId: uuidV7Param('Organization UUID v7'),
   }
 };

@@ -139,6 +139,18 @@ describe('ParameterValue Routes', () => {
       assert.ok(error.message.includes('not found'));
     });
 
+    test('should return 400 when id is not a valid UUIDv7', async () => {
+      const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org);
+
+      const response = await ctx.injectAuth({
+        method: 'GET',
+        url: `/orgs/${org.id}/parameters/values/not-a-uuid`
+      }, user);
+
+      assert.strictEqual(response.statusCode, 400);
+    });
+
     test('should return 403 when parameter value belongs to different org', async () => {
       const org1 = await ctx.buildOrg();
       const org2 = await ctx.buildOrg();
@@ -165,7 +177,7 @@ describe('ParameterValue Routes', () => {
   describe('PUT /orgs/:orgId/parameters/values/:id', () => {
     test('should update parameter value successfully', async () => {
       const org = await ctx.buildOrg();
-      const user = await ctx.buildUserInOrg(org);
+      const user = await ctx.buildUserInOrg(org, { role: 'ADMIN' });
       const app = await ctx.buildApp({ orgId: org.id });
       const env = await ctx.buildEnv({ orgId: org.id, name: 'dev' });
       const param = await ctx.buildParam({ appId: app.id, key: 'API_KEY' });
@@ -194,7 +206,7 @@ describe('ParameterValue Routes', () => {
 
     test('should update parameter value to empty string', async () => {
       const org = await ctx.buildOrg();
-      const user = await ctx.buildUserInOrg(org);
+      const user = await ctx.buildUserInOrg(org, { role: 'ADMIN' });
       const app = await ctx.buildApp({ orgId: org.id });
       const env = await ctx.buildEnv({ orgId: org.id, name: 'dev' });
       const param = await ctx.buildParam({ appId: app.id, key: 'KEY' });
@@ -235,7 +247,7 @@ describe('ParameterValue Routes', () => {
 
     test('should return 400 when value is missing from body', async () => {
       const org = await ctx.buildOrg();
-      const user = await ctx.buildUserInOrg(org);
+      const user = await ctx.buildUserInOrg(org, { role: 'ADMIN' });
       const app = await ctx.buildApp({ orgId: org.id });
       const env = await ctx.buildEnv({ orgId: org.id, name: 'dev' });
       const param = await ctx.buildParam({ appId: app.id, key: 'KEY' });
@@ -256,7 +268,7 @@ describe('ParameterValue Routes', () => {
 
     test('should return 404 when parameter value does not exist', async () => {
       const org = await ctx.buildOrg();
-      const user = await ctx.buildUserInOrg(org);
+      const user = await ctx.buildUserInOrg(org, { role: 'ADMIN' });
 
       const response = await ctx.injectAuth({
         method: 'PUT',
@@ -273,7 +285,7 @@ describe('ParameterValue Routes', () => {
     test('should return 403 when parameter value belongs to different org', async () => {
       const org1 = await ctx.buildOrg();
       const org2 = await ctx.buildOrg();
-      const user = await ctx.buildUserInOrg(org1);
+      const user = await ctx.buildUserInOrg(org1, { role: 'ADMIN' });
       const app2 = await ctx.buildApp({ orgId: org2.id });
       const env2 = await ctx.buildEnv({ orgId: org2.id, name: 'dev' });
       const param2 = await ctx.buildParam({ appId: app2.id, key: 'KEY' });
@@ -292,6 +304,30 @@ describe('ParameterValue Routes', () => {
       assert.strictEqual(response.statusCode, 403);
       const error = JSON.parse(response.body);
       assert.ok(error.message.includes('does not belong'));
+    });
+
+    test('should forbid USER members from updating non-secret values', async () => {
+      const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org, { role: 'USER' });
+      const app = await ctx.buildApp({ orgId: org.id });
+      const env = await ctx.buildEnv({ orgId: org.id, name: 'dev' });
+      const param = await ctx.buildParam({ appId: app.id, key: 'PUBLIC_KEY' });
+
+      const paramValue = await ctx.prisma.parameterValue.findFirst({
+        where: { parameterId: param.id, environmentId: env.id }
+      });
+
+      const response = await ctx.injectAuth({
+        method: 'PUT',
+        url: `/orgs/${org.id}/parameters/values/${paramValue.id}`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ value: 'user-written-value' })
+      }, user);
+
+      assert.strictEqual(response.statusCode, 403);
+      const dbValue = await ctx.prisma.parameterValue.findUnique({ where: { id: paramValue.id } });
+      assert.strictEqual(dbValue.isSet, false);
+      assert.strictEqual(decryptParameterValue(dbValue), '');
     });
   });
 });

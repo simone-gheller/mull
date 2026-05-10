@@ -4,7 +4,7 @@
  * POST /environments - Create new environment
  */
 import { uuidv7 } from 'uuidv7';
-import { listEnvironmentsSchema, createEnvironmentSchema } from '../openapi/environmentRoutes.js';
+import { listEnvironmentsSchema, createEnvironmentSchema, deleteEnvironmentSchema } from '../openapi/environmentRoutes.js';
 import { syncEnvironmentParameterValues } from '../lib/syncParameterValues.js';
 
 export default async function environmentRoutes(fastify, _options) {
@@ -44,6 +44,7 @@ export default async function environmentRoutes(fastify, _options) {
   // DELETE /environments/:envId - Delete environment (ADMIN+)
   fastify.delete('/environments/:envId', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    schema: deleteEnvironmentSchema,
   }, async (request, reply) => {
     const { orgId, envId } = request.params;
 
@@ -68,7 +69,7 @@ export default async function environmentRoutes(fastify, _options) {
 
   // POST /environments - Create environment
   fastify.post('/environments', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
     schema: createEnvironmentSchema
   }, async (request, reply) => {
     const { name, isSecret } = request.body;

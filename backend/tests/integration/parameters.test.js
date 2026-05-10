@@ -279,5 +279,20 @@ describe('Parameter Routes', () => {
       const error = JSON.parse(response.body);
       assert.ok(error.message.includes('already exists'));
     });
+
+    test('should forbid USER members from creating parameters', async () => {
+      const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org, { role: 'USER' });
+      const app = await ctx.buildApp({ orgId: org.id });
+
+      const response = await ctx.injectAuth({
+        method: 'POST',
+        url: `/orgs/${org.id}/parameters`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ appId: app.id, key: 'VIEWER_CREATED_KEY' })
+      }, user);
+
+      assert.strictEqual(response.statusCode, 403);
+    });
   });
 });

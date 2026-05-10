@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "test": "node --env-file=.env --test tests/**/*.test.js",
+    "test": "npm run test:unit",
+    "test:unit": "node --test tests/unit/**/*.test.js",
+    "test:integration": "node --env-file=.env tests/utils/integrationPreflight.js && node --env-file=.env --test tests/integration/**/*.test.js",
+    "test:all": "npm run test:unit && npm run test:integration",
     "dev": "node --watch --env-file=.env src/server.js",
     "start": "node --env-file=.env src/server.js",
     "supabase:start": "cd .. && npx supabase start",

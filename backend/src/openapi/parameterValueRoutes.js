@@ -1,4 +1,4 @@
-import { UUID_V7_PATTERN } from '../schemas/common.js';
+import { uuidV7Param } from '../schemas/common.js';
 import { errorResponse } from './common.js';
 
 /**
@@ -11,17 +11,8 @@ export const getParameterValuesSchema = {
     type: 'object',
     required: ['orgId', 'appId'],
     properties: {
-      orgId: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        format: 'uuid',
-        description: 'Organization ID'
-      },
-      appId: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        description: 'ID dell\'app'
-      }
+      orgId: uuidV7Param('Organization ID'),
+      appId: uuidV7Param('ID dell\'app'),
     }
   },
   response: {
@@ -71,17 +62,8 @@ export const getParameterValueByIdSchema = {
     type: 'object',
     required: ['orgId', 'id'],
     properties: {
-      orgId: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        format: 'uuid',
-        description: 'Organization ID'
-      },
-      id: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        description: 'ID del parameter value'
-      }
+      orgId: uuidV7Param('Organization ID'),
+      id: uuidV7Param('ID del parameter value'),
     }
   },
   response: {
@@ -127,17 +109,8 @@ export const updateParameterValueSchema = {
     type: 'object',
     required: ['orgId', 'id'],
     properties: {
-      orgId: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        format: 'uuid',
-        description: 'Organization ID'
-      },
-      id: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        description: 'ID del parameter value'
-      }
+      orgId: uuidV7Param('Organization ID'),
+      id: uuidV7Param('ID del parameter value'),
     }
   },
   body: {

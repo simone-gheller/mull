@@ -392,18 +392,17 @@ export async function buildTestContext() {
      */
     async cleanup() {
       try {
-        // Delete users first (no foreign keys from other tables to users)
-        if (createdIds.users?.length > 0) {
-          await prisma.user.deleteMany({
-            where: { id: { in: createdIds.users } }
-          });
-        }
-
         // Delete orgs - Prisma cascade handles children
-        // (Apps, Environments, Parameters, ParameterValues all have onDelete: Cascade)
+        // (Apps, Environments, Parameters, ParameterValues, memberships, and invites all have onDelete: Cascade)
         if (createdIds.orgs.length > 0) {
           await prisma.organization.deleteMany({
             where: { id: { in: createdIds.orgs } }
+          });
+        }
+
+        if (createdIds.users?.length > 0) {
+          await prisma.user.deleteMany({
+            where: { id: { in: createdIds.users } }
           });
         }
       } finally {

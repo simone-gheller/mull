@@ -160,5 +160,33 @@ describe('Environment Routes', () => {
       const environment = JSON.parse(response.body);
       assert.strictEqual(environment.name, 'whitespace-test');
     });
+
+    test('should forbid USER members from creating environments', async () => {
+      const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org, { role: 'USER' });
+
+      const response = await ctx.injectAuth({
+        method: 'POST',
+        url: `/orgs/${org.id}/environments`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'viewer-env' })
+      }, user);
+
+      assert.strictEqual(response.statusCode, 403);
+    });
+  });
+
+  describe('DELETE /orgs/:orgId/environments/:envId', () => {
+    test('should return 400 when envId is not a valid UUIDv7', async () => {
+      const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org, { role: 'ADMIN' });
+
+      const response = await ctx.injectAuth({
+        method: 'DELETE',
+        url: `/orgs/${org.id}/environments/not-a-uuid`
+      }, user);
+
+      assert.strictEqual(response.statusCode, 400);
+    });
   });
 });

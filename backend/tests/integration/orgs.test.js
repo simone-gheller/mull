@@ -149,4 +149,18 @@ describe('Org Routes', () => {
       assert.strictEqual(response.statusCode, 401);
     });
   });
+
+  describe('DELETE /orgs/:orgId/invites/:inviteId', () => {
+    test('should return 400 when inviteId is not a valid UUIDv7', async () => {
+      const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org, { role: 'ADMIN' });
+
+      const response = await ctx.injectAuth({
+        method: 'DELETE',
+        url: `/orgs/${org.id}/invites/not-a-uuid`
+      }, user);
+
+      assert.strictEqual(response.statusCode, 400);
+    });
+  });
 });

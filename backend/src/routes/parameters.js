@@ -4,7 +4,12 @@
  * POST /parameters - Create new parameter (creates empty ParameterValue for all environments)
  */
 import { uuidv7 } from 'uuidv7';
-import { listParametersSchema, createParameterSchema } from '../openapi/parameterRoutes.js';
+import {
+  listParametersSchema,
+  createParameterSchema,
+  resolvedParametersSchema,
+  createParameterOverrideSchema,
+} from '../openapi/parameterRoutes.js';
 import { syncParameterEnvironmentValues } from '../lib/syncParameterValues.js';
 import { decryptParameterValue } from '../crypto/envelope.js';
 
@@ -29,6 +34,7 @@ export default async function parameterRoutes(fastify, _options) {
   // GET /parameters/resolved - Full inheritance chain for an app
   fastify.get('/parameters/resolved', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    schema: resolvedParametersSchema,
   }, async (request, reply) => {
     const { orgId } = request.params;
     const { appId, environmentId } = request.query;
@@ -194,7 +200,8 @@ export default async function parameterRoutes(fastify, _options) {
 
   // POST /parameters/override - Create or retrieve an override parameter in a child app
   fastify.post('/parameters/override', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    schema: createParameterOverrideSchema,
   }, async (request, reply) => {
     const { orgId } = request.params;
     const { key, appId, description } = request.body;
@@ -313,7 +320,7 @@ export default async function parameterRoutes(fastify, _options) {
 
   // POST /parameters - Create parameter with empty values for all environments
   fastify.post('/parameters', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
     schema: createParameterSchema
   }, async (request, reply) => {
     const { appId, key, description, isSecret } = request.body;

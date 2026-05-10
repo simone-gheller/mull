@@ -5,6 +5,16 @@
  */
 import { uuidv7 } from 'uuidv7';
 import { listAppsSchema, createAppSchema } from '../openapi/appRoutes.js';
+import { uuidV7Param } from '../schemas/common.js';
+
+const appIdParamsSchema = {
+  type: 'object',
+  required: ['orgId', 'appId'],
+  properties: {
+    orgId: uuidV7Param('Organization ID'),
+    appId: uuidV7Param('Application ID'),
+  },
+};
 
 export default async function appRoutes(fastify, _options) {
   const prisma = fastify.prisma;
@@ -53,6 +63,7 @@ export default async function appRoutes(fastify, _options) {
   // GET /apps/:appId - Get single app
   fastify.get('/apps/:appId', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    schema: { params: appIdParamsSchema },
   }, async (request, reply) => {
     const { orgId, appId } = request.params;
 
@@ -83,6 +94,7 @@ export default async function appRoutes(fastify, _options) {
   // PATCH /apps/:appId - Update app
   fastify.patch('/apps/:appId', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    schema: { params: appIdParamsSchema },
   }, async (request, reply) => {
     const { orgId, appId } = request.params;
     const { name } = request.body ?? {};
@@ -123,6 +135,7 @@ export default async function appRoutes(fastify, _options) {
   // DELETE /apps/:appId - Delete app
   fastify.delete('/apps/:appId', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    schema: { params: appIdParamsSchema },
   }, async (request, reply) => {
     const { orgId, appId } = request.params;
 
@@ -150,7 +163,7 @@ export default async function appRoutes(fastify, _options) {
 
   // POST /apps - Create app
   fastify.post('/apps', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
     schema: createAppSchema
   }, async (request, reply) => {
     const { name, parentId } = request.body;

@@ -85,9 +85,12 @@ export default async function authRoutes(fastify, _options) {
   }, async (request, reply) => {
     const { name } = request.body;
     const orgId = uuidv7();
-    const org = await fastify.prisma.organization.create({ data: { id: orgId, name } });
-    await fastify.prisma.userOrganization.create({
-      data: { userId: request.user.id, orgId, role: 'OWNER' },
+    const org = await fastify.prisma.$transaction(async (tx) => {
+      const createdOrg = await tx.organization.create({ data: { id: orgId, name } });
+      await tx.userOrganization.create({
+        data: { userId: request.user.id, orgId, role: 'OWNER' },
+      });
+      return createdOrg;
     });
     return reply.code(201).send({ id: org.id, name: org.name, role: 'OWNER' });
   });

@@ -91,11 +91,21 @@ export default async function invitationRoutes(fastify) {
       });
     }
 
+    const existingMembership = await fastify.prisma.userOrganization.findUnique({
+      where: { userId_orgId: { userId: request.user.id, orgId: invite.orgId } },
+      select: { role: true },
+    });
+    if (existingMembership) {
+      return reply.status(409).send({
+        error: 'Conflict',
+        message: 'User is already a member of this organization',
+        role: existingMembership.role,
+      });
+    }
+
     await fastify.prisma.$transaction([
-      fastify.prisma.userOrganization.upsert({
-        where: { userId_orgId: { userId: request.user.id, orgId: invite.orgId } },
-        create: { userId: request.user.id, orgId: invite.orgId, role: invite.role },
-        update: { role: invite.role },
+      fastify.prisma.userOrganization.create({
+        data: { userId: request.user.id, orgId: invite.orgId, role: invite.role },
       }),
       fastify.prisma.orgInvite.update({
         where: { id: invite.id },

@@ -2,7 +2,7 @@
  * OpenAPI schemas for app routes
  */
 import { errorResponse } from './common.js';
-import { UUID_V7_PATTERN } from '../schemas/common.js';
+import { uuidV7Param } from '../schemas/common.js';
 
 export const listAppsSchema = {
   tags: ['apps'],
@@ -12,12 +12,7 @@ export const listAppsSchema = {
     type: 'object',
     required: ['orgId'],
     properties: {
-      orgId: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        format: 'uuid',
-        description: 'Organization ID'
-      }
+      orgId: uuidV7Param('Organization ID'),
     }
   },
   response: {
@@ -58,12 +53,7 @@ export const createAppSchema = {
     type: 'object',
     required: ['orgId'],
     properties: {
-      orgId: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        format: 'uuid',
-        description: 'Organization ID'
-      }
+      orgId: uuidV7Param('Organization ID'),
     }
   },
   body: {
@@ -75,12 +65,7 @@ export const createAppSchema = {
         minLength: 1,
         description: 'App name (unique within organization)'
       },
-      parentId: {
-        type: 'string',
-        pattern: UUID_V7_PATTERN,
-        format: 'uuid',
-        description: 'Optional parent app UUID v7 for hierarchical structure'
-      }
+      parentId: uuidV7Param('Optional parent app UUID v7 for hierarchical structure'),
     }
   },
   response: {

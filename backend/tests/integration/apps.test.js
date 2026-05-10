@@ -72,6 +72,29 @@ describe('App Routes', () => {
 
       assert.strictEqual(response.statusCode, 403);
     });
+
+    test('should return 400 when orgId is not a valid UUIDv7', async () => {
+      const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org);
+
+      const response = await ctx.injectAuth({ method: 'GET', url: '/orgs/not-a-uuid/apps' }, user);
+
+      assert.strictEqual(response.statusCode, 400);
+    });
+  });
+
+  describe('GET /orgs/:orgId/apps/:appId', () => {
+    test('should return 400 when appId is not a valid UUIDv7', async () => {
+      const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org);
+
+      const response = await ctx.injectAuth({
+        method: 'GET',
+        url: `/orgs/${org.id}/apps/not-a-uuid`
+      }, user);
+
+      assert.strictEqual(response.statusCode, 400);
+    });
   });
 
   describe('POST /orgs/:orgId/apps', () => {
@@ -181,6 +204,20 @@ describe('App Routes', () => {
       assert.strictEqual(response.statusCode, 201);
       const createdApp = JSON.parse(response.body);
       assert.strictEqual(createdApp.name, 'whitespace-app');
+    });
+
+    test('should forbid USER members from creating apps', async () => {
+      const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org, { role: 'USER' });
+
+      const response = await ctx.injectAuth({
+        method: 'POST',
+        url: `/orgs/${org.id}/apps`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'viewer-created-app' })
+      }, user);
+
+      assert.strictEqual(response.statusCode, 403);
     });
   });
 });

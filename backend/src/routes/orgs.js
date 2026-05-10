@@ -1,5 +1,23 @@
 import { uuidv7 } from 'uuidv7';
 import crypto from 'node:crypto';
+import { uuidV7Param } from '../schemas/common.js';
+
+const orgIdParamsSchema = {
+  type: 'object',
+  required: ['orgId'],
+  properties: {
+    orgId: uuidV7Param('Organization ID'),
+  },
+};
+
+const inviteIdParamsSchema = {
+  type: 'object',
+  required: ['orgId', 'inviteId'],
+  properties: {
+    orgId: uuidV7Param('Organization ID'),
+    inviteId: uuidV7Param('Invite ID'),
+  },
+};
 
 export default async function orgRoutes(fastify, _options) {
   /**
@@ -12,6 +30,7 @@ export default async function orgRoutes(fastify, _options) {
       tags: ['orgs'],
       description: 'Get organization details',
       security: [{ bearerAuth: [] }],
+      params: orgIdParamsSchema,
       response: {
         200: {
           type: 'object',
@@ -46,6 +65,7 @@ export default async function orgRoutes(fastify, _options) {
       tags: ['orgs'],
       description: 'Update organization',
       security: [{ bearerAuth: [] }],
+      params: orgIdParamsSchema,
       body: {
         type: 'object',
         properties: {
@@ -85,6 +105,7 @@ export default async function orgRoutes(fastify, _options) {
       tags: ['orgs'],
       description: 'List organization members',
       security: [{ bearerAuth: [] }],
+      params: orgIdParamsSchema,
       response: {
         200: {
           type: 'array',
@@ -126,6 +147,7 @@ export default async function orgRoutes(fastify, _options) {
     schema: {
       tags: ['orgs'],
       security: [{ bearerAuth: [] }],
+      params: orgIdParamsSchema,
       body: {
         type: 'object',
         required: ['email', 'role'],
@@ -187,7 +209,7 @@ export default async function orgRoutes(fastify, _options) {
    */
   fastify.get('/invites', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
-    schema: { tags: ['orgs'], security: [{ bearerAuth: [] }] },
+    schema: { tags: ['orgs'], security: [{ bearerAuth: [] }], params: orgIdParamsSchema },
   }, async (request, reply) => {
     const { orgId } = request.params;
     const now = new Date();
@@ -214,7 +236,11 @@ export default async function orgRoutes(fastify, _options) {
    */
   fastify.delete('/invites/:inviteId', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
-    schema: { tags: ['orgs'], security: [{ bearerAuth: [] }] },
+    schema: {
+      tags: ['orgs'],
+      security: [{ bearerAuth: [] }],
+      params: inviteIdParamsSchema,
+    },
   }, async (request, reply) => {
     const { orgId, inviteId } = request.params;
 

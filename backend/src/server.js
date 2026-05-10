@@ -8,6 +8,7 @@ import { getPrisma, disconnectPrisma } from './lib/prisma.js';
 import { swaggerConfig, swaggerUiConfig } from './openapi/config.js';
 import { healthCheckSchema } from './openapi/health.js';
 import authPlugin from './plugins/auth.js';
+import testAuthPlugin from './plugins/testAuth.js';
 import supabasePlugin from './plugins/supabase.js';
 import mailerPlugin from './plugins/mailer.js';
 import authRoutes from './routes/auth.js';
@@ -77,7 +78,7 @@ export function buildApp(options = {}) {
 
   fastify.register(supabasePlugin);
   fastify.register(mailerPlugin);
-  fastify.register(authPlugin, { testMode });
+  fastify.register(testMode ? testAuthPlugin : authPlugin);
 
   // Register Swagger documentation
   fastify.register(swagger, swaggerConfig);
