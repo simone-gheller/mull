@@ -2,9 +2,9 @@
 // Only the 5 core entities for configuration management
 
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
   engineType = "client"
-  output = "../src/generated/prisma"
+  output     = "../src/generated/prisma"
 }
 
 datasource db {
@@ -16,8 +16,9 @@ datasource db {
 // ============================================
 
 model Organization {
-  id   String @id @db.Uuid
-  name String @db.VarChar(255)
+  id   String           @id @db.Uuid
+  name String           @db.VarChar(255)
+  plan OrganizationPlan @default(STARTER)
 
   // Relations
   members      UserOrganization[]
@@ -36,7 +37,7 @@ model App {
 
   // Hierarchy optimization (path materialization)
   ancestors String[] @default([]) @db.Uuid // [root_id, ..., parent_id] - excludes itself
-  depth     Int      @default(0)  // 0=root, 1=child, etc. (useful for queries and validation)
+  depth     Int      @default(0) // 0=root, 1=child, etc. (useful for queries and validation)
 
   // Relations
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -58,8 +59,9 @@ model Environment {
   isSecret Boolean @default(false) @map("is_secret")
 
   // Relations
-  organization    Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  parameterValues ParameterValue[]
+  organization           Organization            @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  parameterValues        ParameterValue[]
+  parameterValueVersions ParameterValueVersion[]
 
   @@unique([orgId, name])
   @@index([orgId])
@@ -74,8 +76,9 @@ model Parameter {
   isSecret    Boolean @default(false) @map("is_secret")
 
   // Relations
-  app    App              @relation(fields: [appId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  values ParameterValue[]
+  app      App                     @relation(fields: [appId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  values   ParameterValue[]
+  versions ParameterValueVersion[]
 
   @@unique([appId, key])
   @@index([appId])
@@ -99,13 +102,52 @@ model ParameterValue {
   isSet           Boolean  @default(false) @map("is_set")
 
   // Relations
-  parameter   Parameter   @relation(fields: [parameterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  environment Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  parameter   Parameter               @relation(fields: [parameterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  environment Environment             @relation(fields: [environmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  versions    ParameterValueVersion[]
 
   @@unique([parameterId, environmentId])
   @@index([parameterId])
   @@index([environmentId])
   @@map("parameter_values")
+}
+
+model ParameterValueVersion {
+  id               String @id @db.Uuid
+  parameterValueId String @map("parameter_value_id") @db.Uuid
+  parameterId      String @map("parameter_id") @db.Uuid
+  environmentId    String @map("environment_id") @db.Uuid
+  createdByUserId  String @map("created_by_user_id") @db.Uuid
+
+  versionNumber Int                      @map("version_number")
+  changeType    ParameterValueChangeType @map("change_type")
+
+  rolledBackFromVersionId String? @map("rolled_back_from_version_id") @db.Uuid
+
+  valueCiphertext Bytes    @map("value_ciphertext")
+  valueIv         Bytes    @map("value_iv")
+  valueTag        Bytes    @map("value_tag")
+  dekCiphertext   Bytes    @map("dek_ciphertext")
+  dekIv           Bytes    @map("dek_iv")
+  dekTag          Bytes    @map("dek_tag")
+  kekVersion      Int      @map("kek_version")
+  encryptionAlg   String   @default("AES-256-GCM") @map("encryption_alg")
+  encryptedAt     DateTime @map("encrypted_at")
+  isSet           Boolean  @default(false) @map("is_set")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  parameterValue ParameterValue          @relation(fields: [parameterValueId], references: [id], onDelete: Cascade)
+  parameter      Parameter               @relation(fields: [parameterId], references: [id], onDelete: Cascade)
+  environment    Environment             @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  createdByUser  User                    @relation(fields: [createdByUserId], references: [id])
+  rolledBackFrom ParameterValueVersion?  @relation("RollbackSource", fields: [rolledBackFromVersionId], references: [id])
+  rollbackCopies ParameterValueVersion[] @relation("RollbackSource")
+
+  @@unique([parameterValueId, versionNumber])
+  @@index([parameterValueId, createdAt])
+  @@index([parameterId, environmentId])
+  @@map("parameter_value_versions")
 }
 
 // ============================================
@@ -116,11 +158,12 @@ model User {
   id          String  @id @default(uuid()) @db.Uuid
   supabaseId  String  @unique @map("supabase_id") @db.VarChar(255)
   email       String  @unique @db.VarChar(255)
-  displayName String? @db.VarChar(255) @map("display_name")
+  displayName String? @map("display_name") @db.VarChar(255)
 
   // Relations
-  organizations UserOrganization[]
-  sentInvites   OrgInvite[]        @relation("SentInvites")
+  organizations          UserOrganization[]
+  sentInvites            OrgInvite[]             @relation("SentInvites")
+  parameterValueVersions ParameterValueVersion[]
 
   @@index([supabaseId])
   @@index([email])
@@ -165,6 +208,18 @@ enum InviteStatus {
   PENDING
   ACCEPTED
   REVOKED
+}
+
+enum OrganizationPlan {
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum ParameterValueChangeType {
+  UPDATE
+  CLEAR
+  ROLLBACK
 }
 
 enum UserRole {

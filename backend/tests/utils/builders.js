@@ -76,6 +76,7 @@ export async function buildTestContext() {
      * Build unique organization
      * @param {Object} overrides - Optional field overrides
      * @param {string} [overrides.name] - Organization name
+     * @param {string} [overrides.plan] - Organization plan
      * @returns {Promise<{id: string, name: string}>}
      */
     async buildOrg(overrides = {}) {
@@ -84,9 +85,10 @@ export async function buildTestContext() {
       const org = await prisma.organization.create({
         data: {
           id: uuidv7(),
-          name
+          name,
+          ...(overrides.plan ? { plan: overrides.plan } : {})
         },
-        select: { id: true, name: true }
+        select: { id: true, name: true, plan: true }
       });
 
       // Auto-track

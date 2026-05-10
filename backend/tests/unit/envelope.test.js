@@ -2,12 +2,15 @@ import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import {
   decryptParameterValue,
+  decryptParameterValueVersion,
+  encryptParameterValueVersion,
   encryptParameterValue,
   resetKeyringForTests
 } from '../../src/crypto/envelope.js';
 
 const KEY = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
 const BASE = {
+  parameterValueVersionId: '01900000-0000-7000-8000-000000000004',
   parameterValueId: '01900000-0000-7000-8000-000000000001',
   parameterId: '01900000-0000-7000-8000-000000000002',
   environmentId: '01900000-0000-7000-8000-000000000003'
@@ -17,6 +20,17 @@ function encryptedRecord(value = 'hello') {
   const encrypted = encryptParameterValue({ value, ...BASE });
   return {
     id: BASE.parameterValueId,
+    parameterId: BASE.parameterId,
+    environmentId: BASE.environmentId,
+    ...encrypted
+  };
+}
+
+function encryptedVersionRecord(value = 'hello') {
+  const encrypted = encryptParameterValueVersion({ value, ...BASE });
+  return {
+    id: BASE.parameterValueVersionId,
+    parameterValueId: BASE.parameterValueId,
     parameterId: BASE.parameterId,
     environmentId: BASE.environmentId,
     ...encrypted
@@ -51,5 +65,16 @@ describe('envelope encryption', () => {
     const record = encryptedRecord('secret-api-key');
     record.environmentId = '01900000-0000-7000-8000-000000000099';
     assert.throws(() => decryptParameterValue(record));
+  });
+
+  test('roundtrips historical parameter value versions', () => {
+    const record = encryptedVersionRecord('previous-secret');
+    assert.strictEqual(decryptParameterValueVersion(record), 'previous-secret');
+  });
+
+  test('fails when version identity changes', () => {
+    const record = encryptedVersionRecord('previous-secret');
+    record.parameterValueId = '01900000-0000-7000-8000-000000000099';
+    assert.throws(() => decryptParameterValueVersion(record));
   });
 });

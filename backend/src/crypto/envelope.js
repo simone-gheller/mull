@@ -59,6 +59,20 @@ function dekAad({ parameterValueId, parameterId, environmentId, kekVersion }) {
   return Buffer.from(`parameter_value_dek:v1:${parameterValueId}:${parameterId}:${environmentId}:kek:${kekVersion}`, 'utf8');
 }
 
+function versionValueAad({ parameterValueVersionId, parameterValueId, parameterId, environmentId }) {
+  return Buffer.from(
+    `parameter_value_version:v1:${parameterValueVersionId}:${parameterValueId}:${parameterId}:${environmentId}`,
+    'utf8'
+  );
+}
+
+function versionDekAad({ parameterValueVersionId, parameterValueId, parameterId, environmentId, kekVersion }) {
+  return Buffer.from(
+    `parameter_value_version_dek:v1:${parameterValueVersionId}:${parameterValueId}:${parameterId}:${environmentId}:kek:${kekVersion}`,
+    'utf8'
+  );
+}
+
 function encryptGcm({ plaintext, key, aad }) {
   const iv = crypto.randomBytes(GCM_IV_BYTES);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
@@ -91,6 +105,43 @@ export function encryptParameterValue({ value, parameterValueId, parameterId, en
     plaintext: dek,
     key: kek,
     aad: dekAad({ parameterValueId, parameterId, environmentId, kekVersion })
+  });
+
+  return {
+    valueCiphertext: valueEncrypted.ciphertext,
+    valueIv: valueEncrypted.iv,
+    valueTag: valueEncrypted.tag,
+    dekCiphertext: dekEncrypted.ciphertext,
+    dekIv: dekEncrypted.iv,
+    dekTag: dekEncrypted.tag,
+    kekVersion,
+    encryptionAlg: ALG,
+    encryptedAt: new Date()
+  };
+}
+
+export function encryptParameterValueVersion({
+  value,
+  parameterValueVersionId,
+  parameterValueId,
+  parameterId,
+  environmentId
+}) {
+  const keyring = getKeyring();
+  const kekVersion = keyring.currentVersion;
+  const kek = keyring.keys.get(kekVersion);
+  const dek = crypto.randomBytes(KEY_BYTES);
+
+  const valueEncrypted = encryptGcm({
+    plaintext: Buffer.from(value ?? '', 'utf8'),
+    key: dek,
+    aad: versionValueAad({ parameterValueVersionId, parameterValueId, parameterId, environmentId })
+  });
+
+  const dekEncrypted = encryptGcm({
+    plaintext: dek,
+    key: kek,
+    aad: versionDekAad({ parameterValueVersionId, parameterValueId, parameterId, environmentId, kekVersion })
   });
 
   return {
@@ -148,6 +199,65 @@ export function decryptParameterValue(record) {
   return plaintext.toString('utf8');
 }
 
+export function decryptParameterValueVersion(record) {
+  const parameterValueVersionId = readField(record, 'id');
+  const parameterValueId = readField(record, 'parameterValueId', 'parameter_value_id');
+  const parameterId = readField(record, 'parameterId', 'parameter_id');
+  const environmentId = readField(record, 'environmentId', 'environment_id');
+  const kekVersion = readField(record, 'kekVersion', 'kek_version');
+  const encryptionAlg = readField(record, 'encryptionAlg', 'encryption_alg') ?? ALG;
+
+  if (encryptionAlg !== ALG) {
+    throw new Error(`Unsupported encryption algorithm: ${encryptionAlg}`);
+  }
+  if (!parameterValueVersionId || !parameterValueId || !parameterId || !environmentId) {
+    throw new Error('Encrypted parameter value version is missing identity fields');
+  }
+  if (!Number.isInteger(kekVersion) || kekVersion < 1) {
+    throw new Error('Encrypted parameter value version is missing a valid KEK version');
+  }
+
+  const keyring = getKeyring();
+  const kek = keyring.keys.get(kekVersion);
+  if (!kek) {
+    throw new Error(`No KEK available for version ${kekVersion}`);
+  }
+
+  const dek = decryptGcm({
+    ciphertext: requireBuffer(readField(record, 'dekCiphertext', 'dek_ciphertext'), 'dekCiphertext'),
+    iv: requireBuffer(readField(record, 'dekIv', 'dek_iv'), 'dekIv'),
+    tag: requireBuffer(readField(record, 'dekTag', 'dek_tag'), 'dekTag'),
+    key: kek,
+    aad: versionDekAad({ parameterValueVersionId, parameterValueId, parameterId, environmentId, kekVersion })
+  });
+
+  const plaintext = decryptGcm({
+    ciphertext: requireBuffer(readField(record, 'valueCiphertext', 'value_ciphertext'), 'valueCiphertext'),
+    iv: requireBuffer(readField(record, 'valueIv', 'value_iv'), 'valueIv'),
+    tag: requireBuffer(readField(record, 'valueTag', 'value_tag'), 'valueTag'),
+    key: dek,
+    aad: versionValueAad({ parameterValueVersionId, parameterValueId, parameterId, environmentId })
+  });
+
+  return plaintext.toString('utf8');
+}
+
 export function encryptedParameterValueData({ value, parameterValueId, parameterId, environmentId }) {
   return encryptParameterValue({ value, parameterValueId, parameterId, environmentId });
+}
+
+export function encryptedParameterValueVersionData({
+  value,
+  parameterValueVersionId,
+  parameterValueId,
+  parameterId,
+  environmentId
+}) {
+  return encryptParameterValueVersion({
+    value,
+    parameterValueVersionId,
+    parameterValueId,
+    parameterId,
+    environmentId
+  });
 }

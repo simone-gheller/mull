@@ -330,4 +330,195 @@ describe('ParameterValue Routes', () => {
       assert.strictEqual(decryptParameterValue(dbValue), '');
     });
   });
+
+  describe('Parameter value history and rollback', () => {
+    test('should snapshot previous values, reveal history, and rollback as a new version', async () => {
+      const org = await ctx.buildOrg();
+      const user = await ctx.buildUserInOrg(org, { role: 'ADMIN' });
+      const app = await ctx.buildApp({ orgId: org.id });
+      const env = await ctx.buildEnv({ orgId: org.id, name: 'prod' });
+      const param = await ctx.buildParam({ appId: app.id, key: 'DATABASE_URL' });
+      const paramValue = await ctx.prisma.parameterValue.findFirst({
+        where: { parameterId: param.id, environmentId: env.id }
+      });
+
+      await ctx.injectAuth({
+        method: 'PUT',
+        url: `/orgs/${org.id}/parameters/values/${paramValue.id}`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ value: 'postgres://first' })
+      }, user);
+      await ctx.injectAuth({
+        method: 'PUT',
+        url: `/orgs/${org.id}/parameters/values/${paramValue.id}`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ value: 'postgres://second' })
+      }, user);
+
+      const historyResponse = await ctx.injectAuth({
+        method: 'GET',
+        url: `/orgs/${org.id}/parameters/values/${paramValue.id}/history`
+      }, user);
+
+      assert.strictEqual(historyResponse.statusCode, 200);
+      const history = JSON.parse(historyResponse.body).items;
+      assert.strictEqual(history.length, 2);
+      assert.strictEqual(history[0].versionNumber, 2);
+      assert.strictEqual(history[0].parameterId, param.id);
+      assert.strictEqual(history[0].environmentId, env.id);
+      assert.strictEqual(history[0].changeType, 'UPDATE');
+      assert.strictEqual(history[0].isSet, true);
+      assert.ok(!Object.hasOwn(history[0], 'value'));
+
+      const revealResponse = await ctx.injectAuth({
+        method: 'GET',
+        url: `/orgs/${org.id}/parameters/values/${paramValue.id}/history/${history[0].id}`
+      }, user);
+
+      assert.strictEqual(revealResponse.statusCode, 200);
+      assert.strictEqual(JSON.parse(revealResponse.body).value, 'postgres://first');
+
+      const rollbackResponse = await ctx.injectAuth({
+        method: 'POST',
+        url: `/orgs/${org.id}/parameters/values/${paramValue.id}/rollback`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ versionId: history[0].id })
+      }, user);
+
+      assert.strictEqual(rollbackResponse.statusCode, 200);
+      const rolledBack = JSON.parse(rollbackResponse.body);
+      assert.strictEqual(rolledBack.isSet, true);
+      assert.strictEqual(rolledBack.value, 'postgres://first');
+
+      const rollbackHistory = await ctx.prisma.parameterValueVersion.findFirst({
+        where: { parameterValueId: paramValue.id, changeType: 'ROLLBACK' }
+      });
+      assert.ok(rollbackHistory);
+      assert.strictEqual(rollbackHistory.rolledBackFromVersionId, history[0].id);
+    });
+
+    test('should snapshot clear operations and keep newest five versions on Starter', async () => {
+      const org = await ctx.buildOrg({ plan: 'STARTER' });
+      const user = await ctx.buildUserInOrg(org, { role: 'ADMIN' });
+      const app = await ctx.buildApp({ orgId: org.id });
+      const env = await ctx.buildEnv({ orgId: org.id, name: 'dev' });
+      const param = await ctx.buildParam({ appId: app.id, key: 'FEATURE_FLAG' });
+      const paramValue = await ctx.prisma.parameterValue.findFirst({
+        where: { parameterId: param.id, environmentId: env.id }
+      });
+
+      for (let i = 1; i <= 7; i++) {
+        await ctx.injectAuth({
+          method: 'PUT',
+          url: `/orgs/${org.id}/parameters/values/${paramValue.id}`,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ value: `value-${i}` })
+        }, user);
+      }
+      await ctx.injectAuth({
+        method: 'PUT',
+        url: `/orgs/${org.id}/parameters/values/${paramValue.id}`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ value: '' })
+      }, user);
+
+      const history = await ctx.prisma.parameterValueVersion.findMany({
+        where: { parameterValueId: paramValue.id },
+        orderBy: { versionNumber: 'asc' }
+      });
+
+      assert.strictEqual(history.length, 5);
+      assert.deepStrictEqual(history.map(v => v.versionNumber), [4, 5, 6, 7, 8]);
+      assert.strictEqual(history[4].changeType, 'CLEAR');
+      assert.strictEqual(history[4].isSet, true);
+    });
+
+    test('should keep more than Starter history on Pro and not prune Enterprise', async () => {
+      const proOrg = await ctx.buildOrg({ plan: 'PRO' });
+      const enterpriseOrg = await ctx.buildOrg({ plan: 'ENTERPRISE' });
+      const proUser = await ctx.buildUserInOrg(proOrg, { role: 'ADMIN' });
+      const enterpriseUser = await ctx.buildUserInOrg(enterpriseOrg, { role: 'ADMIN' });
+
+      async function buildValue(org) {
+        const app = await ctx.buildApp({ orgId: org.id });
+        const env = await ctx.buildEnv({ orgId: org.id, name: `env-${org.plan}` });
+        const param = await ctx.buildParam({ appId: app.id, key: `KEY_${org.plan}` });
+        return ctx.prisma.parameterValue.findFirst({
+          where: { parameterId: param.id, environmentId: env.id }
+        });
+      }
+
+      const proValue = await buildValue(proOrg);
+      const enterpriseValue = await buildValue(enterpriseOrg);
+
+      for (let i = 1; i <= 7; i++) {
+        await ctx.injectAuth({
+          method: 'PUT',
+          url: `/orgs/${proOrg.id}/parameters/values/${proValue.id}`,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ value: `pro-${i}` })
+        }, proUser);
+        await ctx.injectAuth({
+          method: 'PUT',
+          url: `/orgs/${enterpriseOrg.id}/parameters/values/${enterpriseValue.id}`,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ value: `enterprise-${i}` })
+        }, enterpriseUser);
+      }
+
+      const proCount = await ctx.prisma.parameterValueVersion.count({
+        where: { parameterValueId: proValue.id }
+      });
+      const enterpriseCount = await ctx.prisma.parameterValueVersion.count({
+        where: { parameterValueId: enterpriseValue.id }
+      });
+
+      assert.strictEqual(proCount, 7);
+      assert.strictEqual(enterpriseCount, 7);
+    });
+
+    test('should prevent cross-org history access and USER secret reveal', async () => {
+      const org1 = await ctx.buildOrg();
+      const org2 = await ctx.buildOrg();
+      const admin = await ctx.buildUserInOrg(org1, { role: 'ADMIN' });
+      const user = await ctx.buildUserInOrg(org1, { role: 'USER' });
+      const app1 = await ctx.buildApp({ orgId: org1.id });
+      const app2 = await ctx.buildApp({ orgId: org2.id });
+      const env1 = await ctx.buildEnv({ orgId: org1.id, name: 'prod' });
+      const env2 = await ctx.buildEnv({ orgId: org2.id, name: 'prod' });
+      const param1 = await ctx.buildParam({ appId: app1.id, key: 'SECRET_KEY' });
+      const param2 = await ctx.buildParam({ appId: app2.id, key: 'OTHER_KEY' });
+      await ctx.prisma.parameter.update({ where: { id: param1.id }, data: { isSecret: true } });
+
+      const value1 = await ctx.prisma.parameterValue.findFirst({
+        where: { parameterId: param1.id, environmentId: env1.id }
+      });
+      const value2 = await ctx.prisma.parameterValue.findFirst({
+        where: { parameterId: param2.id, environmentId: env2.id }
+      });
+
+      await ctx.injectAuth({
+        method: 'PUT',
+        url: `/orgs/${org1.id}/parameters/values/${value1.id}`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ value: 'secret-v1' })
+      }, admin);
+
+      const history = await ctx.prisma.parameterValueVersion.findFirst({
+        where: { parameterValueId: value1.id }
+      });
+
+      const crossOrgResponse = await ctx.injectAuth({
+        method: 'GET',
+        url: `/orgs/${org1.id}/parameters/values/${value2.id}/history`
+      }, admin);
+      assert.strictEqual(crossOrgResponse.statusCode, 403);
+
+      const revealResponse = await ctx.injectAuth({
+        method: 'GET',
+        url: `/orgs/${org1.id}/parameters/values/${value1.id}/history/${history.id}`
+      }, user);
+      assert.strictEqual(revealResponse.statusCode, 403);
+    });
+  });
 });
