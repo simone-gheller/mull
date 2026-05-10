@@ -125,6 +125,21 @@ class ApiService {
     return response.data;
   }
 
+  async getParameterValueHistory(valueId) {
+    const response = await apiClient.get(`/orgs/${this.orgId}/parameters/values/${valueId}/history`);
+    return response.data;
+  }
+
+  async revealParameterValueVersion(valueId, versionId) {
+    const response = await apiClient.get(`/orgs/${this.orgId}/parameters/values/${valueId}/history/${versionId}`);
+    return response.data;
+  }
+
+  async rollbackParameterValue(valueId, versionId) {
+    const response = await apiClient.post(`/orgs/${this.orgId}/parameters/values/${valueId}/rollback`, { versionId });
+    return response.data;
+  }
+
   // Rendered config
   async getConfig(appId, envId) {
     const response = await apiClient.get(`/orgs/${this.orgId}/config/${appId}/${envId}`);

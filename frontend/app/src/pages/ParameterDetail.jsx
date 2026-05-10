@@ -8,7 +8,32 @@ const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$
 
 // ─── Env value card ───────────────────────────────────────────────────────────
 
-function EnvRow({ row, editLabel, T, onEdit }) {
+function DisabledActionTooltip({ children, T, message }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      style={{ position: 'relative', display: 'inline-flex' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {children}
+      {hovered && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 5px)', right: 0,
+          fontFamily: FONTS.mono, fontSize: '9px', color: T.textMuted,
+          background: T.elevated, border: `1px solid ${T.border}`,
+          padding: '3px 8px', borderRadius: '3px', whiteSpace: 'nowrap',
+          pointerEvents: 'none', zIndex: 20,
+        }}>
+          {message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EnvRow({ row, editLabel, canWrite, selected, T, onEdit, onSelect }) {
   const [visible, setVisible]           = useState(false);
   const [copied, setCopied]             = useState(false);
   const [revealHovered, setRevealHovered] = useState(false);
@@ -20,10 +45,17 @@ function EnvRow({ row, editLabel, T, onEdit }) {
   const canReveal = row.isSet && !row.isRedacted;
 
   return (
-    <div role="row" style={{
+    <div
+      role="row"
+      onClick={() => onSelect(row.valueId)}
+      style={{
       display: 'grid', gridTemplateColumns: '160px 1fr 120px',
       alignItems: 'center', padding: '9px 14px',
       borderBottom: `1px solid ${T.border}`,
+      background: selected ? T.overlay : 'transparent',
+      borderLeft: `2px solid ${selected ? T.termGreen : 'transparent'}`,
+      paddingLeft: '12px',
+      cursor: 'pointer',
     }}>
       {/* ENV */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -63,7 +95,7 @@ function EnvRow({ row, editLabel, T, onEdit }) {
           onMouseEnter={() => { if (!visible) setRevealHovered(true); }}
           onMouseLeave={() => setRevealHovered(false)}
         >
-          <Btn T={T} variant="secondary" size="sm" disabled={!canReveal} onClick={() => { if (canReveal) setVisible(v => !v); setRevealHovered(false); }}>
+          <Btn T={T} variant="secondary" size="sm" disabled={!canReveal} onClick={(event) => { event.stopPropagation(); if (canReveal) setVisible(v => !v); setRevealHovered(false); }}>
             {visible ? 'hide' : 'show'}
           </Btn>
           {revealHovered && canReveal && (
@@ -78,12 +110,20 @@ function EnvRow({ row, editLabel, T, onEdit }) {
             </div>
           )}
         </div>
-        <Btn T={T} variant="secondary" size="sm" onClick={handleCopy} disabled={!visible || !row.value || row.isRedacted}>
+        <Btn T={T} variant="secondary" size="sm" onClick={(event) => { event.stopPropagation(); handleCopy(); }} disabled={!visible || !row.value || row.isRedacted}>
           {copied ? 'copied!' : 'copy'}
         </Btn>
-        <Btn T={T} variant="secondary" size="sm" onClick={() => onEdit(row)}>
-          {editLabel}
-        </Btn>
+        {canWrite ? (
+          <Btn T={T} variant="secondary" size="sm" onClick={(event) => { event.stopPropagation(); onEdit(row); }}>
+            {editLabel}
+          </Btn>
+        ) : (
+          <DisabledActionTooltip T={T} message="edit disabled · requires admin">
+            <Btn T={T} variant="secondary" size="sm" disabled>
+              {editLabel}
+            </Btn>
+          </DisabledActionTooltip>
+        )}
       </div>
     </div>
   );
@@ -154,6 +194,152 @@ function EditModal({ row, mode, sourceAppName, currentAppName, T, onSave, onCanc
   );
 }
 
+// ─── History ─────────────────────────────────────────────────────────────────
+
+const HISTORY_GRID = '90px 104px 96px 1fr 170px 140px';
+
+function HistoryTable({ rows, loading, available, canWrite, reveals, T, onReveal, onRollback }) {
+  if (!available) {
+    return (
+      <div style={{
+        background: T.surface, border: `1px solid ${T.border}`,
+        borderRadius: '6px', padding: '24px', textAlign: 'center',
+      }}>
+        <p style={{ fontFamily: FONTS.display, fontSize: '13px', color: T.textMuted }}>
+          History and rollback are available after creating a local override.
+        </p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.termGreen }}>
+        loading history…
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div style={{
+        background: T.surface, border: `1px solid ${T.border}`,
+        borderRadius: '6px', padding: '24px', textAlign: 'center',
+      }}>
+        <p style={{ fontFamily: FONTS.display, fontSize: '13px', color: T.textMuted }}>
+          No previous versions yet
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div role="table" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '6px', overflow: 'hidden' }}>
+      <div role="row" style={{
+        display: 'grid', gridTemplateColumns: HISTORY_GRID,
+        padding: '6px 14px', borderBottom: `1px solid ${T.border}`,
+        fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted,
+        letterSpacing: '0.1em', textTransform: 'uppercase',
+      }}>
+        <span>version</span><span>environment</span><span>action</span><span>value</span><span>changed</span><span />
+      </div>
+      {rows.map(row => {
+        const reveal = reveals[row.id] ?? {};
+        const changedAt = new Date(row.createdAt).toLocaleString();
+        return (
+          <div key={row.id} role="row" style={{
+            display: 'grid', gridTemplateColumns: HISTORY_GRID,
+            alignItems: 'center', padding: '9px 14px',
+            borderBottom: `1px solid ${T.border}`,
+          }}>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.textPrimary }}>v{row.versionNumber}</span>
+            <span style={{ display: 'inline-flex', maxWidth: '88px', overflow: 'hidden' }}>
+              <Badge T={T} variant="default">{row.environment?.name ?? row.environmentName}</Badge>
+            </span>
+            <span style={{
+              fontFamily: FONTS.mono, fontSize: '10px',
+              color: row.changeType === 'ROLLBACK' ? T.amber : row.changeType === 'CLEAR' ? T.textMuted : T.blue,
+            }}>
+              {row.changeType.toLowerCase()}
+            </span>
+            <span style={{
+              fontFamily: FONTS.mono, fontSize: '12px',
+              color: !row.isSet ? T.textMuted : reveal.error ? T.amber : reveal.visible ? T.amber : T.textMuted,
+              fontStyle: !row.isSet || reveal.error ? 'italic' : 'normal',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {!row.isSet
+                ? 'unset'
+                : reveal.error
+                  ? 'restricted'
+                  : reveal.visible
+                    ? reveal.value
+                    : '•'.repeat(16)}
+            </span>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted }}>
+              {changedAt}
+              <br />
+              {row.createdBy?.displayName || row.createdBy?.email || 'unknown'}
+            </span>
+            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+              <Btn T={T} variant="secondary" size="sm" disabled={!row.isSet || reveal.loading} onClick={() => onReveal(row)}>
+                {reveal.visible ? 'hide' : reveal.loading ? '…' : 'show'}
+              </Btn>
+              {canWrite ? (
+                <Btn T={T} variant="secondary" size="sm" onClick={() => onRollback(row)}>
+                  rollback
+                </Btn>
+              ) : (
+                <DisabledActionTooltip T={T} message="rollback disabled · requires admin">
+                  <Btn T={T} variant="secondary" size="sm" disabled>
+                    rollback
+                  </Btn>
+                </DisabledActionTooltip>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RollbackModal({ target, T, onConfirm, onCancel, rollingBack }) {
+  if (!target) return null;
+
+  return (
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onCancel(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 220,
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div style={{
+        background: T.surface, border: `1px solid ${T.border}`,
+        borderRadius: '8px', padding: '24px', width: '460px', maxWidth: '90vw',
+      }}>
+        <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.amber, letterSpacing: '0.12em', marginBottom: '8px' }}>
+          // rollback value
+        </div>
+        <div style={{ fontFamily: FONTS.display, fontSize: '14px', color: T.textPrimary, marginBottom: '8px' }}>
+          Restore {target.environment?.name ?? target.environmentName} to v{target.versionNumber}?
+        </div>
+        <p style={{ fontFamily: FONTS.display, fontSize: '12px', color: T.textSecondary, lineHeight: 1.6, marginBottom: '16px' }}>
+          Rollback creates a new current value and keeps the full history.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <Btn T={T} variant="secondary" size="sm" onClick={onCancel}>cancel</Btn>
+          <Btn T={T} variant="primary" size="sm" onClick={onConfirm} disabled={rollingBack}>
+            {rollingBack ? 'rolling back…' : 'rollback'}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Banners ──────────────────────────────────────────────────────────────────
 
 function InheritedBanner({ sourceAppName, currentAppName, T }) {
@@ -212,11 +398,20 @@ export default function ParameterDetail() {
   const [loading, setLoading] = useState(true);
   const [editingRow, setEditingRow] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyReveals, setHistoryReveals] = useState({});
+  const [rollbackTarget, setRollbackTarget] = useState(null);
+  const [rollingBack, setRollingBack] = useState(false);
+  const [selectedValueId, setSelectedValueId] = useState(null);
   const [loadKey, setLoadKey] = useState(0);
 
   useEffect(() => {
     setLoading(true);
     setEnvValues([]);
+    setHistoryRows([]);
+    setHistoryReveals({});
+    setSelectedValueId(null);
 
     const load = async () => {
       // 1. Resolve app by slug
@@ -293,10 +488,46 @@ export default function ParameterDetail() {
       }
 
       setEnvValues(rows);
+      setSelectedValueId(rows[0]?.valueId ?? null);
     };
 
     load().catch(console.error).finally(() => setLoading(false));
   }, [orgSlug, appSlug, paramKey, orgs, orgId, loadKey]);
+
+  useEffect(() => {
+    if (!resolved?.isOwn || !selectedValueId) {
+      setHistoryRows([]);
+      setHistoryLoading(false);
+      return;
+    }
+
+    const selectedRow = envValues.find(row => row.valueId === selectedValueId);
+    let cancelled = false;
+    setHistoryLoading(true);
+    setHistoryReveals({});
+
+    apiService.getParameterValueHistory(selectedValueId)
+      .then(history => {
+        if (cancelled) return;
+        setHistoryRows((history.items ?? []).map(item => ({
+          ...item,
+          environmentName: selectedRow?.env,
+        })));
+      })
+      .catch(error => {
+        if (!cancelled) {
+          console.error(error);
+          setHistoryRows([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolved?.isOwn, selectedValueId, envValues]);
 
   const handleSave = async (newValue) => {
     if (!editingRow || !resolved) return;
@@ -317,11 +548,49 @@ export default function ParameterDetail() {
     } catch (e) { console.error(e); } finally { setSaving(false); }
   };
 
+  const handleRevealHistory = async (row) => {
+    const current = historyReveals[row.id];
+    if (current?.visible) {
+      setHistoryReveals(prev => ({ ...prev, [row.id]: { ...current, visible: false } }));
+      return;
+    }
+    if (current?.value) {
+      setHistoryReveals(prev => ({ ...prev, [row.id]: { ...current, visible: true } }));
+      return;
+    }
+
+    setHistoryReveals(prev => ({ ...prev, [row.id]: { loading: true } }));
+    try {
+      const revealed = await apiService.revealParameterValueVersion(row.parameterValueId, row.id);
+      setHistoryReveals(prev => ({ ...prev, [row.id]: { visible: true, value: revealed.value } }));
+    } catch (e) {
+      console.error(e);
+      setHistoryReveals(prev => ({ ...prev, [row.id]: { error: true } }));
+    }
+  };
+
+  const handleConfirmRollback = async () => {
+    if (!rollbackTarget) return;
+    setRollingBack(true);
+    try {
+      await apiService.rollbackParameterValue(rollbackTarget.parameterValueId, rollbackTarget.id);
+      setRollbackTarget(null);
+      setLoadKey(k => k + 1);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRollingBack(false);
+    }
+  };
+
   if (loading) {
     return <div style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.termGreen }}>loading…</div>;
   }
 
   const { isOwn, isOverride, sourceAppName, overrideFromAppName, currentAppName } = resolved ?? {};
+  const orgRole = orgs.find(o => o.id === orgId)?.role ?? 'USER';
+  const canWriteValues = ['ADMIN', 'OWNER'].includes(orgRole);
+  const selectedEnvName = envValues.find(row => row.valueId === selectedValueId)?.env ?? '';
   const editLabel = isOwn ? 'edit' : 'override';
   const modalMode = isOwn ? 'own' : 'inherited';
 
@@ -368,7 +637,7 @@ export default function ParameterDetail() {
           fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted,
           letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '12px',
         }}>
-          // values
+          // values {selectedEnvName ? `· selected ${selectedEnvName}` : ''}
         </div>
         {envValues.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
@@ -387,13 +656,22 @@ export default function ParameterDetail() {
               <span>environment</span><span>value</span><span />
             </div>
             {envValues.map(row => (
-              <EnvRow key={row.env} row={row} editLabel={editLabel} T={T} onEdit={setEditingRow} />
+              <EnvRow
+                key={row.env}
+                row={row}
+                editLabel={editLabel}
+                canWrite={canWriteValues}
+                selected={row.valueId === selectedValueId}
+                T={T}
+                onEdit={setEditingRow}
+                onSelect={setSelectedValueId}
+              />
             ))}
           </div>
         )}
       </div>
 
-      {/* History — placeholder */}
+      {/* History */}
       <div>
         <div style={{
           fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted,
@@ -401,15 +679,16 @@ export default function ParameterDetail() {
         }}>
           // history
         </div>
-        <div style={{
-          background: T.surface, border: `1px solid ${T.border}`,
-          borderRadius: '6px', padding: '32px 24px', textAlign: 'center',
-        }}>
-          <div style={{ fontFamily: FONTS.mono, fontSize: '20px', color: T.textMuted, marginBottom: '8px' }}>◌</div>
-          <p style={{ fontFamily: FONTS.display, fontSize: '13px', color: T.textMuted }}>
-            Value history coming soon
-          </p>
-        </div>
+        <HistoryTable
+          rows={historyRows}
+          loading={historyLoading}
+          available={Boolean(isOwn)}
+          canWrite={canWriteValues}
+          reveals={historyReveals}
+          T={T}
+          onReveal={handleRevealHistory}
+          onRollback={setRollbackTarget}
+        />
       </div>
 
       {/* Edit / override modal */}
@@ -425,6 +704,13 @@ export default function ParameterDetail() {
           saving={saving}
         />
       )}
+      <RollbackModal
+        target={rollbackTarget}
+        T={T}
+        onConfirm={handleConfirmRollback}
+        onCancel={() => setRollbackTarget(null)}
+        rollingBack={rollingBack}
+      />
     </div>
   );
 }
