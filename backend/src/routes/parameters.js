@@ -224,6 +224,7 @@ export default async function parameterRoutes(fastify, _options) {
         where: { appId_key: { appId, key } },
         select: { id: true, key: true, description: true, appId: true },
       });
+      const existed = Boolean(parameter);
 
       if (!parameter) {
         parameter = await prisma.parameter.create({
@@ -237,6 +238,16 @@ export default async function parameterRoutes(fastify, _options) {
         });
         await syncParameterEnvironmentValues(parameter.id, orgId);
       }
+
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: existed ? 'parameter_override.retrieve' : 'parameter_override.create',
+        resourceType: 'parameter',
+        resourceId: parameter.id,
+        resourceLabel: parameter.key,
+        metadata: { appId }
+      });
 
       // Return parameter + its current values
       const values = await prisma.parameterValue.findMany({
@@ -377,6 +388,16 @@ export default async function parameterRoutes(fastify, _options) {
         syncedParameterValues: syncedCount
       }, 'Parameter created and values synced');
 
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'parameter.create',
+        resourceType: 'parameter',
+        resourceId: parameter.id,
+        resourceLabel: parameter.key,
+        metadata: { appId: parameter.appId, isSecret: parameter.isSecret, syncedParameterValues: syncedCount }
+      });
+
       return reply.code(201).send(parameter);
 
     } catch (err) {
@@ -405,5 +426,58 @@ export default async function parameterRoutes(fastify, _options) {
         statusCode: 500
       });
     }
+  });
+
+  fastify.post('/exports/parameters', {
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    schema: {
+      tags: ['parameters'],
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        required: ['appId'],
+        properties: {
+          appId: { type: 'string' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    const { orgId } = request.params;
+    const { appId } = request.body;
+
+    const app = await prisma.app.findUnique({
+      where: { id: appId },
+      select: { id: true, orgId: true, name: true }
+    });
+
+    if (!app) {
+      return reply.code(404).send({ error: 'Not Found', message: 'App not found', statusCode: 404 });
+    }
+
+    if (app.orgId !== orgId) {
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'parameters.export',
+        resourceType: 'app',
+        resourceId: appId,
+        outcome: 'DENIED',
+        metadata: { reason: 'cross_org' }
+      });
+      return reply.code(403).send({ error: 'Forbidden', message: 'App does not belong to this organization', statusCode: 403 });
+    }
+
+    const parameterCount = await prisma.parameter.count({ where: { appId } });
+    await fastify.audit.log({
+      request,
+      orgId,
+      action: 'parameters.export',
+      resourceType: 'app',
+      resourceId: app.id,
+      resourceLabel: app.name,
+      metadata: { parameterCount }
+    });
+
+    return reply.send({ ok: true });
   });
 }

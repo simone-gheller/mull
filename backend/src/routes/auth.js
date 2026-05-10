@@ -90,6 +90,15 @@ export default async function authRoutes(fastify, _options) {
       await tx.userOrganization.create({
         data: { userId: request.user.id, orgId, role: 'OWNER' },
       });
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'org.create',
+        resourceType: 'org',
+        resourceId: orgId,
+        resourceLabel: name,
+        metadata: { role: 'OWNER' }
+      }, { tx });
       return createdOrg;
     });
     return reply.code(201).send({ id: org.id, name: org.name, role: 'OWNER' });
@@ -134,6 +143,19 @@ export default async function authRoutes(fastify, _options) {
       select: { id: true, email: true, displayName: true },
     });
 
+    const orgId = user.organizations?.[0]?.id;
+    if (orgId) {
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'profile.update',
+        resourceType: 'user',
+        resourceId: user.id,
+        resourceLabel: updated.email,
+        metadata: { displayNameChanged: displayName !== undefined }
+      });
+    }
+
     return reply.send(updated);
   });
 
@@ -166,6 +188,16 @@ export default async function authRoutes(fastify, _options) {
       }
     }
   }, async (request, reply) => {
+    const orgId = request.user.organizations?.[0]?.id;
+    if (orgId) {
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'auth.admin_example',
+        resourceType: 'auth',
+        resourceLabel: request.user.email
+      });
+    }
     return reply.send({
       message: 'Admin access granted',
       user: request.user.email

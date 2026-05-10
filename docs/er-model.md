@@ -1,15 +1,17 @@
 # Current ER Model
 
-Last updated: 2026-05-09.
+Last updated: 2026-05-10.
 
-This document describes the implemented Prisma schema, not the aspirational billing/token/audit model.
+This document describes the implemented Prisma schema, not aspirational billing/token/SSO models.
 
 ```mermaid
 erDiagram
     ORGANIZATION ||--o{ USER_ORGANIZATION : "members"
     USER ||--o{ USER_ORGANIZATION : "memberships"
     ORGANIZATION ||--o{ ORG_INVITE : "invites"
+    ORGANIZATION ||--o{ AUDIT_EVENT : "audit events"
     USER ||--o{ ORG_INVITE : "sent invites"
+    USER ||--o{ AUDIT_EVENT : "actor"
 
     ORGANIZATION ||--o{ APP : "owns"
     APP ||--o{ APP : "parent child"
@@ -29,6 +31,7 @@ erDiagram
     ORGANIZATION {
         uuid id PK
         string name
+        enum plan "STARTER, PRO, ENTERPRISE"
     }
 
     USER_ORGANIZATION {
@@ -42,7 +45,7 @@ erDiagram
         uuid org_id FK
         string email
         enum role
-        string token UK
+        string token_hash UK
         uuid invited_by FK
         enum status "PENDING, ACCEPTED, REVOKED"
         timestamp expires_at
@@ -89,6 +92,39 @@ erDiagram
         timestamp encrypted_at
         boolean is_set
     }
+
+    PARAMETER_VALUE_VERSION {
+        uuid id PK
+        uuid parameter_value_id FK
+        uuid parameter_id FK
+        uuid environment_id FK
+        uuid created_by_user_id FK
+        int version_number
+        enum change_type "UPDATE, CLEAR, ROLLBACK"
+        uuid rolled_back_from_version_id FK
+        bytea value_ciphertext
+        boolean is_set
+        timestamp created_at
+    }
+
+    AUDIT_EVENT {
+        uuid id PK
+        uuid org_id FK
+        uuid actor_user_id FK
+        enum actor_type "USER, API_TOKEN, SYSTEM, ANONYMOUS"
+        string actor_display
+        string action
+        string resource_type
+        string resource_id
+        string resource_label
+        enum outcome "SUCCESS, DENIED, FAILURE"
+        string request_id
+        string ip
+        string user_agent
+        json metadata
+        timestamp created_at
+        timestamp expires_at
+    }
 ```
 
 ## Invariants
@@ -101,6 +137,9 @@ erDiagram
 6. `ParameterValue.value` no longer exists. Values are encrypted at rest.
 7. `ParameterValue.isSet=false` means unset locally / inherit from ancestors.
 8. `Environment.isSecret || Parameter.isSecret` makes a value secret for read authorization.
+9. `OrgInvite.tokenHash` stores only a SHA-256 fingerprint of the raw email token.
+10. `AuditEvent.metadata` must not contain plaintext parameter values, raw invite tokens, or full credentials.
+11. Audit retention is stored per row in `expiresAt`; Postgres function `prune_expired_audit_events()` deletes expired rows and is scheduled through `pg_cron` when available.
 
 ## Config Inheritance View
 
@@ -121,7 +160,5 @@ The backend decrypts returned rows in Node after the view has resolved inheritan
 These concepts are product/backlog items and are intentionally absent from the current schema:
 
 - API/service tokens
-- audit log
-- parameter value version history
 - billing/subscription tables
 - SSO connections

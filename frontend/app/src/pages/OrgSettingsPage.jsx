@@ -7,6 +7,7 @@ import { useInvites } from '../hooks/useInvites';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Avatar } from '../components/settings/Avatar';
+import apiService from '../services/api';
 
 function relativeExpiry(dateStr) {
   const diff = new Date(dateStr) - Date.now();
@@ -408,13 +409,182 @@ function BillingTab({ memberCount, T }) {
 
 // ── Audit tab ────────────────────────────────────────────────
 
+const AUDIT_ACTIONS = [
+  '',
+  'app.create',
+  'app.update',
+  'app.delete',
+  'environment.create',
+  'environment.delete',
+  'parameter.create',
+  'parameter_override.create',
+  'parameter_value.update',
+  'parameter_value.clear',
+  'parameter_value.rollback',
+  'parameter_value.reveal_current',
+  'parameter_value.reveal_version',
+  'config.fetch',
+  'parameters.export',
+  'invite.create',
+  'invite.revoke',
+  'invite.accept',
+  'invite.preview',
+  'org.create',
+  'org.update',
+  'profile.update',
+];
+
 function AuditTab({ T }) {
+  const [events, setEvents] = useState([]);
+  const [cursor, setCursor] = useState(null);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [filters, setFilters] = useState({ action: '', resourceType: '', outcome: '' });
+
+  const loadEvents = async ({ append = false, cursor: next = null } = {}) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await apiService.getAuditEvents({
+        limit: 30,
+        cursor: next,
+        action: filters.action,
+        resourceType: filters.resourceType,
+        outcome: filters.outcome,
+      });
+      setEvents(prev => append ? [...prev, ...(result.items ?? [])] : (result.items ?? []));
+      setCursor(next);
+      setNextCursor(result.nextCursor ?? null);
+    } catch (e) {
+      setError(e.response?.data?.message || 'Failed to load audit log');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadEvents();
+  }, [filters.action, filters.resourceType, filters.outcome]);
+
+  const updateFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
+
+  const formatWhen = (value) => {
+    const date = new Date(value);
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const outcomeVariant = {
+    SUCCESS: 'default',
+    DENIED: 'warning',
+    FAILURE: 'danger',
+  };
+
   return (
-    <Section T={T} title="Audit Log" description="Last 30 days of activity">
-      <div style={{ textAlign: 'center', padding: '24px 0' }}>
-        <div style={{ fontFamily: FONTS.mono, fontSize: '22px', color: T.textMuted, marginBottom: '10px' }}>◇</div>
-        <div style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: '13px', color: T.textSecondary, marginBottom: '4px' }}>Audit log coming soon</div>
-        <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>Activity tracking will show who changed what and when.</div>
+    <Section T={T} title="Audit Log" description="Tenant-visible security and configuration activity">
+      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr auto', gap: '10px', marginBottom: '14px' }}>
+        <select
+          value={filters.action}
+          onChange={e => updateFilter('action', e.target.value)}
+          style={{
+            background: T.surface, border: `1px solid ${T.border}`, borderRadius: '4px',
+            color: T.textSecondary, fontFamily: FONTS.mono, fontSize: '11px', padding: '8px 10px',
+          }}
+        >
+          {AUDIT_ACTIONS.map(action => (
+            <option key={action || 'all'} value={action}>{action || 'all actions'}</option>
+          ))}
+        </select>
+        <Input
+          T={T}
+          placeholder="resource type"
+          value={filters.resourceType}
+          onChange={e => updateFilter('resourceType', e.target.value)}
+        />
+        <select
+          value={filters.outcome}
+          onChange={e => updateFilter('outcome', e.target.value)}
+          style={{
+            background: T.surface, border: `1px solid ${T.border}`, borderRadius: '4px',
+            color: T.textSecondary, fontFamily: FONTS.mono, fontSize: '11px', padding: '8px 10px',
+          }}
+        >
+          <option value="">all outcomes</option>
+          <option value="SUCCESS">success</option>
+          <option value="DENIED">denied</option>
+          <option value="FAILURE">failure</option>
+        </select>
+        <Btn T={T} variant="secondary" size="sm" onClick={() => loadEvents()} disabled={loading}>
+          refresh
+        </Btn>
+      </div>
+
+      {error && (
+        <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.red, marginBottom: '10px' }}>
+          ✗ {error}
+        </div>
+      )}
+
+      <div style={{ border: `1px solid ${T.border}`, borderRadius: '4px', overflow: 'hidden' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '128px 1fr 1.2fr 1fr 90px',
+          gap: '12px',
+          padding: '9px 12px',
+          background: T.overlay,
+          borderBottom: `1px solid ${T.border}`,
+          fontFamily: FONTS.mono,
+          fontSize: '10px',
+          color: T.textMuted,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+        }}>
+          <span>time</span><span>actor</span><span>action</span><span>target</span><span>outcome</span>
+        </div>
+
+        {loading && events.length === 0 ? (
+          <div style={{ padding: '18px 12px' }}>
+            <Skeleton height={34} T={T} />
+            <Skeleton height={34} T={T} />
+          </div>
+        ) : events.length === 0 ? (
+          <div style={{ padding: '22px 12px', fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>
+            // no audit events match these filters
+          </div>
+        ) : events.map(event => (
+          <div key={event.id} style={{
+            display: 'grid',
+            gridTemplateColumns: '128px 1fr 1.2fr 1fr 90px',
+            gap: '12px',
+            alignItems: 'center',
+            padding: '10px 12px',
+            borderBottom: `1px solid ${T.border}`,
+          }}>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>{formatWhen(event.createdAt)}</span>
+            <span style={{ fontFamily: FONTS.display, fontSize: '12px', color: T.textSecondary, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {event.actorDisplay || event.actorType.toLowerCase()}
+            </span>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textPrimary }}>{event.action}</span>
+            <span style={{ fontFamily: FONTS.display, fontSize: '12px', color: T.textSecondary, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {event.resourceLabel || event.resourceId || event.resourceType}
+            </span>
+            <Badge T={T} variant={outcomeVariant[event.outcome] ?? 'default'}>{event.outcome.toLowerCase()}</Badge>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+        <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>
+          {events.length} {events.length === 1 ? 'event' : 'events'}
+        </span>
+        <Btn T={T} variant="secondary" size="sm" onClick={() => loadEvents({ append: true, cursor: nextCursor })} disabled={loading || !nextCursor}>
+          {loading && cursor ? 'loading…' : 'load more'}
+        </Btn>
       </div>
     </Section>
   );

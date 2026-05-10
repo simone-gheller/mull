@@ -50,6 +50,15 @@ export default async function configRoutes(fastify, _options) {
           appOrgId: app_org_id,
           envOrgId: env_org_id
         }, 'Cross-org access attempt');
+        await fastify.audit.log({
+          request,
+          orgId,
+          action: 'config.fetch',
+          resourceType: 'config',
+          resourceId: `${appId}:${envId}`,
+          outcome: 'DENIED',
+          metadata: { appId, envId, reason: 'cross_org' }
+        });
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'Access denied',
@@ -98,6 +107,22 @@ export default async function configRoutes(fastify, _options) {
           priority: r.priority
         }))
       }, 'Config rendered');
+
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'config.fetch',
+        resourceType: 'config',
+        resourceId: `${appId}:${envId}`,
+        resourceLabel: `${app_name} · ${env_name}`,
+        metadata: {
+          appId,
+          envId,
+          appName: app_name,
+          environmentName: env_name,
+          parametersCount: results.length
+        }
+      });
 
       // Return flat key-value
       return reply.send(config);

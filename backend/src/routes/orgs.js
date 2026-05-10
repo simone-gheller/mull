@@ -2,6 +2,10 @@ import { uuidv7 } from 'uuidv7';
 import crypto from 'node:crypto';
 import { uuidV7Param } from '../schemas/common.js';
 
+function tokenFingerprint(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
 const orgIdParamsSchema = {
   type: 'object',
   required: ['orgId'],
@@ -90,6 +94,16 @@ export default async function orgRoutes(fastify, _options) {
       where: { id: orgId },
       data: { name },
       select: { id: true, name: true },
+    });
+
+    await fastify.audit.log({
+      request,
+      orgId,
+      action: 'org.update',
+      resourceType: 'org',
+      resourceId: org.id,
+      resourceLabel: org.name,
+      metadata: { nameChanged: true }
     });
 
     return reply.send(org);
@@ -185,11 +199,12 @@ export default async function orgRoutes(fastify, _options) {
     // so membership is only created when they click through
     const org = await fastify.prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
     const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = tokenFingerprint(token);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const inviteUrl = `${fastify.config.APP_URL}/invite/accept?token=${token}`;
 
-    await fastify.prisma.orgInvite.create({
-      data: { id: uuidv7(), orgId, email, role, token, invitedBy: request.user.id, expiresAt },
+    const invite = await fastify.prisma.orgInvite.create({
+      data: { id: uuidv7(), orgId, email, role, tokenHash, invitedBy: request.user.id, expiresAt },
     });
 
     await fastify.mailer.sendInvite({
@@ -198,6 +213,16 @@ export default async function orgRoutes(fastify, _options) {
       inviterName: request.user.displayName || request.user.email,
       role,
       inviteUrl,
+    });
+
+    await fastify.audit.log({
+      request,
+      orgId,
+      action: 'invite.create',
+      resourceType: 'invite',
+      resourceId: invite.id,
+      resourceLabel: email,
+      metadata: { role, expiresAt: expiresAt.toISOString() }
     });
 
     return reply.status(200).send({ type: 'invite_sent', email });
@@ -254,6 +279,98 @@ export default async function orgRoutes(fastify, _options) {
       data: { status: 'REVOKED', resolvedAt: new Date() },
     });
 
+    await fastify.audit.log({
+      request,
+      orgId,
+      action: 'invite.revoke',
+      resourceType: 'invite',
+      resourceId: invite.id,
+      resourceLabel: invite.email,
+      metadata: { role: invite.role }
+    });
+
     return reply.status(204).send();
+  });
+
+  fastify.get('/audit-events', {
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    schema: {
+      tags: ['orgs'],
+      security: [{ bearerAuth: [] }],
+      params: orgIdParamsSchema,
+      querystring: {
+        type: 'object',
+        properties: {
+          cursor: { type: 'string' },
+          limit: { type: 'integer', minimum: 1, maximum: 100 },
+          action: { type: 'string' },
+          resourceType: { type: 'string' },
+          actorUserId: uuidV7Param('Actor user ID'),
+          outcome: { type: 'string', enum: ['SUCCESS', 'DENIED', 'FAILURE'] },
+          from: { type: 'string', format: 'date-time' },
+          to: { type: 'string', format: 'date-time' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { orgId } = request.params;
+    const {
+      cursor,
+      limit = 50,
+      action,
+      resourceType,
+      actorUserId,
+      outcome,
+      from,
+      to,
+    } = request.query;
+
+    const where = {
+      orgId,
+      ...(action ? { action } : {}),
+      ...(resourceType ? { resourceType } : {}),
+      ...(actorUserId ? { actorUserId } : {}),
+      ...(outcome ? { outcome } : {}),
+      ...((from || to) ? {
+        createdAt: {
+          ...(from ? { gte: new Date(from) } : {}),
+          ...(to ? { lte: new Date(to) } : {}),
+        },
+      } : {}),
+    };
+
+    const events = await fastify.prisma.auditEvent.findMany({
+      where,
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        actorUserId: true,
+        actorType: true,
+        actorDisplay: true,
+        action: true,
+        resourceType: true,
+        resourceId: true,
+        resourceLabel: true,
+        outcome: true,
+        requestId: true,
+        ip: true,
+        userAgent: true,
+        metadata: true,
+        createdAt: true,
+        expiresAt: true,
+      },
+    });
+
+    const page = events.slice(0, limit);
+    return reply.send({
+      items: page.map(event => ({
+        ...event,
+        createdAt: event.createdAt.toISOString(),
+        expiresAt: event.expiresAt?.toISOString() ?? null,
+      })),
+      nextCursor: events.length > limit ? page.at(-1).id : null,
+    });
   });
 }

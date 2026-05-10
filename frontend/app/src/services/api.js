@@ -29,6 +29,16 @@ class ApiService {
     return response.data;
   }
 
+  async getAuditEvents(params = {}) {
+    const search = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') search.set(key, value);
+    });
+    const suffix = search.toString() ? `?${search.toString()}` : '';
+    const response = await apiClient.get(`/orgs/${this.orgId}/audit-events${suffix}`);
+    return response.data;
+  }
+
   // Members
   async getMembers() {
     const response = await apiClient.get(`/orgs/${this.orgId}/members`);
@@ -61,6 +71,7 @@ class ApiService {
   }
 
   async exportProjectParameters(appId) {
+    await apiClient.post(`/orgs/${this.orgId}/exports/parameters`, { appId });
     const [resolved, values] = await Promise.all([
       this.getResolvedParameters(appId),
       this.getParameterValues(appId),

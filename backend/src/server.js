@@ -11,6 +11,7 @@ import authPlugin from './plugins/auth.js';
 import testAuthPlugin from './plugins/testAuth.js';
 import supabasePlugin from './plugins/supabase.js';
 import mailerPlugin from './plugins/mailer.js';
+import auditPlugin from './plugins/audit.js';
 import authRoutes from './routes/auth.js';
 import configRoutes from './routes/config.js';
 import environmentRoutes from './routes/environments.js';
@@ -79,6 +80,7 @@ export function buildApp(options = {}) {
   fastify.register(supabasePlugin);
   fastify.register(mailerPlugin);
   fastify.register(testMode ? testAuthPlugin : authPlugin);
+  fastify.register(auditPlugin);
 
   // Register Swagger documentation
   fastify.register(swagger, swaggerConfig);

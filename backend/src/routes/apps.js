@@ -101,7 +101,7 @@ export default async function appRoutes(fastify, _options) {
 
     const existing = await prisma.app.findUnique({
       where: { id: appId },
-      select: { orgId: true }
+      select: { orgId: true, name: true }
     });
 
     if (!existing) {
@@ -109,6 +109,15 @@ export default async function appRoutes(fastify, _options) {
     }
 
     if (existing.orgId !== orgId) {
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'app.update',
+        resourceType: 'app',
+        resourceId: appId,
+        outcome: 'DENIED',
+        metadata: { reason: 'cross_org' }
+      });
       return reply.code(403).send({ error: 'Forbidden', message: 'App does not belong to this organization', statusCode: 403 });
     }
 
@@ -121,6 +130,15 @@ export default async function appRoutes(fastify, _options) {
         where: { id: appId },
         data: { name: name.trim() },
         select: { id: true, orgId: true, parentId: true, name: true, ancestors: true, depth: true }
+      });
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'app.update',
+        resourceType: 'app',
+        resourceId: updated.id,
+        resourceLabel: updated.name,
+        metadata: { previousName: existing.name, name: updated.name }
       });
       return reply.send(updated);
     } catch (err) {
@@ -141,7 +159,7 @@ export default async function appRoutes(fastify, _options) {
 
     const existing = await prisma.app.findUnique({
       where: { id: appId },
-      select: { orgId: true }
+      select: { orgId: true, name: true }
     });
 
     if (!existing) {
@@ -149,11 +167,28 @@ export default async function appRoutes(fastify, _options) {
     }
 
     if (existing.orgId !== orgId) {
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'app.delete',
+        resourceType: 'app',
+        resourceId: appId,
+        outcome: 'DENIED',
+        metadata: { reason: 'cross_org' }
+      });
       return reply.code(403).send({ error: 'Forbidden', message: 'App does not belong to this organization', statusCode: 403 });
     }
 
     try {
       await prisma.app.delete({ where: { id: appId } });
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'app.delete',
+        resourceType: 'app',
+        resourceId: appId,
+        resourceLabel: existing.name
+      });
       return reply.code(204).send();
     } catch (err) {
       fastify.log.error(err, 'Failed to delete app');
@@ -229,6 +264,16 @@ export default async function appRoutes(fastify, _options) {
         parentId: app.parentId,
         depth: app.depth
       }, 'App created');
+
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'app.create',
+        resourceType: 'app',
+        resourceId: app.id,
+        resourceLabel: app.name,
+        metadata: { parentId: app.parentId, depth: app.depth }
+      });
 
       return reply.code(201).send(app);
 

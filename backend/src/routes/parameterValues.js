@@ -301,6 +301,21 @@ export default async function parameterValueRoutes(fastify) {
       }
 
       if (!canReadSecretValue(request, parameterValue)) {
+        await fastify.audit.log({
+          request,
+          orgId,
+          action: 'parameter_value.reveal_version',
+          resourceType: 'parameter_value',
+          resourceId: id,
+          resourceLabel: parameterValue.parameter.key,
+          outcome: 'DENIED',
+          metadata: {
+            versionId,
+            parameterId: parameterValue.parameterId,
+            environmentId: parameterValue.environmentId,
+            isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret
+          }
+        });
         return forbiddenSecretReply(reply);
       }
 
@@ -319,6 +334,23 @@ export default async function parameterValueRoutes(fastify) {
           message: 'Parameter value version not found'
         });
       }
+
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'parameter_value.reveal_version',
+        resourceType: 'parameter_value',
+        resourceId: id,
+        resourceLabel: parameterValue.parameter.key,
+        metadata: {
+          versionId: version.id,
+          versionNumber: version.versionNumber,
+          parameterId: parameterValue.parameterId,
+          environmentId: parameterValue.environmentId,
+          isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret,
+          isSet: version.isSet
+        }
+      });
 
       return reply.send({
         id: version.id,
@@ -359,6 +391,21 @@ export default async function parameterValueRoutes(fastify) {
       }
 
       if (!canReadSecretValue(request, parameterValue)) {
+        await fastify.audit.log({
+          request,
+          orgId,
+          action: 'parameter_value.rollback',
+          resourceType: 'parameter_value',
+          resourceId: id,
+          resourceLabel: parameterValue.parameter.key,
+          outcome: 'DENIED',
+          metadata: {
+            versionId,
+            parameterId: parameterValue.parameterId,
+            environmentId: parameterValue.environmentId,
+            isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret
+          }
+        });
         return forbiddenSecretReply(reply);
       }
 
@@ -418,6 +465,22 @@ export default async function parameterValueRoutes(fastify) {
         });
 
         await pruneVersionHistory(tx, id, historyLimit);
+        await fastify.audit.log({
+          request,
+          orgId,
+          action: 'parameter_value.rollback',
+          resourceType: 'parameter_value',
+          resourceId: id,
+          resourceLabel: parameterValue.parameter.key,
+          metadata: {
+            versionId: sourceVersion.id,
+            parameterId: parameterValue.parameterId,
+            environmentId: parameterValue.environmentId,
+            isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret,
+            isSetBefore: parameterValue.isSet,
+            isSetAfter: sourceVersion.isSet
+          }
+        }, { tx });
         return updated;
       });
 
@@ -482,8 +545,37 @@ export default async function parameterValueRoutes(fastify) {
       }
 
       if (!canReadSecretValue(request, parameterValue)) {
+        await fastify.audit.log({
+          request,
+          orgId,
+          action: 'parameter_value.reveal_current',
+          resourceType: 'parameter_value',
+          resourceId: id,
+          resourceLabel: parameterValue.parameter.key,
+          outcome: 'DENIED',
+          metadata: {
+            parameterId: parameterValue.parameterId,
+            environmentId: parameterValue.environmentId,
+            isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret
+          }
+        });
         return forbiddenSecretReply(reply);
       }
+
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'parameter_value.reveal_current',
+        resourceType: 'parameter_value',
+        resourceId: id,
+        resourceLabel: parameterValue.parameter.key,
+        metadata: {
+          parameterId: parameterValue.parameterId,
+          environmentId: parameterValue.environmentId,
+          isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret,
+          isSet: parameterValue.isSet
+        }
+      });
 
       return reply.send({
         id: parameterValue.id,
@@ -515,7 +607,7 @@ export default async function parameterValueRoutes(fastify) {
         where: { id: id },
         include: {
           parameter: {
-            select: { id: true, isSecret: true }
+            select: { id: true, key: true, isSecret: true }
           },
           environment: {
             select: { id: true, orgId: true, isSecret: true }
@@ -539,6 +631,20 @@ export default async function parameterValueRoutes(fastify) {
       }
 
       if (!canReadSecretValue(request, existingValue)) {
+        await fastify.audit.log({
+          request,
+          orgId,
+          action: 'parameter_value.update',
+          resourceType: 'parameter_value',
+          resourceId: id,
+          resourceLabel: existingValue.parameter.key,
+          outcome: 'DENIED',
+          metadata: {
+            parameterId: existingValue.parameterId,
+            environmentId: existingValue.environmentId,
+            isSecret: existingValue.environment.isSecret || existingValue.parameter.isSecret
+          }
+        });
         return forbiddenSecretReply(reply);
       }
 
@@ -586,6 +692,22 @@ export default async function parameterValueRoutes(fastify) {
         });
 
         await pruneVersionHistory(tx, id, historyLimit);
+        await fastify.audit.log({
+          request,
+          orgId,
+          action: isSet ? 'parameter_value.update' : 'parameter_value.clear',
+          resourceType: 'parameter_value',
+          resourceId: id,
+          resourceLabel: existingValue.parameter.key,
+          metadata: {
+            parameterId: existingValue.parameterId,
+            environmentId: existingValue.environmentId,
+            isSecret: existingValue.environment.isSecret || existingValue.parameter.isSecret,
+            isSetBefore: existingValue.isSet,
+            isSetAfter: isSet,
+            valueHashAfter: fastify.audit.hashSensitiveValue(normalizedValue)
+          }
+        }, { tx });
         return updated;
       });
 

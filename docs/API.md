@@ -343,6 +343,50 @@ Implementation:
 
 Caveat: this endpoint currently uses authenticated user JWTs. Scoped service tokens for runtime/CI config fetches are still backlog.
 
+Successful config fetches create `config.fetch` audit events with app/environment metadata and parameter count, never rendered plaintext values.
+
+## Audit Events
+
+### `GET /orgs/:orgId/audit-events`
+
+Lists tenant-visible audit events for OWNER/ADMIN users.
+
+Query filters:
+
+- `cursor`
+- `limit` (1-100)
+- `action`
+- `resourceType`
+- `actorUserId`
+- `outcome` (`SUCCESS`, `DENIED`, `FAILURE`)
+- `from`, `to` ISO datetimes
+
+Response:
+
+```json
+{
+  "items": [
+    {
+      "id": "019...",
+      "actorDisplay": "owner@example.com",
+      "action": "parameter_value.reveal_current",
+      "resourceType": "parameter_value",
+      "resourceLabel": "DATABASE_URL",
+      "outcome": "SUCCESS",
+      "metadata": {
+        "isSecret": true,
+        "isSet": true
+      },
+      "createdAt": "2026-05-10T12:00:00.000Z",
+      "expiresAt": "2026-08-08T12:00:00.000Z"
+    }
+  ],
+  "nextCursor": null
+}
+```
+
+Audit events intentionally do not store plaintext secret values, raw invite tokens, or full credentials.
+
 ## Invitations
 
 ### `GET /orgs/:orgId/invites`
@@ -351,7 +395,7 @@ Lists invites for an org.
 
 ### `POST /orgs/:orgId/invites`
 
-Creates an invite. Existing users can be added directly; new users receive an app-level invite flow.
+Creates an invite for a non-member email. Existing registered users still accept through the same app-level invite link. The raw invite token is sent only in the email link; the database stores only `token_hash`.
 
 ```json
 {
@@ -367,10 +411,12 @@ Revokes a pending invite.
 ### `GET /invites/:token`
 
 Public invite preview/validation endpoint.
+The backend hashes the received token and looks up `org_invites.token_hash`.
 
 ### `POST /invites/accept`
 
 Accepts an invite for the authenticated/signup flow.
+The backend hashes the received token and never persists the raw token.
 
 ## Database Model Notes
 
@@ -380,6 +426,8 @@ Accepts an invite for the authenticated/signup flow.
 - `ParameterValue.value` does not exist.
 - `ParameterValue.isSet` is the inheritance state flag.
 - `Environment.isSecret` and `Parameter.isSecret` both contribute to secret gating.
+- `OrgInvite.token` does not exist; invite lookup uses `tokenHash` / `token_hash`.
+- `AuditEvent` stores tenant-visible activity metadata with per-row retention.
 
 ## Migration Operations
 

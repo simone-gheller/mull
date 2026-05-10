@@ -51,7 +51,7 @@ export default async function environmentRoutes(fastify, _options) {
     try {
       const env = await prisma.environment.findFirst({
         where: { id: envId, orgId },
-        select: { id: true },
+        select: { id: true, name: true, isSecret: true },
       });
 
       if (!env) {
@@ -59,6 +59,15 @@ export default async function environmentRoutes(fastify, _options) {
       }
 
       await prisma.environment.delete({ where: { id: envId } });
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'environment.delete',
+        resourceType: 'environment',
+        resourceId: env.id,
+        resourceLabel: env.name,
+        metadata: { isSecret: env.isSecret }
+      });
       return reply.code(204).send();
 
     } catch (err) {
@@ -101,6 +110,16 @@ export default async function environmentRoutes(fastify, _options) {
         name: environment.name,
         syncedParameterValues: syncedCount
       }, 'Environment created and parameter values synced');
+
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'environment.create',
+        resourceType: 'environment',
+        resourceId: environment.id,
+        resourceLabel: environment.name,
+        metadata: { isSecret: environment.isSecret, syncedParameterValues: syncedCount }
+      });
 
       return reply.code(201).send(environment);
 

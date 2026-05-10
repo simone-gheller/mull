@@ -1,7 +1,7 @@
 # Senior Review Pain Points
 
 Review date: 2026-05-09.
-Last updated after auth test split, UUIDv7 route validation, and lazy route splitting: 2026-05-10.
+Last updated after audit trail, audit retention, and hashed invite tokens: 2026-05-10.
 
 This file is a backlog/reference document. Items marked **Resolved** were valid findings at review time and have since been addressed.
 
@@ -64,21 +64,24 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
 19. **Partially resolved — frontend app shipped as one large route bundle.**
    Route pages are now lazy-loaded with `React.lazy`/`Suspense`, producing route-level chunks. Bundle size should still be monitored as feature code grows.
 
+20. **Resolved — audit logging was missing where it mattered most.**
+   `AuditEvent` now records tenant-visible events for value updates/clears/rollback, secret reveal, config fetch, parameter export, invite lifecycle, org/app/environment/parameter mutations, and profile updates. Audit metadata is sanitized and does not store plaintext secret values or raw invite tokens.
+
+21. **Resolved — organization audit was a visible placeholder.**
+   `settings/org` now has a real audit tab backed by `GET /orgs/:orgId/audit-events` with pagination and filters for action, resource type, and outcome.
+
+22. **Resolved — invite tokens were persisted in plaintext.**
+   `OrgInvite` now stores `token_hash` only. Raw invite tokens exist only in the email/link and incoming request; preview and accept routes hash the received token before lookup.
+
 ## Current Critical Risks
 
-7. The rendered config endpoint returns full config to any authenticated organization member. `GET /orgs/:orgId/config/:appId/:envId` is the product's most sensitive API, but it currently uses user JWT auth only, with no service tokens, scopes, audit logging, or role gate.
-
-10. Audit logging is missing where it matters most. Updating values, revealing secrets, exporting parameters, accepting invites, and fetching rendered config should create durable audit events.
-
-11. Version history and rollback are missing. The UI shows history/audit placeholders, but there is no backend model or route to inspect previous values or restore one.
+7. The rendered config endpoint returns full config to any authenticated organization member. `GET /orgs/:orgId/config/:appId/:envId` is audited, but it still uses user JWT auth only, with no service tokens, scopes, or dedicated runtime role gate.
 
 ## Backend And Security Debt
 
 12. API/service tokens are missing. A B2B config product needs scoped machine credentials for CI/CD, deploy systems, runtime config fetching, and rotation.
 
 17. The `config_inheritance` raw SQL/view path is still high risk. It now has direct `/config` integration coverage, but the path still deserves care because it is raw SQL and returns the product's most sensitive output.
-
-18. Secret reveal is not audited. For a security product, reveal should be a visible, intentional, logged event.
 
 19. Secret masking and authorization are split across route decorators, route handlers, and frontend behavior. This should be centralized so the policy is easier to verify.
 
@@ -87,8 +90,6 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
 ## Frontend And Product Debt
 
 24. Personal tokens are still a "coming soon" route.
-
-25. Organization audit is a visible placeholder.
 
 28. The frontend has no automated tests. For current maturity, Playwright golden paths would be more valuable than component tests with heavy mocks.
 
@@ -100,7 +101,7 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
 
 31. Backend tests require local Supabase/Postgres and are not self-contained. They pass locally with Supabase active on `127.0.0.1:54322` and `.env` configured, but CI still needs an ephemeral database strategy.
 
-32. Partially resolved: integration tests now cover role policy, config rendering, invite acceptance edge cases, encryption behavior, and inheritance fallback. Frontend route behavior and additional auth/role edge cases still need a quicker safety net.
+32. Partially resolved: integration tests now cover role policy, config rendering, invite acceptance edge cases, encryption behavior, inheritance fallback, and the audit action matrix. Frontend route behavior and additional auth/role edge cases still need a quicker safety net.
 
 33. Frontend production build succeeds, and route-level lazy loading now avoids a single route bundle. Chunk size should continue to be watched.
 
@@ -110,9 +111,7 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
 
 35. Scoped org/app/environment API tokens with one-time display, hashed storage, rotation, revoke, last-used timestamp, and least-privilege scopes.
 
-36. Audit log model and UI for value changes, secret reveal, config fetch, export, invite lifecycle, member role changes, token creation, and token revoke.
-
-37. Version history and manual rollback for parameter values.
+36. Member role-change auditing once role management ships.
 
 38. Role and permission management: change role, remove member, transfer ownership, protect against removing/downgrading the last owner, and redesign the coarse `USER`/`ADMIN` split into explicit capabilities such as config read/write and secret read/write.
 
