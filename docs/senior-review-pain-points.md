@@ -1,93 +1,123 @@
 # Senior Review Pain Points
 
 Review date: 2026-05-09.
+Last updated after auth test split, UUIDv7 route validation, and lazy route splitting: 2026-05-10.
 
-## Critical
+This file is a backlog/reference document. Items marked **Resolved** were valid findings at review time and have since been addressed.
 
-1. Parameter values are stored in plaintext. The product positioning promises secure configuration and envelope encryption, but `ParameterValue.value` is currently plain `TEXT`, and the required `MASTER_KEY_HEX` is not used in the value read/write path.
+## Resolved Since Review
 
-2. The rendered config endpoint returns full config to any authenticated organization member. `GET /orgs/:orgId/config/:appId/:envId` is the product's most sensitive API, but it currently uses user JWT auth only, with no service tokens, scopes, audit logging, or role gate.
+1. **Resolved — parameter values were plaintext.**
+   `ParameterValue.value` has been dropped. Values are now encrypted at rest with AES-256-GCM envelope encryption: value ciphertext/IV/tag, wrapped DEK ciphertext/IV/tag, `kekVersion`, `encryptionAlg`, and `encryptedAt`.
 
-3. Production authorization has a schema drift bug. `requireRole(..., { onlyIfSecret: true })` still reads `app.isSecret`, but that field has been removed from the Prisma schema. Some value routes can therefore fail at runtime.
+2. **Resolved — production authorization referenced removed `app.isSecret`.**
+   Secret gating now checks parameter/environment secrecy. Grouped value reads redact row by row instead of gating the whole app.
 
-4. Mutating configuration is too permissive. Regular `USER` members can create apps, environments, and parameters because the create routes only require authentication and organization membership.
+3. **Resolved — blank child values shadowed ancestors.**
+   `parameter_values.is_set` is now the explicit non-secret state flag. Empty string means unset/inherit, and `config_inheritance` filters `WHERE pv.is_set = true`.
 
-5. Non-secret parameter values can be updated by non-admin users. `PUT /parameters/values/:id` only enforces `ADMIN` when the value is considered secret, which is risky for config integrity.
+4. **Partially resolved — `/parameters/resolved` contract was chaotic and frontend-heavy.**
+   The backend now returns resolved definition relationship plus optional effective environment value state. The Parameters list and Project detail consume the new contract. Parameter Detail is compatible but still lacks a dedicated all-environment resolved detail endpoint.
 
-6. Audit logging is missing where it matters most. Updating values, revealing secrets, exporting parameters, accepting invites, and fetching rendered config should create durable audit events.
+5. **Partially resolved — no encryption safety net.**
+   Unit tests cover envelope roundtrip and tamper/AAD failures. Integration tests cover parameter value encryption behavior and `/parameters/resolved` blank-child fallback.
 
-7. Version history and rollback are missing. The UI shows a history placeholder, but there is no backend model or route to inspect previous values or restore one.
+6. **Resolved — toast infrastructure missing.**
+   `ToastProvider` exists and wraps app routes. Adoption now covers the main app/environment/invite/org-save/export paths; some lower-priority paths may still need adoption.
+
+7. **Resolved — mutating configuration was too permissive.**
+   Creating apps, environments, parameters, and parameter overrides now requires `ADMIN` or `OWNER`.
+
+8. **Resolved — non-secret parameter values could be updated by non-admin users.**
+   `PUT /orgs/:orgId/parameters/values/:id` now requires `ADMIN` or `OWNER` for every value update, while read redaction and blank-as-inherit semantics are unchanged. This is a conservative policy until the permission model is redesigned with granular write capabilities.
+
+9. **Resolved — additional organization creation was not transactional.**
+   `POST /orgs` now creates the organization and owner membership in a single Prisma transaction.
+
+10. **Resolved — invite acceptance could mutate existing membership role.**
+   Invite acceptance now returns `409` when the authenticated user is already a member and does not update their role.
+
+11. **Resolved — `/config` lacked direct integration coverage.**
+   `GET /orgs/:orgId/config/:appId/:envId` now has an integration test covering inherited config and unset child overrides.
+
+12. **Resolved — backend-down detection was missing.**
+   Axios network errors now mark the backend as down, `AuthContext` polls `/health` every 10 seconds, and the app shows a sticky recovery banner until the API responds.
+
+13. **Resolved — parameter export was a stub.**
+   The app detail panel exports parameters to JSON with app metadata, timestamp, per-environment values, and completion/error toasts.
+
+14. **Resolved — organization token settings showed fake data.**
+   The org token tab now shows an honest unavailable state instead of static placeholder token rows.
+
+15. **Resolved — billing and usage looked more mature than reality.**
+   Billing now shows the current free plan and real member usage only; invoice/API-call placeholders were removed or marked coming soon.
+
+16. **Resolved — `testMode` authentication was embedded in the production auth plugin.**
+   Test authentication now lives in a separate test auth plugin. Production auth only contains the Supabase/JWT path.
+
+17. **Resolved — UUIDv7 route and input validation was inconsistent.**
+   UUIDv7 validation is now centralized through `uuidV7Param()`/`isUuidV7()` and applied to app-level params plus relevant query/body IDs across apps, environments, parameters, parameter values, config, org routes, and invite revocation. Invite tokens remain plain token strings because they are not UUIDs.
+
+18. **Resolved/removed — `/dashboard/users` was considered missing.**
+   This is no longer tracked as a product gap: `settings/profile` owns the session user surface, and `settings/org` owns organization and member management.
+
+19. **Partially resolved — frontend app shipped as one large route bundle.**
+   Route pages are now lazy-loaded with `React.lazy`/`Suspense`, producing route-level chunks. Bundle size should still be monitored as feature code grows.
+
+## Current Critical Risks
+
+7. The rendered config endpoint returns full config to any authenticated organization member. `GET /orgs/:orgId/config/:appId/:envId` is the product's most sensitive API, but it currently uses user JWT auth only, with no service tokens, scopes, audit logging, or role gate.
+
+10. Audit logging is missing where it matters most. Updating values, revealing secrets, exporting parameters, accepting invites, and fetching rendered config should create durable audit events.
+
+11. Version history and rollback are missing. The UI shows history/audit placeholders, but there is no backend model or route to inspect previous values or restore one.
 
 ## Backend And Security Debt
 
-8. API/service tokens are missing. A B2B config product needs scoped machine credentials for CI/CD, deploy systems, runtime config fetching, and rotation.
+12. API/service tokens are missing. A B2B config product needs scoped machine credentials for CI/CD, deploy systems, runtime config fetching, and rotation.
 
-9. Organization creation is not transactional. `POST /orgs` creates the organization and membership in separate writes, so partial failure can leave an orphan organization.
+17. The `config_inheritance` raw SQL/view path is still high risk. It now has direct `/config` integration coverage, but the path still deserves care because it is raw SQL and returns the product's most sensitive output.
 
-10. Invite acceptance can update existing membership role through an upsert. Even if normal invite creation prevents inviting an existing member, the accept endpoint should avoid surprising role mutation.
+18. Secret reveal is not audited. For a security product, reveal should be a visible, intentional, logged event.
 
-11. `testMode` authentication is embedded in the production auth plugin. This makes the auth plugin harder to reason about and keeps test-only behavior inside production code.
+19. Secret masking and authorization are split across route decorators, route handlers, and frontend behavior. This should be centralized so the policy is easier to verify.
 
-12. UUID validation appears to rely mostly on OpenAPI `format: uuid`, not a consistently enforced UUIDv7 invariant at the route boundary.
-
-13. The `config_inheritance` raw SQL/view path is one of the riskiest backend paths and is not covered by tests.
-
-14. Secret reveal is not audited. For a security product, reveal should be a visible, intentional, logged event.
-
-15. Secret masking and authorization are split across route decorators, route handlers, and frontend behavior. This should be centralized so the policy is easier to verify.
+20. Key management is env-backed only. Local `.env` is acceptable for development, but production should move `MASTER_KEY_HEX`/KEK material to a managed secret store and define rotation/rewrap procedures.
 
 ## Frontend And Product Debt
 
-16. Backend-down detection is not implemented. Axios has no response interceptor for network errors, and `AuthContext` silently treats failed `/auth/me` calls as missing user data.
+24. Personal tokens are still a "coming soon" route.
 
-17. The app can show an authenticated shell with empty organizations when the backend is unreachable. This creates the `'...'` org-name/failing-dashboard state described in the backlog.
+25. Organization audit is a visible placeholder.
 
-18. Parameter export is still a stub in `Projects.jsx`.
+28. The frontend has no automated tests. For current maturity, Playwright golden paths would be more valuable than component tests with heavy mocks.
 
-19. Organization API tokens in settings are static placeholder rows, not real data.
+29. Toast adoption is improved for main app, environment, invite, org-save, and export paths, but lower-priority paths should continue adopting it as they change.
 
-20. Personal tokens are still a "coming soon" route.
-
-21. The security page contains placeholder sessions and disabled actions for password, 2FA, session revoke, and account deletion.
-
-22. Organization audit is a visible placeholder.
-
-23. Billing and usage are placeholder-like and may communicate more product maturity than exists.
-
-24. `/dashboard/users` exists conceptually and `Users.jsx` exists, but the current router does not expose it.
-
-25. The frontend has no automated tests. For the current maturity, Playwright golden paths would be more valuable than component tests with heavy mocks.
-
-26. Toasts exist now, but not every create/delete/export/error path consistently uses them.
+30. Parameter Detail still makes multiple grouped-value calls and performs some fallback assembly client-side. A dedicated backend detail endpoint would simplify it and reduce duplicate logic.
 
 ## Testing And Developer Experience
 
-27. Backend tests require local Supabase/Postgres and are not self-contained. In the reviewed environment they failed with `connect EPERM 127.0.0.1:54322`.
+31. Backend tests require local Supabase/Postgres and are not self-contained. They pass locally with Supabase active on `127.0.0.1:54322` and `.env` configured, but CI still needs an ephemeral database strategy.
 
-28. There is no quick unit-level safety net for auth/role policy, encryption behavior, config rendering, or invite acceptance edge cases.
+32. Partially resolved: integration tests now cover role policy, config rendering, invite acceptance edge cases, encryption behavior, and inheritance fallback. Frontend route behavior and additional auth/role edge cases still need a quicker safety net.
 
-29. Frontend production build succeeds, but the app bundle is a single large JavaScript chunk.
+33. Frontend production build succeeds, and route-level lazy loading now avoids a single route bundle. Chunk size should continue to be watched.
 
-30. Build output for `frontend/app` is about 703 kB raw / 201 kB gzip for JS. This is not catastrophic, but it is high for the current feature set.
+34. Build output for `frontend/app` is no longer one large JS file after lazy route splitting, but aggregate JS remains worth monitoring for the current feature set.
 
 ## Relevant Missing Features
 
-31. Envelope encryption at rest with ciphertext, IV, auth tag, wrapped DEK, KEK version, checksum, and migration for existing plaintext values.
+35. Scoped org/app/environment API tokens with one-time display, hashed storage, rotation, revoke, last-used timestamp, and least-privilege scopes.
 
-32. Scoped org/app/environment API tokens with one-time display, hashed storage, rotation, revoke, last-used timestamp, and least-privilege scopes.
+36. Audit log model and UI for value changes, secret reveal, config fetch, export, invite lifecycle, member role changes, token creation, and token revoke.
 
-33. Audit log model and UI for value changes, secret reveal, config fetch, export, invite lifecycle, member role changes, token creation, and token revoke.
+37. Version history and manual rollback for parameter values.
 
-34. Version history and manual rollback for parameter values.
+38. Role and permission management: change role, remove member, transfer ownership, protect against removing/downgrading the last owner, and redesign the coarse `USER`/`ADMIN` split into explicit capabilities such as config read/write and secret read/write.
 
-35. Role management: change role, remove member, transfer ownership, and protect against removing/downgrading the last owner.
+41. CI setup that can run backend integration tests against an ephemeral database.
 
-36. Backend unreachable banner and recovery polling.
+42. E2E golden paths: signup, OTP verification, login, org switch, create app/environment/parameter, edit/clear/inherit value, invite accept.
 
-37. Export parameters to JSON from the app detail panel.
-
-38. CI setup that can run backend integration tests against an ephemeral database.
-
-39. E2E golden paths: signup, OTP verification, login, org switch, create app/environment/parameter, edit value, invite accept.
-
-40. Bundle splitting by route and removal or lazy-loading of heavy dependencies used only on public/rare pages.
+43. Further bundle tuning beyond route-level lazy loading, including lazy-loading heavy dependencies used only on public/rare pages.

@@ -2,6 +2,8 @@
 
 Date: 2026-05-09
 
+Status: implemented for the list/project flows. `ParameterDetail.jsx` is compatible with `isSet`, but a dedicated all-environment resolved detail endpoint is still deferred.
+
 ## Goal
 
 Redesign parameter inheritance resolution so the backend owns the domain model and the frontend receives a clean contract.
@@ -64,7 +66,7 @@ Because plaintext `parameter_values.value` has already been dropped, backfill mu
 4. Do not log decrypted values.
 5. Make the script idempotent.
 
-After local/prod backfill, the script can be removed or kept as a one-off migration helper until production is migrated.
+The implemented script is `backend/scripts/backfill-parameter-value-is-set.js`. Keep it until every non-local environment has run the backfill.
 
 ## Write Path Changes
 
@@ -397,15 +399,23 @@ Manual smoke tests first:
 8. Verify child returns to inherited value.
 9. Verify `/config` matches UI.
 
-## Implementation Order
+## Implementation Status
 
-1. Add `is_set` migration.
-2. Add temporary backfill script and run it locally.
-3. Update write paths.
-4. Update `config_inheritance`.
-5. Redesign `/parameters/resolved` response.
-6. Refactor `Projects.jsx`.
-7. Refactor `Parameters.jsx`.
-8. Update `ParameterDetail.jsx` minimal compatibility with `isSet`.
-9. Add backend tests.
-10. Run migrations, backfill, tests, and frontend build.
+Completed:
+
+1. Added `is_set` migration.
+2. Added `backend/scripts/backfill-parameter-value-is-set.js` and ran it locally.
+3. Updated parameter-value write paths.
+4. Updated `config_inheritance` to ignore unset values.
+5. Redesigned `/parameters/resolved` response.
+6. Refactored `Projects.jsx`.
+7. Refactored `Parameters.jsx`.
+8. Updated `ParameterDetail.jsx` for `isSet` compatibility.
+9. Added backend coverage for `/parameters/resolved` blank-child fallback and parameter value `isSet` behavior.
+10. Ran migrations, backfill, backend tests, and frontend build locally.
+
+Deferred:
+
+1. Dedicated parameter detail endpoint that returns resolved values for every environment.
+2. Direct `/config` integration coverage for view behavior.
+3. Frontend automated tests for the inheritance UI.

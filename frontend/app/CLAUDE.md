@@ -10,20 +10,20 @@ Tema: `useTheme()` → `{ T, mode, toggle }`. Tutti i colori da `T.*`, mai hex h
 /login          → pages/Login.jsx
 /signup         → pages/Signup.jsx          ← due step inline (form + OTP)
 /oauth/callback → pages/OAuthCallback.jsx
+/invite/accept  → pages/InviteAcceptPage.jsx
 /verify-email   → RIMOSSA (ora inline in /signup)
 
 /dashboard      → components/layout/Layout.jsx (ProtectedRoute)
   index         → pages/Dashboard.jsx
-  /projects     → pages/Projects.jsx
+  /apps         → pages/Projects.jsx
   /parameters   → pages/Parameters.jsx
-  /parameters/:parameterId → pages/ParameterDetail.jsx
+  /:orgSlug/:appSlug/parameters/:paramKey → pages/ParameterDetail.jsx
   /environments → pages/Environments.jsx
-  /users        → coming soon (inline placeholder)
 
-/settings       → components/layout/SettingsLayout.jsx (ProtectedRoute)
+/settings       → components/layout/Layout.jsx (ProtectedRoute)
   index         → redirect a /settings/profile
   /profile      → pages/ProfilePage.jsx
-  /security     → coming soon
+  /security     → pages/SecurityPage.jsx
   /tokens       → coming soon
   /org          → pages/OrgSettingsPage.jsx
 ```
@@ -50,6 +50,28 @@ Se il backend API non risponde, `orgs` è `[]` e l'app funziona parzialmente (ve
 - `lib/api.js` — axios client, base URL da `VITE_API_URL` (default `http://localhost:3000`), token Bearer impostato via `setToken()`
 - `services/api.js` — `ApiService` singleton con metodi per ogni risorsa; usa `this.orgId` (impostato da `AuthContext` via `apiService.setOrgId()`)
 - `lib/supabase.js` — client Supabase per auth (signUp, signIn, verifyOtp, OAuth)
+
+## Parameters UI contract
+
+La pagina `Parameters.jsx` usa `apiService.getResolvedParameters(appId, environmentId)` come sorgente principale. Il backend ritorna `items[]` con:
+- `relationship`: `local` | `inherited` | `override`, cioè dove vive la definizione del parametro.
+- `parameter`: definizione vincente (`id`, `appId`, `appName`, `description`, `isSecret`).
+- `overridden`: ancestor sovrascritto, solo per `override`.
+- `value`: stato effettivo nell'environment selezionato.
+
+`value.state` può essere:
+- `set`: valore effettivo dalla app corrente.
+- `inherited`: valore effettivo da ancestor.
+- `unset`: nessun valore settato nella chain.
+- `redacted`: esiste un valore secret ma l'utente non può leggerlo.
+
+Semantica prodotto: `''` non è un valore intenzionale. Salvare stringa vuota significa unset locale e riattiva l'ereditarietà. Il flag pubblico è `isSet`; non dedurre mai ereditarietà da `value === ''`.
+
+`GET /parameters/:appId/values` ritorna valori per environment raggruppati come oggetto, non array. Ogni value include `isSet`; `value` può essere `null` se unset o redatto.
+
+## Toasts
+
+`ToastProvider` è già montato in `App.jsx`; usare `useToast()` per nuove azioni. Ad oggi non tutti i flussi create/delete/export/error lo usano ancora.
 
 ## Convenzioni
 

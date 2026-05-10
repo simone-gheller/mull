@@ -1,89 +1,52 @@
-```mermaid 
+# Current ER Model
 
+Last updated: 2026-05-09.
+
+This document describes the implemented Prisma schema, not the aspirational billing/token/audit model.
+
+```mermaid
 erDiagram
-    ORGANIZATION ||--o{ USER_ORGANIZATION : "ha membri"
-    ORGANIZATION ||--o{ SSO_CONNECTION : "ha connessioni SSO"
-    ORGANIZATION ||--o{ INVITATION : "ha inviti pendenti"
-    USER ||--o{ USER_ORGANIZATION : "membro di"
-    USER ||--o{ INVITATION : "ha invitato"
-    USER ||--o{ INVITATION : "è stato invitato"
-    ORGANIZATION ||--o{ ENVIRONMENT : "ha ambienti"
-    ORGANIZATION ||--o{ APP : "ha applicazioni"
-    APP ||--o{ APP : "gerarchia parent-child"
-    APP ||--o{ PARAMETER : "ha parametri"
-    PARAMETER ||--o{ PARAMETER_VALUE : "ha valori per env"
-    ENVIRONMENT ||--o{ PARAMETER_VALUE : "valori per ambiente"
-    USER ||--o{ AUDIT_LOG : "esegue azioni"
-    ORGANIZATION ||--o{ AUDIT_LOG : "contiene log"
-    APP ||--o{ API_TOKEN : "ha token API"
-    USER ||--o{ API_TOKEN : "ha creato token"
+    ORGANIZATION ||--o{ USER_ORGANIZATION : "members"
+    USER ||--o{ USER_ORGANIZATION : "memberships"
+    ORGANIZATION ||--o{ ORG_INVITE : "invites"
+    USER ||--o{ ORG_INVITE : "sent invites"
+
+    ORGANIZATION ||--o{ APP : "owns"
+    APP ||--o{ APP : "parent child"
+    APP ||--o{ PARAMETER : "defines"
+
+    ORGANIZATION ||--o{ ENVIRONMENT : "owns"
+    PARAMETER ||--o{ PARAMETER_VALUE : "has env values"
+    ENVIRONMENT ||--o{ PARAMETER_VALUE : "has parameter values"
 
     USER {
         uuid id PK
+        string supabase_id UK
         string email UK
-        string full_name
-        string avatar_url
-        timestamp created_at
-        timestamp last_login
+        string display_name
     }
 
     ORGANIZATION {
         uuid id PK
         string name
-        string slug UK
-        uuid created_by FK
-        string subscription_tier "hobby, starter, team, growth"
-        string subscription_status "active, past_due, canceled, trialing"
-        string stripe_customer_id UK "cus_xxx"
-        string stripe_subscription_id UK "sub_xxx"
-        timestamp current_period_end "quando scade il periodo corrente"
-        timestamp trial_end "se in trial"
-        jsonb subscription_metadata "dati extra da Stripe"
-        timestamp created_at
-        timestamp updated_at
     }
 
     USER_ORGANIZATION {
-        uuid id PK
-        uuid user_id FK
-        uuid org_id FK
-        string role
-        string joined_via
-        timestamp joined_at
+        uuid user_id PK,FK
+        uuid org_id PK,FK
+        enum role "USER, ADMIN, OWNER"
     }
 
-    SSO_CONNECTION {
-        uuid id PK
-        uuid org_id FK
-        string provider
-        string connection_type
-        string identifier
-        string default_role
-        boolean auto_provision
-        string status
-        timestamp verified_at
-        timestamp created_at
-    }
-
-    INVITATION {
+    ORG_INVITE {
         uuid id PK
         uuid org_id FK
         string email
-        uuid invited_by FK
-        string role
+        enum role
         string token UK
-        string status
+        uuid invited_by FK
+        enum status "PENDING, ACCEPTED, REVOKED"
         timestamp expires_at
-        timestamp accepted_at
-        timestamp created_at
-    }
-
-    ENVIRONMENT {
-        uuid id PK
-        uuid org_id FK
-        string name
-        string color
-        int sort_order
+        timestamp resolved_at
         timestamp created_at
     }
 
@@ -92,10 +55,15 @@ erDiagram
         uuid org_id FK
         uuid parent_id FK
         string name
-        string slug
-        string description
-        timestamp created_at
-        timestamp updated_at
+        uuid[] ancestors
+        int depth
+    }
+
+    ENVIRONMENT {
+        uuid id PK
+        uuid org_id FK
+        string name
+        boolean is_secret
     }
 
     PARAMETER {
@@ -104,41 +72,56 @@ erDiagram
         string key
         string description
         boolean is_secret
-        timestamp created_at
     }
 
     PARAMETER_VALUE {
         uuid id PK
         uuid parameter_id FK
         uuid environment_id FK
-        bytea value_encrypted
-        int version
-        uuid updated_by FK
-        timestamp updated_at
-    }
-
-    AUDIT_LOG {
-        uuid id PK
-        uuid org_id FK
-        uuid user_id FK
-        string action
-        string entity_type
-        uuid entity_id
-        jsonb metadata
-        string ip_address
-        timestamp created_at
-    }
-
-    API_TOKEN {
-        uuid id PK
-        uuid app_id FK
-        uuid org_id FK
-        uuid created_by FK
-        string name
-        string token_hash
-        string[] scopes
-        timestamp expires_at
-        timestamp last_used_at
-        timestamp created_at
+        bytea value_ciphertext
+        bytea value_iv
+        bytea value_tag
+        bytea dek_ciphertext
+        bytea dek_iv
+        bytea dek_tag
+        int kek_version
+        string encryption_alg
+        timestamp encrypted_at
+        boolean is_set
     }
 ```
+
+## Invariants
+
+1. `User.role` and `User.organizationId` do not exist. Membership and role are stored in `UserOrganization`.
+2. `Organization.members` is the join-table relation; there is no direct `Organization.users` relation.
+3. `App.ancestors` is a materialized root-to-parent path. The app itself is not included.
+4. `Parameter.key` is unique per app.
+5. `ParameterValue` is unique per `(parameterId, environmentId)`.
+6. `ParameterValue.value` no longer exists. Values are encrypted at rest.
+7. `ParameterValue.isSet=false` means unset locally / inherit from ancestors.
+8. `Environment.isSecret || Parameter.isSecret` makes a value secret for read authorization.
+
+## Config Inheritance View
+
+`config_inheritance` is a SQL view, not a Prisma model. It expands app ancestry and returns the winning encrypted value row for each `(app, org, environment, key)`.
+
+Important behavior:
+
+```sql
+WHERE pv.is_set = true
+```
+
+Unset local values are omitted before ranking, so a blank child value does not shadow a set ancestor value. Because of that filter, `is_set` is always true for rows returned by the view.
+
+The backend decrypts returned rows in Node after the view has resolved inheritance.
+
+## Planned But Not Implemented
+
+These concepts are product/backlog items and are intentionally absent from the current schema:
+
+- API/service tokens
+- audit log
+- parameter value version history
+- billing/subscription tables
+- SSO connections

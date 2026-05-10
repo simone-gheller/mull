@@ -10,7 +10,7 @@ The immediate security goal is that a database dump must not contain plaintext c
 
 This is encryption at rest, not end-to-end encryption.
 
-Implementation status: completed locally. The plaintext `parameter_values.value` column has been dropped after backfill, and encrypted fields are now non-null.
+Implementation status: completed locally. The plaintext `parameter_values.value` column has been dropped after backfill, encrypted fields are now non-null, and `is_set` records whether a value is intentionally set for inheritance purposes.
 
 ## Non-Goals For V1
 
@@ -93,9 +93,9 @@ Later options:
 
 ## Schema Plan
 
-Add encrypted columns to `ParameterValue`.
+This section records the migration path and the current final state.
 
-Temporary migration state:
+Historical temporary migration state:
 
 ```prisma
 model ParameterValue {
@@ -120,7 +120,7 @@ model ParameterValue {
 }
 ```
 
-Final state after backfill and verification:
+Current final state after backfill and verification:
 
 ```prisma
 model ParameterValue {
@@ -139,20 +139,23 @@ model ParameterValue {
   kekVersion    Int      @map("kek_version")
   encryptionAlg String   @default("AES-256-GCM") @map("encryption_alg")
   encryptedAt   DateTime @map("encrypted_at")
+  isSet         Boolean  @default(false) @map("is_set")
 }
 ```
+
+`isSet=false` means unset locally / inherit. Even in that state, encrypted columns contain encrypted `''` so the encrypted fields can stay non-null. Application and SQL inheritance logic must use `isSet`, not decrypted plaintext, to decide whether a value shadows ancestors.
 
 ## View Plan
 
 Keep `config_inheritance`, but update its selected columns.
 
-Current behavior:
+Pre-encryption behavior:
 
 ```sql
 SELECT key, value, priority, source_app_name, source_app_id
 ```
 
-Target behavior:
+Current behavior:
 
 ```sql
 SELECT
@@ -170,10 +173,11 @@ SELECT
   dek_iv,
   dek_tag,
   kek_version,
-  encryption_alg
+  encryption_alg,
+  is_set
 ```
 
-The view must still return one winning row per resolved parameter key for `{orgId, appId, envId}`.
+The view must still return one winning row per resolved parameter key for `{orgId, appId, envId}`. It now filters `WHERE pv.is_set = true`, so rows returned by the view always have `is_set=true`. The selected `is_set` is useful only for debugging/shape consistency.
 
 ## Implementation Phases
 
@@ -200,6 +204,8 @@ Requirements:
 
 ### Phase 2: Schema Migration
 
+Historical phase:
+
 1. Add nullable encrypted columns.
 2. Keep existing plaintext `value`.
 3. Regenerate Prisma client.
@@ -224,6 +230,8 @@ Behavior:
 5. Be idempotent.
 6. Print counts only, no values.
 
+Current repository note: the legacy plaintext encryption backfill script was removed after use. The remaining script is `backend/scripts/backfill-parameter-value-is-set.js`, which decrypts encrypted rows only to set `is_set = decryptedValue !== ''`.
+
 ### Phase 4: Switch Writes
 
 Update all write paths to write encrypted values:
@@ -234,7 +242,7 @@ Update all write paths to write encrypted values:
 4. seed data
 5. any override creation path that creates parameter values
 
-During this phase, writes may optionally keep plaintext `value` for rollback until read switch is verified.
+Historical note: during this phase, writes could optionally keep plaintext `value` for rollback until read switch was verified. Current schema has no plaintext `value` column.
 
 ### Phase 5: Switch Reads
 
@@ -250,6 +258,7 @@ Rules:
 1. Check authorization before decrypting.
 2. If caller cannot read the value, return `null` or masked response without decrypting.
 3. Preserve current response shape where possible.
+4. Return `isSet` with parameter-value responses so clients can distinguish unset from redacted or empty display state.
 
 ### Phase 6: Update Config View And Rendering
 
@@ -309,7 +318,7 @@ Config rendering:
 
 1. `/config/:appId/:envId` returns inherited config correctly.
 2. Child override wins over parent.
-3. Empty local override behavior is explicit and tested.
+3. Empty local override means unset/inherit and is explicit/tested.
 4. Cross-org access remains forbidden.
 5. DB rows do not contain plaintext after config updates.
 
@@ -321,15 +330,24 @@ Migration:
 
 ## Rollout Plan
 
+Completed locally:
+
 1. Land crypto module and tests.
-2. Land schema migration with nullable encrypted columns.
-3. Run migration locally.
-4. Run backfill locally.
-5. Switch writes.
-6. Switch reads.
-7. Update config view and config route.
-8. Verify frontend flows.
-9. Drop plaintext column in a second migration.
+2. Land encrypted column migration.
+3. Backfill legacy plaintext rows.
+4. Switch writes.
+5. Switch reads.
+6. Update config view and config route.
+7. Drop plaintext column.
+8. Add `is_set` and run `db:backfill:is-set`.
+9. Verify backend tests and frontend build.
+
+For any other environment that has data:
+
+```bash
+npm run db:migrate
+npm run db:backfill:is-set
+```
 
 ## Operational Notes
 
@@ -344,7 +362,7 @@ Migration:
 
 ## Open Questions
 
-1. Resolved: empty string means the value is intentionally empty.
+1. Resolved: empty string means unset/inherit at the product layer, not an intentional empty config value.
 2. Resolved: `USER` can update and edit non-secret parameter values.
 3. Deferred: `/config` service-token auth is not part of this encryption feature.
 4. Deferred: audit/release sequencing is out of scope for this implementation pass.

@@ -1,61 +1,44 @@
-# SafeConfig API Reference
+# mull API Reference
 
-REST API implementata con Fastify + Prisma. Base URL locale: `http://localhost:3000`.
+REST API implemented with Fastify + Prisma. Local base URL: `http://localhost:3000`.
 
-## Indice
+Current contract status: pre-release, no backward-compatibility guarantees yet.
 
-- [Autenticazione](#autenticazione)
-- [GET /auth/me](#auth---get-current-user)
-- [PATCH /auth/me](#auth---update-profile)
-- [POST /orgs](#orgs---create-organization)
-- [Apps](#apps)
-- [Environments](#environments)
-- [Parameters](#parameters)
-- [Parameter Values](#parameter-values)
-- [Config](#config)
+## Authentication
 
----
-
-## Autenticazione
-
-Tutti gli endpoint (eccetto `/health` e `/auth/*`) richiedono Bearer JWT Supabase.
-
-### Ottenere un token (locale)
+All endpoints except `/health`, `/auth/*`, and `GET /invites/:token` require a Supabase Bearer JWT. `POST /invites/accept` is authenticated.
 
 ```bash
-ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
-
-# Login (utente già registrato)
-export TOKEN=$(curl -s -X POST 'http://localhost:54321/auth/v1/token?grant_type=password' \
-  -H "Content-Type: application/json" \
-  -H "apikey: $ANON_KEY" \
-  -d '{"email": "test@example.com", "password": "password123"}' | jq -r '.access_token')
+curl http://localhost:3000/auth/me \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-**Nota sulla registrazione:** La registrazione avviene via `supabase.auth.signUp()` con OTP email. Il trigger PostgreSQL `on_auth_user_created` crea atomicamente `public.users` + `public.organizations` + `public.user_organizations` al momento dell'INSERT in `auth.users`. Non esiste un endpoint REST di registrazione separato.
+Registration is not a backend REST endpoint. The frontend calls `supabase.auth.signUp()`; a PostgreSQL trigger on `auth.users` creates `public.users`, `public.organizations`, and `public.user_organizations` atomically.
 
-### Ottenere l'organization ID
+Google OAuth uses the same trigger path.
 
-```bash
-export ORG_ID=$(curl -s http://localhost:3000/auth/me \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.organizations[0].id')
+## Organization Context
+
+Most product endpoints are org-scoped:
+
+```txt
+/orgs/:orgId/...
 ```
 
----
+`validateOrgAccess` checks that the authenticated user is a member of `:orgId` and sets `request.orgRole`.
 
-## Auth - Get Current User
+Roles are per organization:
 
-| | |
-|---|---|
-| **Metodo** | `GET /auth/me` |
-| **Auth** | Bearer JWT |
-| **File** | `backend/src/routes/auth.js` |
-
-```bash
-curl http://localhost:3000/auth/me -H "Authorization: Bearer $TOKEN"
+```txt
+OWNER > ADMIN > USER
 ```
 
-**Response:**
+## Auth
+
+### `GET /auth/me`
+
+Returns the current backend user and memberships.
+
 ```json
 {
   "id": "019dfe08-8b5e-7e08-abe2-7fd735d11f0c",
@@ -71,168 +54,279 @@ curl http://localhost:3000/auth/me -H "Authorization: Bearer $TOKEN"
 }
 ```
 
-- `organizations` è sempre un array (supporto multi-org)
-- `role` è per-org, non globale sull'utente
+### `PATCH /auth/me`
 
-**Status:** `200` | `401`
+Updates profile fields.
 
----
-
-## Auth - Update Profile
-
-| | |
-|---|---|
-| **Metodo** | `PATCH /auth/me` |
-| **Auth** | Bearer JWT |
-
-```bash
-curl -X PATCH http://localhost:3000/auth/me \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"displayName": "Ada Lovelace"}'
-```
-
-**Status:** `200` | `401`
-
----
-
-## Orgs - Create Organization
-
-Crea un'organizzazione aggiuntiva per un utente già esistente. L'utente diventa automaticamente OWNER.
-
-| | |
-|---|---|
-| **Metodo** | `POST /orgs` |
-| **Auth** | Bearer JWT |
-
-```bash
-curl -X POST http://localhost:3000/orgs \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "new-workspace"}'
-```
-
-**Response:** `201`
 ```json
-{ "id": "019dfe...", "name": "new-workspace", "role": "OWNER" }
+{ "displayName": "Ada Lovelace" }
 ```
 
-**Nota:** Questo endpoint crea org aggiuntive, non sostituisce la creazione durante la registrazione (che è gestita dal trigger SQL).
+### `POST /orgs`
 
----
+Creates an additional organization for an existing authenticated user. The caller becomes `OWNER`.
+
+```json
+{ "name": "new-workspace" }
+```
 
 ## Apps
 
-Tutti gli endpoint app usano il prefisso `/orgs/:orgId/apps`. Richiedono membership nell'org.
+Prefix: `/orgs/:orgId/apps`
 
-### GET /orgs/:orgId/apps
+Apps form a materialized hierarchy:
 
-```bash
-curl "http://localhost:3000/orgs/$ORG_ID/apps" -H "Authorization: Bearer $TOKEN"
-```
+- `parentId`: direct parent.
+- `ancestors`: root-to-parent UUID path.
+- `depth`: `0` for root, `1` for child, etc.
 
-**Response:**
+### `GET /orgs/:orgId/apps`
+
+Returns every app for the org, ordered for tree rendering.
+
+### `GET /orgs/:orgId/apps/:appId`
+
+Returns one app.
+
+### `POST /orgs/:orgId/apps`
+
 ```json
-[
-  { "id": "...", "orgId": "...", "parentId": null, "name": "root-app", "ancestors": [], "depth": 0 },
-  { "id": "...", "orgId": "...", "parentId": "...", "name": "child-app", "ancestors": ["..."], "depth": 1 }
-]
+{
+  "name": "api",
+  "parentId": null
+}
 ```
 
-### POST /orgs/:orgId/apps
+`name` is unique within an organization.
 
-```bash
-curl -X POST "http://localhost:3000/orgs/$ORG_ID/apps" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"name": "my-app", "parentId": null}'
-```
+### `PATCH /orgs/:orgId/apps/:appId`
 
-**Status:** `201` | `400` | `401` | `403` | `409` (nome duplicato)
+Updates app metadata currently supported by the route.
 
----
+### `DELETE /orgs/:orgId/apps/:appId`
+
+Deletes an app. Requires `ADMIN` or `OWNER`. Parameter/value deletion cascades, but deleting an app with children may fail because child apps reference their parent with `onDelete: Restrict`.
 
 ## Environments
 
-### GET /orgs/:orgId/environments
+Prefix: `/orgs/:orgId/environments`
 
-```bash
-curl "http://localhost:3000/orgs/$ORG_ID/environments" -H "Authorization: Bearer $TOKEN"
+### `GET /orgs/:orgId/environments`
+
+Returns org environments.
+
+```json
+[
+  {
+    "id": "019...",
+    "orgId": "019...",
+    "name": "production",
+    "isSecret": true
+  }
+]
 ```
 
-**Response:** `[{ "id": "...", "orgId": "...", "name": "development" }, ...]`
+`isSecret=true` means values in that environment are treated as secret regardless of parameter-level secrecy.
 
-### POST /orgs/:orgId/environments
+### `POST /orgs/:orgId/environments`
 
-```bash
-curl -X POST "http://localhost:3000/orgs/$ORG_ID/environments" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"name": "staging"}'
+```json
+{
+  "name": "staging",
+  "isSecret": false
+}
 ```
 
-Crea automaticamente `ParameterValue` entries vuote per tutti i parametri esistenti nell'org.
+Creates encrypted, unset `ParameterValue` rows for existing parameters in the org.
 
-**Status:** `201` | `409` (nome duplicato)
+### `DELETE /orgs/:orgId/environments/:envId`
 
----
+Deletes an environment and its values.
 
 ## Parameters
 
-### GET /orgs/:orgId/parameters?appId=:appId
+Prefix: `/orgs/:orgId/parameters`
 
-```bash
-curl "http://localhost:3000/orgs/$ORG_ID/parameters?appId=$APP_ID" \
-  -H "Authorization: Bearer $TOKEN"
+### `GET /orgs/:orgId/parameters?appId=:appId`
+
+Returns parameter definitions directly owned by the app. This endpoint does not resolve inheritance.
+
+```json
+[
+  {
+    "id": "019...",
+    "appId": "019...",
+    "key": "DATABASE_URL",
+    "description": "Primary database URL",
+    "isSecret": true
+  }
+]
 ```
 
-**Response:** `[{ "id": "...", "appId": "...", "key": "DATABASE_URL" }, ...]`
+### `POST /orgs/:orgId/parameters`
 
-### POST /orgs/:orgId/parameters
-
-```bash
-curl -X POST "http://localhost:3000/orgs/$ORG_ID/parameters" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"appId\": \"$APP_ID\", \"key\": \"DATABASE_URL\"}"
+```json
+{
+  "appId": "019...",
+  "key": "DATABASE_URL",
+  "description": "Primary database URL",
+  "isSecret": true
+}
 ```
 
-Crea automaticamente `ParameterValue` entries vuote per tutti gli environment esistenti.
+Creates encrypted, unset `ParameterValue` rows for every existing environment in the org.
 
-**Status:** `201` | `409` (chiave duplicata nell'app)
+### `GET /orgs/:orgId/parameters/resolved?appId=:appId&environmentId=:envId`
 
----
+Primary frontend list contract. It resolves parameter definitions through the app ancestry chain and optionally resolves the effective value for one environment.
+
+`environmentId` is optional:
+
+- omitted: returns definitions + summary only, `value: null`.
+- present: returns effective value state for that environment.
+
+Response:
+
+```json
+{
+  "app": { "id": "019...", "name": "api" },
+  "environment": { "id": "019...", "name": "production", "isSecret": true },
+  "summary": {
+    "total": 3,
+    "local": 1,
+    "inherited": 1,
+    "overrides": 1
+  },
+  "items": [
+    {
+      "key": "DATABASE_URL",
+      "relationship": "override",
+      "parameter": {
+        "id": "019...",
+        "appId": "019...",
+        "appName": "api",
+        "description": "Primary database URL",
+        "isSecret": true
+      },
+      "overridden": {
+        "parameterId": "019...",
+        "appId": "019...",
+        "appName": "root"
+      },
+      "value": {
+        "state": "inherited",
+        "valueId": "019...",
+        "parameterId": "019...",
+        "environmentId": "019...",
+        "value": "postgres://example",
+        "sourceAppId": "019...",
+        "sourceAppName": "root",
+        "isSecret": true,
+        "isSet": true,
+        "canRead": true,
+        "canWrite": true
+      }
+    }
+  ]
+}
+```
+
+`relationship` describes the winning definition:
+
+- `local`: definition is on requested app and no ancestor defines the key.
+- `inherited`: definition comes from nearest ancestor.
+- `override`: requested app defines the key and shadows an ancestor definition.
+
+`value.state` describes the effective value for the requested environment:
+
+- `set`: value comes from requested app.
+- `inherited`: value comes from an ancestor app.
+- `unset`: no row in the chain has `isSet=true`.
+- `redacted`: value exists, but caller cannot read it.
+
+### `POST /orgs/:orgId/parameters/override`
+
+Creates or retrieves a local override parameter in a child app.
+
+```json
+{
+  "key": "DATABASE_URL",
+  "appId": "019...",
+  "description": "Optional override description"
+}
+```
+
+New override values are unset by default (`isSet=false`), so they do not shadow ancestor values until a non-empty value is saved.
 
 ## Parameter Values
 
-### GET /orgs/:orgId/parameters/:appId/values
+Parameter values are encrypted at rest. The plaintext column has been removed.
 
-```bash
-curl "http://localhost:3000/orgs/$ORG_ID/parameters/$APP_ID/values" \
-  -H "Authorization: Bearer $TOKEN"
+### `GET /orgs/:orgId/parameters/:appId/values`
+
+Returns values for parameters directly owned by the app, grouped by environment name.
+
+```json
+{
+  "production": {
+    "environmentId": "019...",
+    "values": [
+      {
+        "id": "019...",
+        "parameterId": "019...",
+        "parameterKey": "DATABASE_URL",
+        "isSet": true,
+        "value": "postgres://example"
+      },
+      {
+        "id": "019...",
+        "parameterId": "019...",
+        "parameterKey": "OPTIONAL_FLAG",
+        "isSet": false,
+        "value": null
+      }
+    ]
+  }
+}
 ```
 
-**Response:** oggetto con chiavi = nome environment, valori = array di parameter values.
+`value` is `null` when `isSet=false` or when the value is redacted for the caller.
 
-### PUT /orgs/:orgId/parameters/values/:id
+### `GET /orgs/:orgId/parameters/values/:id`
 
-```bash
-curl -X PUT "http://localhost:3000/orgs/$ORG_ID/parameters/values/$VALUE_ID" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"value": "postgres://localhost:5432/mydb"}'
+Returns one value with `parameter` and `environment` relations. Secret values require `ADMIN` or `OWNER`.
+
+### `PUT /orgs/:orgId/parameters/values/:id`
+
+```json
+{ "value": "postgres://localhost:5432/mydb" }
 ```
 
----
+Semantics:
 
-## Config - Rendered Config with Inheritance
+- non-empty string: encrypts value and sets `isSet=true`.
+- empty string: encrypts `''` but sets `isSet=false`.
 
-### GET /orgs/:orgId/config/:appId/:envId
+Empty string means "unset locally / inherit", not an intentional empty config value.
 
-Restituisce la configurazione risolta, con ereditarietà gerarchica (child override parent).
+Response:
 
-```bash
-curl "http://localhost:3000/orgs/$ORG_ID/config/$APP_ID/$ENV_ID" \
-  -H "Authorization: Bearer $TOKEN"
+```json
+{
+  "id": "019...",
+  "parameterId": "019...",
+  "environmentId": "019...",
+  "isSet": true,
+  "value": "postgres://localhost:5432/mydb"
+}
 ```
 
-**Response:**
+## Config
+
+### `GET /orgs/:orgId/config/:appId/:envId`
+
+Returns flat rendered config with app inheritance applied.
+
 ```json
 {
   "DATABASE_URL": "postgres://localhost:5432/mydb",
@@ -240,116 +334,69 @@ curl "http://localhost:3000/orgs/$ORG_ID/config/$APP_ID/$ENV_ID" \
 }
 ```
 
-**Status:** `200` | `403` (cross-org access) | `404`
+Implementation:
 
----
+- PostgreSQL view `config_inheritance` resolves the winning set values.
+- The view filters `WHERE pv.is_set = true`, so unset local values never shadow ancestors.
+- The view returns encrypted columns only.
+- Node decrypts the already-resolved rows in memory.
 
-## Modelli Database (schema Prisma attuale)
+Caveat: this endpoint currently uses authenticated user JWTs. Scoped service tokens for runtime/CI config fetches are still backlog.
 
-```prisma
-model User {
-  id          String             @id @db.Uuid    // UUIDv7
-  supabaseId  String             @unique
-  email       String             @unique
-  displayName String?
-  organizations UserOrganization[]
-  // NOTA: role e organizationId non esistono più (rimossi nella multi-org migration)
-}
+## Invitations
 
-model Organization {
-  id      String             @id @db.Uuid        // UUIDv7
-  name    String
-  members UserOrganization[]
-  apps    App[]
-  environments Environment[]
-}
+### `GET /orgs/:orgId/invites`
 
-model UserOrganization {
-  userId String   @map("user_id") @db.Uuid
-  orgId  String   @map("org_id") @db.Uuid
-  role   UserRole @default(USER)
-  @@id([userId, orgId])
-}
+Lists invites for an org.
 
-enum UserRole { USER ADMIN OWNER }
+### `POST /orgs/:orgId/invites`
 
-model App {
-  id        String  @id @db.Uuid
-  orgId     String  @db.Uuid
-  parentId  String? @db.Uuid
-  name      String
-  ancestors String[] @db.Uuid   // UUIDs dei parent
-  depth     Int      @default(0)
-}
+Creates an invite. Existing users can be added directly; new users receive an app-level invite flow.
 
-model Environment {
-  id    String @id @db.Uuid
-  orgId String @db.Uuid
-  name  String
-}
-
-model Parameter {
-  id    String @id @db.Uuid
-  appId String @db.Uuid
-  key   String
-}
-
-model ParameterValue {
-  id            String  @id @db.Uuid
-  parameterId   String  @db.Uuid
-  environmentId String  @db.Uuid
-  value         String?
+```json
+{
+  "email": "teammate@example.com",
+  "role": "USER"
 }
 ```
 
----
+### `DELETE /orgs/:orgId/invites/:inviteId`
 
-## Script di test completo
+Revokes a pending invite.
+
+### `GET /invites/:token`
+
+Public invite preview/validation endpoint.
+
+### `POST /invites/accept`
+
+Accepts an invite for the authenticated/signup flow.
+
+## Database Model Notes
+
+- IDs are UUIDv7 for app-created rows.
+- `User.role` and `User.organizationId` do not exist.
+- Roles live in `UserOrganization`.
+- `ParameterValue.value` does not exist.
+- `ParameterValue.isSet` is the inheritance state flag.
+- `Environment.isSecret` and `Parameter.isSecret` both contribute to secret gating.
+
+## Migration Operations
+
+For a fresh/local database:
 
 ```bash
-#!/bin/bash
-ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
-
-# Login
-export TOKEN=$(curl -s -X POST 'http://localhost:54321/auth/v1/token?grant_type=password' \
-  -H "Content-Type: application/json" -H "apikey: $ANON_KEY" \
-  -d '{"email": "test@example.com", "password": "password123"}' | jq -r '.access_token')
-
-# Health
-curl -s http://localhost:3000/health | jq .
-
-# User + org
-ME=$(curl -s http://localhost:3000/auth/me -H "Authorization: Bearer $TOKEN")
-echo $ME | jq .
-export ORG_ID=$(echo $ME | jq -r '.organizations[0].id')
-
-# App
-APP=$(curl -s -X POST "http://localhost:3000/orgs/$ORG_ID/apps" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"name": "test-app"}')
-export APP_ID=$(echo $APP | jq -r '.id')
-
-# Environment
-ENV=$(curl -s -X POST "http://localhost:3000/orgs/$ORG_ID/environments" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"name": "development"}')
-export ENV_ID=$(echo $ENV | jq -r '.id')
-
-# Parameter
-curl -s -X POST "http://localhost:3000/orgs/$ORG_ID/parameters" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"appId\": \"$APP_ID\", \"key\": \"DATABASE_URL\"}" | jq .
-
-# Values
-VALUES=$(curl -s "http://localhost:3000/orgs/$ORG_ID/parameters/$APP_ID/values" \
-  -H "Authorization: Bearer $TOKEN")
-VALUE_ID=$(echo $VALUES | jq -r 'to_entries | .[0].value.values[0].id')
-
-curl -s -X PUT "http://localhost:3000/orgs/$ORG_ID/parameters/values/$VALUE_ID" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"value": "postgres://localhost:5432/testdb"}' | jq .
-
-# Config
-curl -s "http://localhost:3000/orgs/$ORG_ID/config/$APP_ID/$ENV_ID" \
-  -H "Authorization: Bearer $TOKEN" | jq .
+cd backend
+npm run db:migrate
+npm run db:generate
 ```
+
+For an environment that already had encrypted values before `is_set` was added:
+
+```bash
+cd backend
+npm run db:migrate
+npm run db:backfill:is-set
+```
+
+The backfill decrypts existing encrypted rows only to set the non-secret `is_set` flag. It does not log plaintext values.

@@ -3,10 +3,12 @@
 > Review esterna del prodotto (maggio 2026). Score identità visiva: **5.5/10**. **37 fix totali**, ordinati per sprint.
 > Diagnosi: il design system è solido e intenzionale, ma solo parzialmente implementato. Il gap principale non è estetico: è strutturale. La landing è sorprendentemente più solida dell'app. Il problema emergente dalle schermate dell'app è la disconnessione tra la qualità del copy tecnico (molto buono) e la qualità dell'interaction design per le azioni critiche — reveal, create, edit.
 
+**Aggiornamento 2026-05-09:** la UI Parameters ora consuma il contratto backend `/parameters/resolved`, mostra `unset` invece di `(empty)`, distingue `set` / `inherited` / `unset` / `redacted`, e usa `isSet` come stato pubblico. Empty string non è più un valore intenzionale: equivale a unset/inherit.
+
 **Note operative:**
 - **Fase 1, fix #1 e #9** (font globale + token `textMuted`) sono ~1 ora di lavoro ciascuno ma hanno il maggiore impatto visivo dell'intero backlog.
 - **Fix #10** (`:focus-visible`) sono 6 righe di CSS che risolvono simultaneamente tutti i problemi di keyboard focus.
-- **Fix #5, #6, #7, #8** (coming soon visibili) devono essere completati prima di qualsiasi demo — nei primi 90 secondi un investitore o un developer esperto li nota.
+- I coming-soon visibili più rischiosi sono ora audit, personal tokens e users. Gli inviti sono implementati; security ha una pagina reale.
 - **Fix #13** (metriche landing non verificabili) è il rischio reputazionale più alto: se i numeri non sono reali, vanno rimossi prima di ogni contesto YC/investor.
 
 ---
@@ -56,7 +58,7 @@ In pratica:
 
 **Cosa non funziona:**
 - L'environment selector (`alpha` dropdown) è in alto a destra, separato dalla tabella che controlla. L'occhio legge la tabella da sinistra a destra, ma il filtro che determina cosa si vede è nell'angolo opposto. Viola il principio Gestalt di prossimità: i controlli devono essere adiacenti al contenuto che affettano.
-- La riga `KEY_SECRET` che mostra `(empty)` in amber è ambigua: amber significa "warning" (il secret non ha valore e dovrebbe averlo) o è solo stile informativo? Il design system stabilisce amber per "valore rivelato" — usarlo per empty state crea una collisione semantica. L'empty deve essere `T.textMuted` + italic, non amber.
+- Stato aggiornato: la tabella ora mostra `unset` in `T.textMuted` + italic. Questo riflette la semantica prodotto: blank = unset/inherit, non valore vuoto intenzionale.
 - Il badge `5` nell'header del pannello APPS tree è in `T.termGreen` pieno — un badge verde per un conteggio non comunica la cosa giusta. I badge contatore devono usare `T.textSecondary`.
 
 ### Environments
@@ -78,7 +80,7 @@ In pratica:
 ### Settings / Org (Members)
 **Cosa funziona:** la barra di utilizzo posti (`2/25 members` con progress bar) è eccellente — mostra le informazioni giuste alla densità giusta. La navigazione a tab (members / tokens / billing / audit / settings) è pulita.
 
-**Problema critico:** "Pending Invites / Invite system coming soon" è spedito in una section header visibile. Questo è il segnale più negativo dell'intero prodotto in un contesto demo: una sezione che promette una feature e poi dice che non c'è ancora. Rimuovere completamente finché non è implementata.
+**Stato aggiornato:** Pending Invites è implementato con invio/revoca. Resta critico il tab Audit, che mostra ancora un placeholder visibile.
 
 ### Landing Page — Hero
 **Identity consistency: 8/10 — la schermata più forte di tutto il prodotto.**
@@ -124,7 +126,7 @@ Il footer (`© 2026 Mull. All rights reserved.`) è quasi invisibile e senza lin
 
 **Reveal senza micro-friction:** il bottone "show" non comunica cosa succederà dopo il click — il valore si mostra in-place? Si apre un modal? Si copia in clipboard? L'assenza di feedback anticipato crea ansia. Per un security tool, il reveal di un segreto deve avere micro-friction deliberata: hover state che mostra `click to reveal · logged to audit` prima del click. Questo non è solo UX — è il messaggio che stai vendendo: accountability e audit trail. Il momento del reveal è il momento di ricordarlo.
 
-**URL con UUID raw:** `localhost:5173/dashboard/parameters/019dff2c-3845-7074-b229-e0ee40fb3b6a?appId=...` — in produzione, un developer che condivide la URL di un parametro con un collega vede 100+ caratteri incomprensibili. Le URL fanno parte dell'UX. Target: `/dashboard/acme-corp/backend/KEY` (org slug, app slug, parameter key). Impatta condivisione, bookmarking, debugging. **Priorità alta.**
+**URL con UUID raw:** parzialmente risolto. Il frontend ora usa `/dashboard/:orgSlug/:appSlug/parameters/:paramKey` per Parameter Detail, costruito da nomi slugificati. Non esistono ancora slug persistiti nel DB, quindi collisioni/rename restano da gestire prima di considerarlo definitivo.
 
 ### New Parameter Modal
 
@@ -167,10 +169,10 @@ Regola: verde solo dove il sistema parla. I nomi di ruolo non sono stati — non
 | 2 | ✅ | Stat cards ENVIRONMENTS e API CALLS mostrano `—` — sembrano broken | `frontend/app/src/pages/Dashboard.jsx` | `value={0}` + prop `empty` su `<Stat>`; sub-label "nothing yet" |
 | 3 | ✅ | Delete button `×` sempre visibile, senza handler, senza conferma | `frontend/app/src/pages/Environments.jsx` | `TrashButton` + `DeleteConfirmModal` riusabili; refactor anche in Projects.jsx |
 | 4 | ✅ | USER role badge usa `success` (verde) — USER non è uno stato attivo | `frontend/app/src/pages/OrgSettingsPage.jsx` | `USER: 'success'` → `USER: 'default'` |
-| 5 | ⏭ | Sezione "Pending Invites — coming soon" visibile | `frontend/app/src/pages/OrgSettingsPage.jsx` | Da implementare, poi nascondere il placeholder |
+| 5 | ✅ | Sezione "Pending Invites — coming soon" visibile | `frontend/app/src/pages/OrgSettingsPage.jsx` | Invite system implementato con pending invites |
 | 6 | ⏭ | Sezione "Audit Log — coming soon" visibile | `frontend/app/src/pages/OrgSettingsPage.jsx` | Da implementare, poi nascondere il placeholder |
-| 7 | ⏭ | `/dashboard/users` mostra "Users — coming soon" | `frontend/app/src/App.jsx` | Da implementare |
-| 8 | ⏭ | `/settings/security` e `/settings/tokens` mostrano "coming soon" | `frontend/app/src/App.jsx` | Da implementare |
+| 7 | ⏭ | `/dashboard/users` non è esposta nel router | `frontend/app/src/App.jsx` | Da implementare o rimuovere file non usato |
+| 8 | ◐ | `/settings/security` implementata, `/settings/tokens` ancora coming soon | `frontend/app/src/App.jsx` | Implementare personal tokens |
 | 9 | ✅ | `T.textMuted` (`#3d4555`) produce **2.1:1** — fail WCAG AA globale | `packages/ui/src/tokens.js` | `#3d4555` → `#636e84`; effetto globale |
 | 10 | ✅ | Nessun focus ring globale per navigazione da tastiera | `frontend/app/src/index.css` | Aggiunta regola `:focus-visible` globale |
 | 11 | ✅ | Badge `● OPEN BETA` sulla landing è verde solid — sembra un template Tailwind | `frontend/marketing/src/` | Aggiunta variante `outline` al Badge; background trasparente, bordo + testo verde |
@@ -224,10 +226,10 @@ Tutti i bottoni con solo icona (profile, theme toggle, logout) devono avere `ari
 
 Dopo il fix del token `textMuted` (item 9 in Fase 1), verificare che il contrasto risultante sia sufficiente. Se `T.textSecondary` è ancora sotto 4.5:1, alzare ulteriormente il valore.
 
-### 22 ✅ — `(empty)` in Parameters usa amber
+### 22 ✅ — `unset` in Parameters usa muted/italic
 **File:** `frontend/app/src/pages/Parameters.jsx`
 
-**Nota importante sul contrasto:** il valore `(empty)` in amber tecnicamente **passa** WCAG AA (contrasto misurato: 8.1:1) — non è un problema di leggibilità. È un problema di **semantica del colore**: amber nel design system significa "valore rivelato", non "valore assente". Un utente con deficit nella percezione del colore amber/giallo non distingue tra un secret rivelato e un parametro vuoto.
+**Nota importante sul contrasto:** il vecchio valore `(empty)` in amber tecnicamente passava WCAG AA, ma era semanticamente sbagliato. La UI ora mostra `unset` in muted/italic e il backend usa `isSet=false` per ereditarietà. Non dedurre più questo stato da `value === ''`.
 
 Fix: `color: T.textMuted`, `fontStyle: 'italic'`, rimuovere background amber. Il cambio è semantico, non di contrasto.
 
@@ -236,18 +238,19 @@ Fix: `color: T.textMuted`, `fontStyle: 'italic'`, rimuovere background amber. Il
 
 Standard da applicare ovunque: `// section · subsection` in `FONTS.mono`, `fontSize: 11px`, `color: T.termGreen`. Verificare che ogni page abbia il suo breadcrumb con questo formato. Le pagine che non ce l'hanno lo aggiungono.
 
-### 24 ✅ — URL routing con UUID raw — zero slug leggibili
+### 24 ◐ — URL routing con UUID raw — parziale
 **File:** backend routes + `frontend/app/src/App.jsx` + pagine con link
 
-L'URL corrente di un parametro è del tipo `/dashboard/parameters/019dff2c-3845-7074-...?appId=019dff2b-...`. In produzione un developer che condivide la URL con un collega vede 100+ caratteri inutili. Target: `/dashboard/{org-slug}/{app-slug}/parameters/{PARAM_KEY}`.
+Il Parameter Detail frontend ora usa il target leggibile `/dashboard/{org-slug}/{app-slug}/parameters/{PARAM_KEY}`.
 
-Richiede:
-1. Aggiungere campo `slug` ai model `Organization`, `App` nel backend (Prisma + migrazione)
-2. Route backend che accettano slug oltre a UUID
-3. React Router routes aggiornate nel frontend
-4. Link generati ovunque usino slug invece di UUID
+Resta da fare per renderlo robusto:
 
-Impatto: condivisione URL, bookmarking, debugging, credibilità professionale. Alta complessità, alta priorità.
+1. Aggiungere campo `slug` ai model `Organization`, `App` nel backend.
+2. Imporre unicità e gestione rename/collisioni.
+3. Aggiungere route backend che accettano slug oltre a UUID.
+4. Evitare lookup client-side fragile per nomi duplicati o rinominati.
+
+Impatto: condivisione URL, bookmarking, debugging, credibilità professionale.
 
 ### 25 ✅ — Reveal button senza micro-friction (accountability)
 **File:** `frontend/app/src/pages/ParameterDetail.jsx`
@@ -427,7 +430,7 @@ Elimina tutti i problemi di focus ring senza toccare l'aspetto visivo per gli ut
 
 ### Cosa NON è un problema di contrasto (ma di semantica)
 
-Il valore `(empty)` mostrato in amber nelle righe di Parameters **passa WCAG AA** (contrasto misurato: 8.1:1) — è leggibile. Il problema è semantico: amber nel design system significa "secret rivelato", non "valore assente". Un utente con deficit nella percezione del giallo/amber non distingue le due condizioni. Fix: `color: T.textMuted`, `font-style: italic` — non amber.
+Il vecchio valore `(empty)` mostrato in amber passava WCAG AA, ma il problema era semantico: amber nel design system significa "secret rivelato", non "valore assente". Lo stato corrente è `unset` in `T.textMuted` + italic, guidato da `isSet=false`.
 
 ---
 
