@@ -3,7 +3,12 @@ import { Badge, Btn, FONTS, Input } from '@mull/ui';
 import apiService from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 
-const SCOPES = ['config:read', 'parameters:read', 'parameters:write', 'apps:read', 'environments:read'];
+const SCOPE_GROUPS = [
+  { key: 'config', label: 'Config values', scopes: ['config:read', 'config:reveal', 'config:write'] },
+  { key: 'parameters', label: 'Parameters', scopes: ['parameters:read', 'parameters:write', 'parameters:delete'] },
+  { key: 'resources', label: 'Apps & environments', scopes: ['apps:read', 'apps:manage', 'environments:read', 'environments:manage'] }
+];
+const SCOPES = SCOPE_GROUPS.flatMap(group => group.scopes);
 const TTLS = ['30d', '90d', '365d', 'never'];
 
 function formatDate(value) {
@@ -35,6 +40,91 @@ function NativeSelect({ T, label, value, onChange, children }) {
   );
 }
 
+function ScopeButton({ scope, active, onClick, T }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '6px 9px',
+        borderRadius: '4px',
+        border: `1px solid ${active ? T.termGreenBorder : T.border}`,
+        background: active ? T.termGreenBg : T.elevated,
+        color: active ? T.termGreen : T.textSecondary,
+        fontFamily: FONTS.mono,
+        fontSize: '11px',
+        cursor: 'pointer'
+      }}
+    >
+      {scope}
+    </button>
+  );
+}
+
+function ScopeGroupSelector({ selectedScopes, onToggle, T }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '12px' }}>
+      {SCOPE_GROUPS.map(group => (
+        <div key={group.key} style={{ background: T.overlay, border: `1px solid ${T.border}`, borderRadius: '6px', padding: '12px' }}>
+          <div style={{
+            fontFamily: FONTS.mono,
+            fontSize: '10px',
+            color: T.textMuted,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            marginBottom: '9px'
+          }}>
+            {group.label}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px' }}>
+            {group.scopes.map(scope => (
+              <ScopeButton
+                key={scope}
+                scope={scope}
+                active={selectedScopes.has(scope)}
+                onClick={() => onToggle(scope)}
+                T={T}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ScopeGroupSummary({ scopes, T }) {
+  const selected = new Set(scopes ?? []);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginTop: '8px' }}>
+      {SCOPE_GROUPS.map(group => {
+        const active = group.scopes.filter(scope => selected.has(scope));
+        if (active.length === 0) return null;
+        return (
+          <div key={group.key} style={{ display: 'flex', gap: '8px', alignItems: 'baseline', flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted, minWidth: '118px' }}>
+              {group.label}
+            </span>
+            {active.map(scope => (
+              <span key={scope} style={{
+                padding: '3px 6px',
+                borderRadius: '4px',
+                border: `1px solid ${T.border}`,
+                background: T.elevated,
+                color: T.textSecondary,
+                fontFamily: FONTS.mono,
+                fontSize: '10px'
+              }}>
+                {scope}
+              </span>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function AccessKeysPanel({ T, mode }) {
   const { toast } = useToast();
   const isOrg = mode === 'org';
@@ -48,7 +138,7 @@ export default function AccessKeysPanel({ T, mode }) {
     name: '',
     orgId: '',
     ttl: '90d',
-    scopes: ['config:read'],
+    scopes: ['config:read', 'config:reveal'],
     appId: '',
     environmentId: ''
   });
@@ -166,26 +256,11 @@ export default function AccessKeysPanel({ T, mode }) {
         </NativeSelect>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-        {SCOPES.map(scope => (
-          <button
-            key={scope}
-            type="button"
-            onClick={() => toggleScope(scope)}
-            style={{
-              padding: '6px 9px',
-              borderRadius: '4px',
-              border: `1px solid ${selectedScopes.has(scope) ? T.termGreenBorder : T.border}`,
-              background: selectedScopes.has(scope) ? T.termGreenBg : T.elevated,
-              color: selectedScopes.has(scope) ? T.termGreen : T.textSecondary,
-              fontFamily: FONTS.mono,
-              fontSize: '11px',
-              cursor: 'pointer'
-            }}
-          >
-            {scope}
-          </button>
-        ))}
+      <div>
+        <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>
+          Scopes
+        </div>
+        <ScopeGroupSelector selectedScopes={selectedScopes} onToggle={toggleScope} T={T} />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -207,8 +282,9 @@ export default function AccessKeysPanel({ T, mode }) {
                 </div>
                 <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted, marginBottom: '4px' }}>{key.tokenPrefix}</div>
                 <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>
-                  scopes: {key.scopes.join(', ')} · expires: {formatDate(key.expiresAt)} · last used: {formatDate(key.lastUsedAt)}
+                  expires: {formatDate(key.expiresAt)} · last used: {formatDate(key.lastUsedAt)}
                 </div>
+                <ScopeGroupSummary scopes={key.scopes} T={T} />
               </div>
               <Btn T={T} variant="danger" size="sm" onClick={() => revoke(key)} disabled={Boolean(key.revokedAt)}>revoke</Btn>
             </div>

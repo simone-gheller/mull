@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Lock } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { useTheme, Btn, FONTS } from '@mull/ui';
 import apiService from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -15,7 +15,8 @@ export default function Environments() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newSecret, setNewSecret] = useState(false);
+  const [newTier, setNewTier] = useState('CUSTOM');
+  const [newProtected, setNewProtected] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(null);
   const [confirmEnv, setConfirmEnv] = useState(null);
@@ -55,11 +56,10 @@ export default function Environments() {
     if (!newName.trim()) return;
     setCreating(true); setCreateError(null);
     try {
-      const payload = { name: newName.trim() };
-      if (newSecret) payload.isSecret = true;
+      const payload = { name: newName.trim(), tier: newTier, protected: newProtected };
       const created = await apiService.createEnvironment(payload);
       setEnvironments([...environments, created]);
-      setShowModal(false); setNewName(''); setNewSecret(false);
+      setShowModal(false); setNewName(''); setNewTier('CUSTOM'); setNewProtected(false);
       toast('environment created', 'success', created.name);
     } catch (e) {
       const message = e.response?.data?.message || 'Failed to create environment';
@@ -102,19 +102,27 @@ export default function Environments() {
             <div
               key={env.id}
               style={{
-                background: env.isSecret ? `${T.amber}08` : T.surface,
-                border: `1px solid ${env.isSecret ? `${T.amber}40` : T.border}`,
+                background: env.protected ? `${T.amber}08` : T.surface,
+                border: `1px solid ${env.protected ? `${T.amber}40` : T.border}`,
                 borderRadius: '6px', padding: '16px 18px',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}
             >
               <div>
-                <div style={{ fontFamily: FONTS.mono, fontSize: '13px', color: T.textPrimary, marginBottom: env.isSecret ? '6px' : 0 }}>
+                <div style={{ fontFamily: FONTS.mono, fontSize: '13px', color: T.textPrimary, marginBottom: '6px' }}>
                   {env.name}
                 </div>
-                {env.isSecret && (
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{
+                    fontFamily: FONTS.mono, fontSize: '9px', color: T.textMuted,
+                    background: T.overlay, border: `1px solid ${T.border}`,
+                    padding: '1px 6px', borderRadius: '2px', letterSpacing: '0.05em',
+                  }}>
+                    {env.tier?.toLowerCase?.() ?? 'custom'}
+                  </span>
+                {env.protected && (
                   <span
-                    title="All parameters in this environment are secret — only Admin and above can view or edit values"
+                    title="Protected environments require elevated config permissions to reveal or write values"
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: '4px',
                       fontFamily: FONTS.mono, fontSize: '9px', color: T.amber,
@@ -123,10 +131,11 @@ export default function Environments() {
                       cursor: 'default',
                     }}
                   >
-                    <Lock size={9} strokeWidth={2} color={T.amber} />
-                    SECRET
+                    <Shield size={9} strokeWidth={2} color={T.amber} />
+                    PROTECTED
                   </span>
                 )}
+                </div>
               </div>
 
               <TrashButton
@@ -152,7 +161,7 @@ export default function Environments() {
         deleteLabel="delete environment"
       />
 
-      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setNewName(''); setNewSecret(false); setCreateError(null); }} title="new environment" size="sm">
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setNewName(''); setNewTier('CUSTOM'); setNewProtected(false); setCreateError(null); }} title="new environment" size="sm">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <FormInput
             label="Environment name"
@@ -163,32 +172,58 @@ export default function Environments() {
             autoFocus
           />
 
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted }}>Tier</span>
+            <select
+              value={newTier}
+              onChange={e => {
+                const tier = e.target.value;
+                setNewTier(tier);
+                if (tier === 'PRODUCTION') setNewProtected(true);
+              }}
+              style={{
+                background: T.surface,
+                border: `1px solid ${T.border}`,
+                borderRadius: '4px',
+                color: T.textPrimary,
+                fontFamily: FONTS.mono,
+                fontSize: '12px',
+                padding: '9px 10px'
+              }}
+            >
+              <option value="DEVELOPMENT">development</option>
+              <option value="STAGING">staging</option>
+              <option value="PRODUCTION">production</option>
+              <option value="CUSTOM">custom</option>
+            </select>
+          </label>
+
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '8px 10px',
-            background: newSecret ? `${T.amber}10` : T.overlay,
-            border: `1px solid ${newSecret ? `${T.amber}40` : T.border}`,
+            background: newProtected ? `${T.amber}10` : T.overlay,
+            border: `1px solid ${newProtected ? `${T.amber}40` : T.border}`,
             borderRadius: '4px',
           }}>
             <div>
-              <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: newSecret ? T.amber : T.textMuted }}>
-                secret environment
+              <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: newProtected ? T.amber : T.textMuted }}>
+                protected environment
               </div>
               <div style={{ fontFamily: FONTS.display, fontSize: '10px', color: T.textMuted, marginTop: '2px' }}>
-                {newSecret ? 'all values always masked, ADMIN+ only' : 'values visible to all members'}
+                {newProtected ? 'reveal and write require elevated permission' : 'available to roles with non-protected config access'}
               </div>
             </div>
             <button
               type="button"
-              onClick={() => setNewSecret(v => !v)}
+              onClick={() => setNewProtected(v => !v)}
               style={{
                 width: '36px', height: '20px', borderRadius: '10px',
-                background: newSecret ? T.amber : T.border,
+                background: newProtected ? T.amber : T.border,
                 border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
               }}
             >
               <span style={{
-                position: 'absolute', top: '2px', left: newSecret ? '18px' : '2px',
+                position: 'absolute', top: '2px', left: newProtected ? '18px' : '2px',
                 width: '16px', height: '16px', borderRadius: '50%',
                 background: T.bg, transition: 'left 0.2s', display: 'block',
               }} />
@@ -197,7 +232,7 @@ export default function Environments() {
 
           {createError && <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.red }}>{createError}</div>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowModal(false); setNewName(''); setNewSecret(false); setCreateError(null); }}>cancel</Btn>
+            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowModal(false); setNewName(''); setNewTier('CUSTOM'); setNewProtected(false); setCreateError(null); }}>cancel</Btn>
             <Btn T={T} variant="primary" size="sm" onClick={handleCreate} disabled={!newName.trim() || creating}>
               {creating ? 'creating…' : 'create'}
             </Btn>

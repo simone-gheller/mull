@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@mull/ui';
-import { Layers, ChevronsUpDown, Eye, EyeOff, Lock } from 'lucide-react';
+import { Layers, ChevronsUpDown, Eye, EyeOff, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import apiService from '../services/api';
@@ -90,7 +90,7 @@ function EnvDropdown({ environments, selectedEnvId, onSelect, T }) {
               }}
             >
               <span style={{ flex: 1 }}>{env.name}</span>
-              {env.isSecret && (
+              {env.protected && (
                 <span style={{
                   fontFamily: FONTS.mono, fontSize: '9px', color: T.amber,
                   background: `${T.amber}18`, border: `1px solid ${T.amber}40`,
@@ -116,7 +116,7 @@ export default function Parameters() {
   const [searchParams] = useSearchParams();
   const selectedProjectId = searchParams.get('project');
 
-  const orgRole = orgs.find(o => o.id === orgId)?.role ?? 'USER';
+  const orgRole = orgs.find(o => o.id === orgId)?.role ?? 'DEVELOPER';
   const isAdmin = ['ADMIN', 'OWNER'].includes(orgRole);
 
   const [apps, setApps] = useState([]);
@@ -135,7 +135,6 @@ export default function Parameters() {
   const [hoveredLockId, setHoveredLockId] = useState(null);
   const [newKey, setNewKey] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const [newSecret, setNewSecret]   = useState(false);
   const [newDefault, setNewDefault] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -216,7 +215,6 @@ export default function Parameters() {
     try {
       const payload = { key: newKey.trim(), appId: currentApp.id };
       if (newDesc.trim()) payload.description = newDesc.trim();
-      if (newSecret) payload.isSecret = true;
       const created = await apiService.createParameter(payload);
 
       if (newDefault.trim()) {
@@ -254,8 +252,6 @@ export default function Parameters() {
   };
 
   const filtered = parameters.filter(p => (p.key ?? '').toLowerCase().includes(search.toLowerCase()));
-
-  const envIsSecret = environments.find(e => e.id === selectedEnvId)?.isSecret ?? false;
 
   return (
     <div>
@@ -398,7 +394,7 @@ export default function Parameters() {
                 const isUnset = !valueInfo || valueInfo.state === 'unset';
                 const isRedacted = valueInfo?.state === 'redacted';
                 const isRevealed = revealedIds.has(rowId);
-                const isEffectivelySecret = valueInfo?.isSecret ?? (param.parameter.isSecret || envIsSecret);
+                const isProtectedEnv = environments.find(e => e.id === selectedEnvId)?.protected ?? false;
                 const canReveal = !!valueInfo?.canRead && hasValue;
                 const sourceName = valueInfo?.state === 'inherited'
                   ? valueInfo.sourceAppName
@@ -470,14 +466,14 @@ export default function Parameters() {
                                 const isInteractive = canReveal || isRevealed;
                                 // No tooltip on the eye when secret: the lock already carries that meaning.
                                 const tooltipText =
-                                  isEffectivelySecret ? null :
+                                  isProtectedEnv ? null :
                                   valueInfo?.state === 'inherited' ? 'inherited' :
                                   !hasValue && !isUnset ? 'no value' :
                                   isRevealed ? 'hide value' : 'reveal value';
                                 const eyeAriaLabel =
                                   isRevealed ? 'Hide value' :
                                   canReveal ? 'Reveal value' :
-                                  isEffectivelySecret ? 'Value hidden — secret parameter' :
+                                  isProtectedEnv ? 'Value hidden in protected environment' :
                                   'No value set';
                                 return (
                                   <div style={{ position: 'relative', display: 'inline-flex' }}>
@@ -520,7 +516,7 @@ export default function Parameters() {
                                         transition: 'background 0.12s, border-color 0.12s',
                                       }}
                                     >
-                                      {isEffectivelySecret && !isRevealed ? (
+                                      {isProtectedEnv && !isRevealed ? (
                                         <EyeOff size={14} color={T.textMuted} strokeWidth={1.5} />
                                       ) : isRevealed ? (
                                         <EyeOff size={14} color={T.amber} strokeWidth={1.5} />
@@ -534,11 +530,11 @@ export default function Parameters() {
 
                               <div
                                 style={{ position: 'relative', display: 'inline-flex' }}
-                                onMouseEnter={() => isEffectivelySecret && setHoveredLockId(rowId)}
+                                onMouseEnter={() => isProtectedEnv && setHoveredLockId(rowId)}
                                 onMouseLeave={() => setHoveredLockId(null)}
-                                aria-label={isEffectivelySecret ? 'Secret parameter' : undefined}
-                                aria-hidden={!isEffectivelySecret}
-                                role={isEffectivelySecret ? 'img' : undefined}
+                                aria-label={isProtectedEnv ? 'Protected environment' : undefined}
+                                aria-hidden={!isProtectedEnv}
+                                role={isProtectedEnv ? 'img' : undefined}
                               >
                                 {hoveredLockId === rowId && (
                                   <div style={{
@@ -552,7 +548,7 @@ export default function Parameters() {
                             fontFamily: FONTS.mono, fontSize: '10px', color: T.textSecondary,
                             whiteSpace: 'nowrap', zIndex: 50, pointerEvents: 'none',
                           }}>
-                            Secret
+                            Protected environment
                             <div style={{
                               position: 'absolute',
                               top: '100%', left: '50%', transform: 'translateX(-50%)',
@@ -563,11 +559,11 @@ export default function Parameters() {
                             }} />
                           </div>
                         )}
-                        <Lock
+                        <Shield
                           size={13}
                           strokeWidth={1.5}
-                          color={isEffectivelySecret ? T.amber : T.textMuted}
-                          style={{ opacity: isEffectivelySecret ? 1 : 0.35 }}
+                          color={isProtectedEnv ? T.amber : T.textMuted}
+                          style={{ opacity: isProtectedEnv ? 1 : 0.35 }}
                                 />
                               </div>
 
@@ -589,7 +585,7 @@ export default function Parameters() {
 
       <Modal
         isOpen={showModal}
-        onClose={() => { setShowModal(false); setNewKey(''); setNewDesc(''); setNewSecret(false); setNewDefault(''); }}
+        onClose={() => { setShowModal(false); setNewKey(''); setNewDesc(''); setNewDefault(''); }}
         title={`new parameter · ${currentApp?.name ?? ''}`}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -612,44 +608,11 @@ export default function Parameters() {
             placeholder="applied to all environments"
             value={newDefault}
             onChange={e => setNewDefault(e.target.value)}
-            type={newSecret ? 'password' : 'text'}
+            type="password"
           />
 
-          {/* Secret toggle */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '8px 10px',
-            background: newSecret ? `${T.amber}10` : T.overlay,
-            border: `1px solid ${newSecret ? `${T.amber}40` : T.border}`,
-            borderRadius: '4px',
-          }}>
-            <div>
-              <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: newSecret ? T.amber : T.textMuted }}>
-                {newSecret ? 'mask value (secret)' : 'show value in list'}
-              </div>
-              <div style={{ fontFamily: FONTS.display, fontSize: '10px', color: T.textMuted, marginTop: '2px' }}>
-                {newSecret ? 'shown as •••••• · visible to ADMIN+ only' : 'value readable by all members'}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setNewSecret(v => !v)}
-              style={{
-                width: '36px', height: '20px', borderRadius: '10px',
-                background: newSecret ? T.amber : T.border,
-                border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
-              }}
-            >
-              <span style={{
-                position: 'absolute', top: '2px', left: newSecret ? '18px' : '2px',
-                width: '16px', height: '16px', borderRadius: '50%',
-                background: T.bg, transition: 'left 0.2s', display: 'block',
-              }} />
-            </button>
-          </div>
-
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowModal(false); setNewKey(''); setNewDesc(''); setNewSecret(false); setNewDefault(''); }}>
+            <Btn T={T} variant="secondary" size="sm" onClick={() => { setShowModal(false); setNewKey(''); setNewDesc(''); setNewDefault(''); }}>
               cancel
             </Btn>
             <Btn T={T} variant="primary" size="sm" onClick={handleCreate} disabled={!newKey.trim() || creating} style={{ background: T.termGreenBg, color: T.termGreen, border: `1px solid ${T.termGreenBorder}` }}>

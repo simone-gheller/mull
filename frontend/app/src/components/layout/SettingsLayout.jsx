@@ -26,9 +26,9 @@ function SettingsSidebar() {
   const email = user?.email || '';
   const activeOrg = orgs.find(o => o.id === orgId);
   const orgName = activeOrg?.name ?? 'workspace';
-  const role = activeOrg?.role?.toLowerCase() ?? 'member';
+  const role = activeOrg?.role?.toLowerCase() ?? 'developer';
 
-  const roleVariant = { owner: 'warning', admin: 'info', member: 'success', viewer: 'default' }[role] ?? 'default';
+  const roleVariant = { owner: 'warning', admin: 'info', developer: 'success', viewer: 'default' }[role] ?? 'default';
 
   return (
     <aside style={{

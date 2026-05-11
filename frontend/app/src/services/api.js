@@ -73,6 +73,34 @@ class ApiService {
     return response.data;
   }
 
+  async updateMemberRole(userId, roleId) {
+    const response = await apiClient.patch(`/orgs/${this.orgId}/members/${userId}`, { roleId });
+    return response.data;
+  }
+
+  async removeMember(userId) {
+    await apiClient.delete(`/orgs/${this.orgId}/members/${userId}`);
+  }
+
+  async getRoles() {
+    const response = await apiClient.get(`/orgs/${this.orgId}/roles`);
+    return response.data;
+  }
+
+  async createRole(data) {
+    const response = await apiClient.post(`/orgs/${this.orgId}/roles`, data);
+    return response.data;
+  }
+
+  async updateRole(roleId, data) {
+    const response = await apiClient.patch(`/orgs/${this.orgId}/roles/${roleId}`, data);
+    return response.data;
+  }
+
+  async deleteRole(roleId) {
+    await apiClient.delete(`/orgs/${this.orgId}/roles/${roleId}`);
+  }
+
   // Apps (previously "projects")
   async getProjects() {
     const response = await apiClient.get(`/orgs/${this.orgId}/apps`);
@@ -115,6 +143,11 @@ class ApiService {
 
   async createEnvironment(envData) {
     const response = await apiClient.post(`/orgs/${this.orgId}/environments`, envData);
+    return response.data;
+  }
+
+  async updateEnvironment(envId, envData) {
+    const response = await apiClient.patch(`/orgs/${this.orgId}/environments/${envId}`, envData);
     return response.data;
   }
 
@@ -197,8 +230,8 @@ class ApiService {
     return response.data;
   }
 
-  async sendInvite({ email, role }) {
-    const response = await apiClient.post(`/orgs/${this.orgId}/invites`, { email, role });
+  async sendInvite({ email, roleId }) {
+    const response = await apiClient.post(`/orgs/${this.orgId}/invites`, { email, roleId });
     return response.data;
   }
 

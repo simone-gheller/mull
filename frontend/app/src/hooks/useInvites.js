@@ -21,8 +21,8 @@ export function useInvites() {
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const sendInvite = async ({ email, role }) => {
-    const result = await apiService.sendInvite({ email, role });
+  const sendInvite = async ({ email, roleId }) => {
+    const result = await apiService.sendInvite({ email, roleId });
     await fetch();
     return result;
   };

@@ -47,7 +47,7 @@ function SecurityRow({ label, value, action, statusVariant, T }) {
   );
 }
 
-const ROLE_VARIANT = { OWNER: 'warning', ADMIN: 'info', USER: 'success' };
+const ROLE_VARIANT = { OWNER: 'warning', ADMIN: 'info', DEVELOPER: 'success', VIEWER: 'default' };
 
 export default function ProfilePage() {
   const { T } = useTheme();
@@ -76,7 +76,7 @@ export default function ProfilePage() {
   };
 
   const name = profile?.displayName || profile?.email?.split('@')[0] || '—';
-  const role = profile?.role ?? 'USER';
+  const role = profile?.role ?? 'DEVELOPER';
   const roleLabel = role.toLowerCase();
   const roleVariant = ROLE_VARIANT[role] ?? 'default';
 
