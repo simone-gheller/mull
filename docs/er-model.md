@@ -43,14 +43,22 @@ erDiagram
     USER_ORGANIZATION {
         uuid user_id PK,FK
         uuid org_id PK,FK
-        enum role "USER, ADMIN, OWNER"
+        uuid role_id FK
+    }
+
+    ROLE {
+        uuid id PK
+        uuid org_id FK "nullable for system roles"
+        string key
+        enum kind "SYSTEM, CUSTOM"
+        json permissions
     }
 
     ORG_INVITE {
         uuid id PK
         uuid org_id FK
         string email
-        enum role
+        uuid role_id FK
         string token_hash UK
         uuid invited_by FK
         enum status "PENDING, ACCEPTED, REVOKED"
@@ -72,7 +80,8 @@ erDiagram
         uuid id PK
         uuid org_id FK
         string name
-        boolean is_secret
+        enum tier "DEVELOPMENT, STAGING, PRODUCTION, CUSTOM"
+        boolean protected
     }
 
     PARAMETER {
@@ -80,7 +89,6 @@ erDiagram
         uuid app_id FK
         string key
         string description
-        boolean is_secret
     }
 
     PARAMETER_VALUE {
@@ -163,14 +171,14 @@ erDiagram
 
 ## Invariants
 
-1. `User.role` and `User.organizationId` do not exist. Membership and role are stored in `UserOrganization`.
+1. `User.role` and `User.organizationId` do not exist. Memberships store `roleId` and resolve permissions through `Role`.
 2. `Organization.members` is the join-table relation; there is no direct `Organization.users` relation.
 3. `App.ancestors` is a materialized root-to-parent path. The app itself is not included.
 4. `Parameter.key` is unique per app.
 5. `ParameterValue` is unique per `(parameterId, environmentId)`.
 6. `ParameterValue.value` no longer exists. Values are encrypted at rest.
 7. `ParameterValue.isSet=false` means unset locally / inherit from ancestors.
-8. `Environment.isSecret || Parameter.isSecret` makes a value secret for read authorization.
+8. All parameter values are secret-by-default. `Environment.protected` and `Environment.tier` are RBAC conditions for reveal/write authorization.
 9. `OrgInvite.tokenHash` stores only a SHA-256 fingerprint of the raw email token.
 10. `AccessKey.tokenHash` stores only a SHA-256 fingerprint of the full raw access key. The raw token is shown once at creation.
 11. `AccessKey.tokenPrefix` stores the non-secret `mull_pat_<keyId>` or `mull_st_<keyId>` prefix for display, audit, and support.

@@ -72,7 +72,7 @@ npm run dev:app        # http://localhost:5173
 - **Blank-as-inherit semantics** — empty string clears a local value and falls back to ancestors
 - **Multi-environment** — dev, staging, production, or any custom env
 - **Supabase auth** — JWT verified via JWKS, local OTP flow, Google OAuth support
-- **Role-based access** — OWNER / ADMIN / USER per organization
+- **Role-based access** — org roles are presets of scopes (`OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`) with paid custom roles
 - **Access keys** — personal access tokens and org service tokens with scopes, hashed storage, one-time display, revoke, expiry, and audit attribution
 - **Audit + history** — tenant-visible audit events and encrypted parameter value version history
 

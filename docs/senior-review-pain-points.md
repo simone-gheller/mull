@@ -26,10 +26,10 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
    `ToastProvider` exists and wraps app routes. Adoption now covers the main app/environment/invite/org-save/export paths; some lower-priority paths may still need adoption.
 
 7. **Resolved — mutating configuration was too permissive.**
-   Creating apps, environments, parameters, and parameter overrides now requires `ADMIN` or `OWNER`.
+   Mutating configuration is now scope-based. App/environment management requires manage scopes; parameter definitions use `parameters:*`; values use `config:write` with environment conditions.
 
-8. **Resolved — non-secret parameter values could be updated by non-admin users.**
-   `PUT /orgs/:orgId/parameters/values/:id` now requires `ADMIN` or `OWNER` for every value update, while read redaction and blank-as-inherit semantics are unchanged. This is a conservative policy until the permission model is redesigned with granular write capabilities.
+8. **Resolved — secret/non-secret policy was ambiguous.**
+   All parameter values are secret-by-default. `config:reveal` controls plaintext access, and protected environments restrict reveal/write through RBAC conditions.
 
 9. **Resolved — additional organization creation was not transactional.**
    `POST /orgs` now creates the organization and owner membership in a single Prisma transaction.
@@ -74,7 +74,7 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
    `OrgInvite` now stores `token_hash` only. Raw invite tokens exist only in the email/link and incoming request; preview and accept routes hash the received token before lookup.
 
 23. **Resolved — secret masking and authorization policy was scattered.**
-   Backend secret value policy is centralized in `backend/src/lib/secretPolicy.js`. Route decorators, route handlers, grouped value redaction, resolved parameter access metadata, and tests now share the same role hierarchy and parameter/environment secrecy rules.
+   Backend authorization now uses `backend/src/lib/rbac.js`: scopes, system role presets, custom-role validation, environment conditions, and config reveal/write helpers are centralized.
 
 24. **Resolved — scoped API/service tokens were missing.**
    `Identity` + `AccessKey` now support personal access tokens and org service tokens with one-time raw display, hashed storage, prefix display, TTL presets, revoke, last-used tracking, scopes, optional app/environment bindings, `/auth/whoami`, frontend management UI, audit attribution, and backend integration coverage.
@@ -85,7 +85,7 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
 ## Current Critical Risks
 
 7. **Partially resolved — runtime config auth now has scoped access keys.**
-   `GET /orgs/:orgId/config/:appId/:envId` supports `config:read` access keys and optional app/environment bindings. Remaining risk: RBAC is still coarse (`USER`/`ADMIN`/`OWNER` plus key scopes), and OIDC/workload identity is not implemented.
+   `GET /orgs/:orgId/config/:appId/:envId` supports access-key scopes plus app/environment bindings and requires `config:reveal` for plaintext. Remaining risk: OIDC/workload identity is not implemented.
 
 ## Backend And Security Debt
 
@@ -121,9 +121,9 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
 
 35. Access key rotation flow and bulk revoke/disable identity controls.
 
-36. Member role-change auditing once role management ships.
+36. Transfer-ownership UX and richer member management UI.
 
-38. Role and permission management: change role, remove member, transfer ownership, protect against removing/downgrading the last owner, and redesign the coarse `USER`/`ADMIN` split into explicit capabilities such as config read/write and secret read/write. Access key scopes are a foundation for this future RBAC model but do not replace member-level RBAC yet.
+38. Advanced RBAC UX: condition editor for custom roles, role assignment flows, and paid-plan upgrade affordances.
 
 39. OIDC/workload identity auth methods for GitHub Actions, GitLab, Kubernetes, and cloud workloads.
 

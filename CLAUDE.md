@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -104,12 +104,21 @@ model Organization {
 }
 
 model UserOrganization {
-  userId String   @map("user_id") @db.Uuid
-  orgId  String   @map("org_id") @db.Uuid
-  role   UserRole @default(USER)                       // USER | ADMIN | OWNER
+  userId String @map("user_id") @db.Uuid
+  orgId  String @map("org_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
   user   User         @relation(...)
   org    Organization @relation(...)
+  role   Role         @relation(...)
   @@id([userId, orgId])
+}
+
+model Role {
+  id          String   @id @db.Uuid
+  orgId       String?  @map("org_id") @db.Uuid        // null for system roles
+  key         String                                      // OWNER | ADMIN | DEVELOPER | VIEWER | custom
+  kind        RoleKind                                    // SYSTEM | CUSTOM
+  permissions Json
 }
 
 model ParameterValue {
@@ -190,12 +199,12 @@ The `authenticate` backend decorator is a **pure lookup** — it never creates u
 Decorators registered on Fastify:
 - **`authenticate`** — accepts Supabase JWTs plus `mull_pat_*`/`mull_st_*` access keys. It normalizes every authenticated request into `request.auth`.
 - **`validateOrgAccess`** — for JWT/PAT checks user membership in `:orgId`; for service tokens checks the service identity belongs to `:orgId`.
-- **`requireScope(scope)`** — checks access-key scopes. JWT sessions have `scopes: ['*']`.
+- **`requireScope(scope, options?)`** — checks role permissions for JWT/PAT, direct scopes for service tokens, and optional environment conditions.
 - **`requireJwtAuth()`** — keeps account/org/admin management endpoints user-session only.
-- **`requireRole(role)`** — checks `request.orgRole` for human user/PAT requests. Service tokens use scopes and bindings, not member roles.
+- **`requireRole(role)`** — legacy compatibility alias for coarse system-role checks; prefer `requireScope`.
 - **`enforceAccessKeyResource(request, reply, { appId, environmentId })`** — enforces optional access-key app/environment bindings.
 
-Usage pattern: `preHandler: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('OWNER')]`
+Usage pattern: `preHandler: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('roles:manage')]`
 
 `request.auth` shape:
 
@@ -302,11 +311,11 @@ State: `{ user, orgs, orgId, isAuthenticated, loading, error }`.
 ## Security Model
 
 - **Supabase JWT** (ES256) verified via JWKS — no password/session management in backend
-- **Per-org role** (`OWNER > ADMIN > USER`) — stored in `UserOrganization`, not on `User`
+- **Per-org RBAC roles** (`OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`, paid custom roles) — `UserOrganization.roleId` points to `Role`, whose permissions are scopes with optional environment conditions
 - **`validateOrgAccess` on every org-scoped route** — 403 if not a member of the org in the path
 - **UUIDv7 validation** on all `:orgId` params — rejects UUIDv4 or malformed IDs
 - **Envelope encryption** — parameter values encrypted at rest, keys managed server-side
-- **Row-by-row redaction** — grouped value reads redact secret parameter/environment values per row for non-admin users
+- **Secret-by-default config** — all values are sensitive; `config:reveal` controls plaintext access and protected environments restrict reveal/write
 - **Blank-as-inherit** — empty value clears the local value and allows ancestor fallback
 
 ## Tests

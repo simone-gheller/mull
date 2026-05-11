@@ -81,13 +81,15 @@ Most product endpoints are org-scoped:
 /orgs/:orgId/...
 ```
 
-`validateOrgAccess` checks that the authenticated user is a member of `:orgId` and sets `request.orgRole`.
+`validateOrgAccess` checks that the authenticated user is a member of `:orgId` and sets `request.orgRole` as a compatibility alias for the role key.
 
-Roles are per organization:
+Roles are per organization and are presets of scopes:
 
 ```txt
-OWNER > ADMIN > USER
+OWNER > ADMIN > DEVELOPER > VIEWER
 ```
+
+Custom roles are org-scoped and paid-plan only. Config values are secret-by-default; `config:reveal` controls plaintext access, and protected environments can restrict reveal/write through permission conditions.
 
 ## Auth
 
@@ -104,7 +106,10 @@ Returns the current backend user and memberships.
     {
       "id": "019dfe08-8b5f-7fec-86f4-b8675bf9580f",
       "name": "acme-corp",
-      "role": "OWNER"
+      "role": "OWNER",
+      "roleId": "019...",
+      "roleKey": "OWNER",
+      "roleName": "Owner"
     }
   ]
 }
@@ -205,19 +210,21 @@ Returns org environments.
     "id": "019...",
     "orgId": "019...",
     "name": "production",
-    "isSecret": true
+    "tier": "PRODUCTION",
+    "protected": true
   }
 ]
 ```
 
-`isSecret=true` means values in that environment are treated as secret regardless of parameter-level secrecy.
+All values are sensitive by default. `protected=true` means reveal/write requires a permission that allows protected environments.
 
 ### `POST /orgs/:orgId/environments`
 
 ```json
 {
   "name": "staging",
-  "isSecret": false
+  "tier": "STAGING",
+  "protected": false
 }
 ```
 
@@ -241,8 +248,7 @@ Returns parameter definitions directly owned by the app. This endpoint does not 
     "id": "019...",
     "appId": "019...",
     "key": "DATABASE_URL",
-    "description": "Primary database URL",
-    "isSecret": true
+    "description": "Primary database URL"
   }
 ]
 ```
@@ -253,8 +259,7 @@ Returns parameter definitions directly owned by the app. This endpoint does not 
 {
   "appId": "019...",
   "key": "DATABASE_URL",
-  "description": "Primary database URL",
-  "isSecret": true
+  "description": "Primary database URL"
 }
 ```
 
@@ -274,7 +279,7 @@ Response:
 ```json
 {
   "app": { "id": "019...", "name": "api" },
-  "environment": { "id": "019...", "name": "production", "isSecret": true },
+  "environment": { "id": "019...", "name": "production", "tier": "PRODUCTION", "protected": true },
   "summary": {
     "total": 3,
     "local": 1,
@@ -289,8 +294,7 @@ Response:
         "id": "019...",
         "appId": "019...",
         "appName": "api",
-        "description": "Primary database URL",
-        "isSecret": true
+        "description": "Primary database URL"
       },
       "overridden": {
         "parameterId": "019...",
@@ -305,7 +309,6 @@ Response:
         "value": "postgres://example",
         "sourceAppId": "019...",
         "sourceAppName": "root",
-        "isSecret": true,
         "isSet": true,
         "canRead": true,
         "canWrite": true
@@ -458,7 +461,8 @@ Response:
       "resourceLabel": "DATABASE_URL",
       "outcome": "SUCCESS",
       "metadata": {
-        "isSecret": true,
+        "protected": true,
+        "tier": "PRODUCTION",
         "isSet": true
       },
       "createdAt": "2026-05-10T12:00:00.000Z",
@@ -506,10 +510,10 @@ The backend hashes the received token and never persists the raw token.
 
 - IDs are UUIDv7 for app-created rows.
 - `User.role` and `User.organizationId` do not exist.
-- Roles live in `UserOrganization`.
+- Memberships point to `Role` via `UserOrganization.roleId`.
 - `ParameterValue.value` does not exist.
 - `ParameterValue.isSet` is the inheritance state flag.
-- `Environment.isSecret` and `Parameter.isSecret` both contribute to secret gating.
+- `Environment.protected` and `Environment.tier` feed RBAC conditions; `Parameter.isSecret` and `Environment.isSecret` no longer exist.
 - `OrgInvite.token` does not exist; invite lookup uses `tokenHash` / `token_hash`.
 - `AuditEvent` stores tenant-visible activity metadata with per-row retention.
 
