@@ -306,9 +306,9 @@ describe('ParameterValue Routes', () => {
       assert.ok(error.message.includes('does not belong'));
     });
 
-    test('should forbid USER members from updating non-secret values', async () => {
+    test('should allow DEVELOPER members to update non-protected values', async () => {
       const org = await ctx.buildOrg();
-      const user = await ctx.buildUserInOrg(org, { role: 'USER' });
+      const user = await ctx.buildUserInOrg(org, { role: 'DEVELOPER' });
       const app = await ctx.buildApp({ orgId: org.id });
       const env = await ctx.buildEnv({ orgId: org.id, name: 'dev' });
       const param = await ctx.buildParam({ appId: app.id, key: 'PUBLIC_KEY' });
@@ -324,10 +324,10 @@ describe('ParameterValue Routes', () => {
         body: JSON.stringify({ value: 'user-written-value' })
       }, user);
 
-      assert.strictEqual(response.statusCode, 403);
+      assert.strictEqual(response.statusCode, 200);
       const dbValue = await ctx.prisma.parameterValue.findUnique({ where: { id: paramValue.id } });
-      assert.strictEqual(dbValue.isSet, false);
-      assert.strictEqual(decryptParameterValue(dbValue), '');
+      assert.strictEqual(dbValue.isSet, true);
+      assert.strictEqual(decryptParameterValue(dbValue), 'user-written-value');
     });
   });
 
@@ -477,18 +477,17 @@ describe('ParameterValue Routes', () => {
       assert.strictEqual(enterpriseCount, 7);
     });
 
-    test('should prevent cross-org history access and USER secret reveal', async () => {
+    test('should prevent cross-org history access and DEVELOPER protected reveal', async () => {
       const org1 = await ctx.buildOrg();
       const org2 = await ctx.buildOrg();
       const admin = await ctx.buildUserInOrg(org1, { role: 'ADMIN' });
-      const user = await ctx.buildUserInOrg(org1, { role: 'USER' });
+      const user = await ctx.buildUserInOrg(org1, { role: 'DEVELOPER' });
       const app1 = await ctx.buildApp({ orgId: org1.id });
       const app2 = await ctx.buildApp({ orgId: org2.id });
-      const env1 = await ctx.buildEnv({ orgId: org1.id, name: 'prod' });
+      const env1 = await ctx.buildEnv({ orgId: org1.id, name: 'prod', tier: 'PRODUCTION', protected: true });
       const env2 = await ctx.buildEnv({ orgId: org2.id, name: 'prod' });
       const param1 = await ctx.buildParam({ appId: app1.id, key: 'SECRET_KEY' });
       const param2 = await ctx.buildParam({ appId: app2.id, key: 'OTHER_KEY' });
-      await ctx.prisma.parameter.update({ where: { id: param1.id }, data: { isSecret: true } });
 
       const value1 = await ctx.prisma.parameterValue.findFirst({
         where: { parameterId: param1.id, environmentId: env1.id }

@@ -14,7 +14,7 @@ describe('Access Key Routes', () => {
     await ctx.cleanup();
   });
 
-  test('creates a service token, shows raw token once, and uses it for config:read', async () => {
+  test('creates a service token, shows raw token once, and uses it for config reveal', async () => {
     const org = await ctx.buildOrg();
     const user = await ctx.buildUserInOrg(org, { role: 'ADMIN' });
     const app = await ctx.buildApp({ orgId: org.id, name: 'api' });
@@ -41,7 +41,7 @@ describe('Access Key Routes', () => {
       url: `/orgs/${org.id}/access-keys`,
       body: {
         name: 'github deploy',
-        scopes: ['config:read'],
+        scopes: ['config:read', 'config:reveal'],
         ttl: '90d',
         appId: app.id,
         environmentId: env.id
@@ -112,7 +112,7 @@ describe('Access Key Routes', () => {
 
   test('personal access tokens keep user role checks for writes', async () => {
     const org = await ctx.buildOrg();
-    const user = await ctx.buildUserInOrg(org, { role: 'USER' });
+    const user = await ctx.buildUserInOrg(org, { role: 'DEVELOPER' });
     const app = await ctx.buildApp({ orgId: org.id });
     const env = await ctx.buildEnv({ orgId: org.id });
     const param = await ctx.buildParam({ appId: app.id, key: 'LOG_LEVEL' });
@@ -142,7 +142,7 @@ describe('Access Key Routes', () => {
     assert.equal(whoami.identityType, 'USER');
     assert.equal(whoami.credentialType, 'ACCESS_KEY');
     assert.equal(whoami.organizations[0].id, org.id);
-    assert.equal(whoami.organizations[0].role, 'USER');
+    assert.equal(whoami.organizations[0].role, 'DEVELOPER');
 
     const updateResponse = await ctx.fastify.inject({
       method: 'PUT',

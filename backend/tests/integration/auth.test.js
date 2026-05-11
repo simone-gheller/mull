@@ -35,7 +35,7 @@ describe('Auth Routes', () => {
       const org1 = await ctx.buildOrg();
       const org2 = await ctx.buildOrg();
       const user = await ctx.buildUserInOrg(org1, { role: 'OWNER' });
-      await ctx.buildOrgMembership({ userId: user.id, orgId: org2.id, role: 'USER' });
+      await ctx.buildOrgMembership({ userId: user.id, orgId: org2.id, role: 'DEVELOPER' });
 
       const response = await ctx.injectAuth({ method: 'GET', url: '/auth/me' }, user);
 
@@ -105,10 +105,11 @@ describe('Auth Routes', () => {
       ctx.createdIds.orgs.push(body.id);
 
       const membership = await ctx.prisma.userOrganization.findUnique({
-        where: { userId_orgId: { userId: user.id, orgId: body.id } }
+        where: { userId_orgId: { userId: user.id, orgId: body.id } },
+        include: { role: { select: { key: true } } }
       });
       assert.ok(membership);
-      assert.strictEqual(membership.role, 'OWNER');
+      assert.strictEqual(membership.role.key, 'OWNER');
     });
 
     test('should return 400 when name is missing', async () => {

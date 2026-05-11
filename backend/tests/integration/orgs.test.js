@@ -30,7 +30,7 @@ describe('Org Routes', () => {
     test('should reflect correct member count with multiple members', async () => {
       const org = await ctx.buildOrg();
       const user1 = await ctx.buildUserInOrg(org, { role: 'OWNER' });
-      const user2 = await ctx.buildUserInOrg(org, { role: 'USER' });
+      const user2 = await ctx.buildUserInOrg(org, { role: 'DEVELOPER' });
 
       const response = await ctx.injectAuth({ method: 'GET', url: `/orgs/${org.id}` }, user1);
 
@@ -79,9 +79,9 @@ describe('Org Routes', () => {
       assert.strictEqual(dbOrg.name, 'updated-org-name');
     });
 
-    test('should return 403 when user has USER role (not OWNER)', async () => {
+    test('should return 403 when user has DEVELOPER role (not OWNER)', async () => {
       const org = await ctx.buildOrg();
-      const user = await ctx.buildUserInOrg(org, { role: 'USER' });
+      const user = await ctx.buildUserInOrg(org, { role: 'DEVELOPER' });
 
       const response = await ctx.injectAuth({
         method: 'PATCH',
@@ -113,7 +113,7 @@ describe('Org Routes', () => {
     test('should return all members with roles', async () => {
       const org = await ctx.buildOrg();
       const owner = await ctx.buildUserInOrg(org, { role: 'OWNER' });
-      const member = await ctx.buildUserInOrg(org, { role: 'USER' });
+      const member = await ctx.buildUserInOrg(org, { role: 'DEVELOPER' });
 
       const response = await ctx.injectAuth({ method: 'GET', url: `/orgs/${org.id}/members` }, owner);
 
@@ -128,7 +128,7 @@ describe('Org Routes', () => {
 
       const memberEntry = members.find(m => m.id === member.id);
       assert.ok(memberEntry);
-      assert.strictEqual(memberEntry.role, 'USER');
+      assert.strictEqual(memberEntry.role, 'DEVELOPER');
     });
 
     test('should return 403 for non-member', async () => {
@@ -147,6 +147,58 @@ describe('Org Routes', () => {
       const response = await ctx.fastify.inject({ method: 'GET', url: `/orgs/${org.id}/members` });
 
       assert.strictEqual(response.statusCode, 401);
+    });
+  });
+
+  describe('PATCH /orgs/:orgId/members/:userId', () => {
+    test('should update another member role as OWNER', async () => {
+      const org = await ctx.buildOrg();
+      const owner = await ctx.buildUserInOrg(org, { role: 'OWNER' });
+      const member = await ctx.buildUserInOrg(org, { role: 'DEVELOPER' });
+      const viewerRole = await ctx.getSystemRole('VIEWER');
+
+      const response = await ctx.injectAuth({
+        method: 'PATCH',
+        url: `/orgs/${org.id}/members/${member.id}`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ roleId: viewerRole.id })
+      }, owner);
+
+      assert.strictEqual(response.statusCode, 200);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.id, member.id);
+      assert.strictEqual(body.role, 'VIEWER');
+    });
+
+    test('should reject changing your own role', async () => {
+      const org = await ctx.buildOrg();
+      const owner = await ctx.buildUserInOrg(org, { role: 'OWNER' });
+      const adminRole = await ctx.getSystemRole('ADMIN');
+
+      const response = await ctx.injectAuth({
+        method: 'PATCH',
+        url: `/orgs/${org.id}/members/${owner.id}`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ roleId: adminRole.id })
+      }, owner);
+
+      assert.strictEqual(response.statusCode, 403);
+    });
+
+    test('should reject ownership changes through the role update endpoint', async () => {
+      const org = await ctx.buildOrg();
+      const owner = await ctx.buildUserInOrg(org, { role: 'OWNER' });
+      const member = await ctx.buildUserInOrg(org, { role: 'DEVELOPER' });
+      const ownerRole = await ctx.getSystemRole('OWNER');
+
+      const response = await ctx.injectAuth({
+        method: 'PATCH',
+        url: `/orgs/${org.id}/members/${member.id}`,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ roleId: ownerRole.id })
+      }, owner);
+
+      assert.strictEqual(response.statusCode, 409);
     });
   });
 

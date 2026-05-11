@@ -280,9 +280,9 @@ describe('Parameter Routes', () => {
       assert.ok(error.message.includes('already exists'));
     });
 
-    test('should forbid USER members from creating parameters', async () => {
+    test('should allow DEVELOPER members to create parameters', async () => {
       const org = await ctx.buildOrg();
-      const user = await ctx.buildUserInOrg(org, { role: 'USER' });
+      const user = await ctx.buildUserInOrg(org, { role: 'DEVELOPER' });
       const app = await ctx.buildApp({ orgId: org.id });
 
       const response = await ctx.injectAuth({
@@ -292,7 +292,7 @@ describe('Parameter Routes', () => {
         body: JSON.stringify({ appId: app.id, key: 'VIEWER_CREATED_KEY' })
       }, user);
 
-      assert.strictEqual(response.statusCode, 403);
+      assert.strictEqual(response.statusCode, 201);
     });
   });
 });

@@ -81,14 +81,12 @@ test.describe('audit events', () => {
     assert.equal(JSON.stringify(audit.metadata).includes('postgres://super-secret'), false);
   });
 
-  test('audits denied secret reveal without plaintext', async () => {
-    const { org, app, env } = await ctx.buildOrgWithAppAndEnv();
-    const user = await ctx.buildUserInOrg(org, { role: 'USER' });
+  test('audits denied protected-environment reveal without plaintext', async () => {
+    const org = await ctx.buildOrg();
+    const app = await ctx.buildApp({ orgId: org.id });
+    const env = await ctx.buildEnv({ orgId: org.id, tier: 'PRODUCTION', protected: true });
+    const user = await ctx.buildUserInOrg(org, { role: 'DEVELOPER' });
     const param = await ctx.buildParam({ appId: app.id, key: 'API_KEY' });
-    await ctx.prisma.parameter.update({
-      where: { id: param.id },
-      data: { isSecret: true }
-    });
     const value = await ctx.prisma.parameterValue.findUnique({
       where: { parameterId_environmentId: { parameterId: param.id, environmentId: env.id } }
     });
@@ -115,8 +113,29 @@ test.describe('audit events', () => {
     });
     assert.ok(audit);
     assert.equal(audit.outcome, 'DENIED');
-    assert.equal(audit.metadata.isSecret, true);
+    assert.equal(audit.metadata.protected, true);
     assert.equal(JSON.stringify(audit.metadata).includes('secret-api-key'), false);
+  });
+
+  test('keeps generic HTTP failure audits scoped to an explicit organization', async () => {
+    const org = await ctx.buildOrg();
+    const owner = await ctx.buildUserInOrg(org, { role: 'OWNER' });
+
+    const personalTokenResponse = await ctx.injectAuth({
+      method: 'POST',
+      url: '/auth/access-keys',
+      body: { name: 'broken-token-request', scopes: ['config:read'] }
+    }, owner);
+    assert.equal(personalTokenResponse.statusCode, 400);
+
+    const leakedPersonalFailure = await ctx.prisma.auditEvent.findFirst({
+      where: {
+        orgId: org.id,
+        action: 'http.request_failed',
+        resourceId: '/auth/access-keys'
+      }
+    });
+    assert.equal(leakedPersonalFailure, null);
   });
 
   test('covers the audit action matrix for org, app, env, parameter, value, export, and invite flows', async () => {
@@ -173,7 +192,7 @@ test.describe('audit events', () => {
     const createEnvResponse = await ctx.injectAuth({
       method: 'POST',
       url: `/orgs/${org.id}/environments`,
-      body: { name: 'audit-env', isSecret: true }
+      body: { name: 'audit-env', tier: 'PRODUCTION', protected: true }
     }, owner);
     assert.equal(createEnvResponse.statusCode, 201);
     const env = JSON.parse(createEnvResponse.body);
@@ -198,8 +217,7 @@ test.describe('audit events', () => {
       body: {
         appId: app.id,
         key: 'AUDIT_SECRET',
-        description: 'audit coverage',
-        isSecret: true
+        description: 'audit coverage'
       }
     }, owner);
     assert.equal(createParameterResponse.statusCode, 201);
@@ -276,10 +294,11 @@ test.describe('audit events', () => {
     }, owner);
     assert.equal(exportResponse.statusCode, 200);
 
+    const adminRole = await ctx.getSystemRole('ADMIN');
     const inviteResponse = await ctx.injectAuth({
       method: 'POST',
       url: `/orgs/${org.id}/invites`,
-      body: { email: invitedUser.email, role: 'ADMIN' }
+      body: { email: invitedUser.email, roleId: adminRole.id }
     }, owner);
     assert.equal(inviteResponse.statusCode, 200);
     const inviteToken = new URL(createdInviteUrls.at(-1)).searchParams.get('token');
@@ -298,13 +317,14 @@ test.describe('audit events', () => {
     }, invitedUser);
     assert.equal(acceptResponse.statusCode, 200);
 
+    const developerRole = await ctx.getSystemRole('DEVELOPER');
     const revokeRawToken = `audit-revoke-${uuidv7()}`;
     const inviteToRevoke = await ctx.prisma.orgInvite.create({
       data: {
         id: uuidv7(),
         orgId: org.id,
         email: `revoke-${uuidv7()}@test.com`,
-        role: 'USER',
+        roleId: developerRole.id,
         tokenHash: hashToken(revokeRawToken),
         invitedBy: owner.id,
         expiresAt: new Date(Date.now() + 60 * 60 * 1000)

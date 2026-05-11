@@ -206,9 +206,9 @@ describe('App Routes', () => {
       assert.strictEqual(createdApp.name, 'whitespace-app');
     });
 
-    test('should forbid USER members from creating apps', async () => {
+    test('should forbid DEVELOPER members from creating apps', async () => {
       const org = await ctx.buildOrg();
-      const user = await ctx.buildUserInOrg(org, { role: 'USER' });
+      const user = await ctx.buildUserInOrg(org, { role: 'DEVELOPER' });
 
       const response = await ctx.injectAuth({
         method: 'POST',
