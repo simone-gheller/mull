@@ -73,6 +73,9 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
 22. **Resolved — invite tokens were persisted in plaintext.**
    `OrgInvite` now stores `token_hash` only. Raw invite tokens exist only in the email/link and incoming request; preview and accept routes hash the received token before lookup.
 
+23. **Resolved — secret masking and authorization policy was scattered.**
+   Backend secret value policy is centralized in `backend/src/lib/secretPolicy.js`. Route decorators, route handlers, grouped value redaction, resolved parameter access metadata, and tests now share the same role hierarchy and parameter/environment secrecy rules.
+
 ## Current Critical Risks
 
 7. The rendered config endpoint returns full config to any authenticated organization member. `GET /orgs/:orgId/config/:appId/:envId` is audited, but it still uses user JWT auth only, with no service tokens, scopes, or dedicated runtime role gate.
@@ -82,8 +85,6 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
 12. API/service tokens are missing. A B2B config product needs scoped machine credentials for CI/CD, deploy systems, runtime config fetching, and rotation.
 
 17. The `config_inheritance` raw SQL/view path is still high risk. It now has direct `/config` integration coverage, but the path still deserves care because it is raw SQL and returns the product's most sensitive output.
-
-19. Secret masking and authorization are split across route decorators, route handlers, and frontend behavior. This should be centralized so the policy is easier to verify.
 
 20. Key management is env-backed only. Local `.env` is acceptable for development, but production should move `MASTER_KEY_HEX`/KEK material to a managed secret store and define rotation/rewrap procedures.
 

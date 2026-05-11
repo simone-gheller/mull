@@ -1,5 +1,6 @@
 import fp from 'fastify-plugin';
 import { isUuidV7 } from '../schemas/common.js';
+import { isSecretValue, roleAtLeast } from '../lib/secretPolicy.js';
 
 async function testAuthPlugin(fastify) {
   fastify.decorate('authenticate', async function (request, reply) {
@@ -36,11 +37,10 @@ async function testAuthPlugin(fastify) {
   });
 
   fastify.decorate('requireRole', (minRole, options = {}) => {
-    const HIERARCHY = ['USER', 'ADMIN', 'OWNER'];
     return async function (request, reply) {
       if (options.onlyIfSecret) {
         try {
-          let isSecret = false;
+          let secret = false;
           const appId = request.params.appId;
           if (appId) {
             return;
@@ -53,15 +53,15 @@ async function testAuthPlugin(fastify) {
               }
             });
             if (pv) {
-              isSecret = !!(pv.parameter?.isSecret || pv.environment?.isSecret);
+              secret = isSecretValue(pv);
             }
           }
-          if (!isSecret) return;
+          if (!secret) return;
         } catch {
           return;
         }
       }
-      if (!request.orgRole || HIERARCHY.indexOf(request.orgRole) < HIERARCHY.indexOf(minRole)) {
+      if (!request.orgRole || !roleAtLeast(request.orgRole, minRole)) {
         return reply.code(403).send({ error: 'Forbidden', message: `Requires ${minRole} or higher`, statusCode: 403 });
       }
     };

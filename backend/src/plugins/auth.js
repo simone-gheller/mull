@@ -17,6 +17,7 @@ import fp from 'fastify-plugin';
 import jwt from '@fastify/jwt';
 import buildGetJwks from 'get-jwks';
 import { isUuidV7 } from '../schemas/common.js';
+import { isSecretValue, roleAtLeast } from '../lib/secretPolicy.js';
 
 async function authPlugin(fastify, options) {
   const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF;
@@ -119,11 +120,10 @@ fastify.decorate('authenticate', async function (request, reply) {
    * Esempio: preHandler: [fastify.authenticate, fastify.requireRole('OWNER')]
    */
   fastify.decorate('requireRole', (minRole, options = {}) => {
-    const HIERARCHY = ['USER', 'ADMIN', 'OWNER'];
     return async function (request, reply) {
       if (options.onlyIfSecret) {
         try {
-          let isSecret = false;
+          let secret = false;
           const appId = request.params.appId;
           if (appId) {
             // Grouped-value routes can contain both secret and non-secret rows.
@@ -138,15 +138,15 @@ fastify.decorate('authenticate', async function (request, reply) {
               }
             });
             if (pv) {
-              isSecret = !!(pv.parameter?.isSecret || pv.environment?.isSecret);
+              secret = isSecretValue(pv);
             }
           }
-          if (!isSecret) return;
+          if (!secret) return;
         } catch {
           return; // invalid UUID or other lookup error — let the route handler respond
         }
       }
-      if (!request.orgRole || HIERARCHY.indexOf(request.orgRole) < HIERARCHY.indexOf(minRole)) {
+      if (!request.orgRole || !roleAtLeast(request.orgRole, minRole)) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: `Requires ${minRole} or higher`,

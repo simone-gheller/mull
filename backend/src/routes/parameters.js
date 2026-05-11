@@ -12,12 +12,7 @@ import {
 } from '../openapi/parameterRoutes.js';
 import { syncParameterEnvironmentValues } from '../lib/syncParameterValues.js';
 import { decryptParameterValue } from '../crypto/envelope.js';
-
-const ROLE_CAN_READ_SECRET = new Set(['ADMIN', 'OWNER']);
-
-function roleCanReadSecret(role) {
-  return ROLE_CAN_READ_SECRET.has(role);
-}
+import { describeValueAccess } from '../lib/secretPolicy.js';
 
 function buildSummary(items) {
   return {
@@ -105,8 +100,6 @@ export default async function parameterRoutes(fastify, _options) {
           })
         : [];
       const valueByParameterId = new Map(allValues.map(value => [value.parameterId, value]));
-      const isAdmin = roleCanReadSecret(request.orgRole);
-
       const items = [...byKey.entries()]
         .map(([key, candidates]) => {
           const ordered = candidates
@@ -130,6 +123,10 @@ export default async function parameterRoutes(fastify, _options) {
               .find(candidate => candidate?.isSet);
 
             if (!valueWinner) {
+              const access = describeValueAccess(request.orgRole, {
+                parameter: winner,
+                environment,
+              });
               value = {
                 state: 'unset',
                 valueId: null,
@@ -138,27 +135,29 @@ export default async function parameterRoutes(fastify, _options) {
                 value: null,
                 sourceAppId: null,
                 sourceAppName: null,
-                isSecret: winner.isSecret || environment.isSecret,
+                isSecret: access.isSecret,
                 isSet: false,
                 canRead: true,
-                canWrite: !(winner.isSecret || environment.isSecret) || isAdmin,
+                canWrite: access.canWrite,
               };
             } else {
-              const isSecretValue = valueWinner.parameter.isSecret || environment.isSecret;
-              const canRead = !isSecretValue || isAdmin;
+              const access = describeValueAccess(request.orgRole, {
+                parameter: valueWinner.parameter,
+                environment,
+              });
               const sourceIsCurrentApp = valueWinner.parameter.appId === app.id;
               value = {
-                state: canRead ? sourceIsCurrentApp ? 'set' : 'inherited' : 'redacted',
+                state: access.canRead ? sourceIsCurrentApp ? 'set' : 'inherited' : 'redacted',
                 valueId: valueWinner.id,
                 parameterId: valueWinner.parameterId,
                 environmentId: valueWinner.environmentId,
-                value: canRead ? decryptParameterValue(valueWinner) : null,
+                value: access.canRead ? decryptParameterValue(valueWinner) : null,
                 sourceAppId: valueWinner.parameter.appId,
                 sourceAppName: valueWinner.parameter.app.name,
-                isSecret: isSecretValue,
+                isSecret: access.isSecret,
                 isSet: valueWinner.isSet,
-                canRead,
-                canWrite: !isSecretValue || isAdmin,
+                canRead: access.canRead,
+                canWrite: access.canWrite,
               };
             }
           }

@@ -14,6 +14,11 @@ import {
   encryptedParameterValueVersionData
 } from '../crypto/envelope.js';
 import { getParameterValueVersionLimit } from '../lib/planLimits.js';
+import {
+  canReadParameterValue,
+  isSecretValue,
+  secretForbiddenResponse
+} from '../lib/secretPolicy.js';
 
 /**
  * @param {import('fastify').FastifyInstance} fastify
@@ -21,18 +26,8 @@ import { getParameterValueVersionLimit } from '../lib/planLimits.js';
 export default async function parameterValueRoutes(fastify) {
   const { prisma } = fastify;
 
-  function canReadSecretValue(request, parameterValue) {
-    const isSecretValue = parameterValue.environment.isSecret || parameterValue.parameter.isSecret;
-    const isAdmin = ['ADMIN', 'OWNER'].includes(request.orgRole);
-    return !isSecretValue || isAdmin;
-  }
-
   function forbiddenSecretReply(reply) {
-    return reply.code(403).send({
-      error: 'Forbidden',
-      message: 'Requires ADMIN or higher',
-      statusCode: 403
-    });
+    return reply.code(403).send(secretForbiddenResponse());
   }
 
   async function createVersionSnapshot(tx, { parameterValue, userId, changeType, rolledBackFromVersionId = null }) {
@@ -187,7 +182,6 @@ export default async function parameterValueRoutes(fastify) {
       });
 
       // Group by environment, redacting values the caller is not allowed to read
-      const isAdmin = ['ADMIN', 'OWNER'].includes(request.orgRole);
       const grouped = {};
       for (const pv of parameterValues) {
         const envName = pv.environment.name;
@@ -197,13 +191,13 @@ export default async function parameterValueRoutes(fastify) {
             values: []
           };
         }
-        const isSecretValue = pv.environment.isSecret || pv.parameter.isSecret;
+        const canRead = canReadParameterValue(request.orgRole, pv);
         grouped[envName].values.push({
           id: pv.id,
           parameterId: pv.parameterId,
           parameterKey: pv.parameter.key,
           isSet: pv.isSet,
-          value: !pv.isSet || (isSecretValue && !isAdmin) ? null : decryptParameterValue(pv),
+          value: !pv.isSet || !canRead ? null : decryptParameterValue(pv),
         });
       }
 
@@ -300,7 +294,7 @@ export default async function parameterValueRoutes(fastify) {
         });
       }
 
-      if (!canReadSecretValue(request, parameterValue)) {
+      if (!canReadParameterValue(request.orgRole, parameterValue)) {
         await fastify.audit.log({
           request,
           orgId,
@@ -313,7 +307,7 @@ export default async function parameterValueRoutes(fastify) {
             versionId,
             parameterId: parameterValue.parameterId,
             environmentId: parameterValue.environmentId,
-            isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret
+            isSecret: isSecretValue(parameterValue)
           }
         });
         return forbiddenSecretReply(reply);
@@ -347,7 +341,7 @@ export default async function parameterValueRoutes(fastify) {
           versionNumber: version.versionNumber,
           parameterId: parameterValue.parameterId,
           environmentId: parameterValue.environmentId,
-          isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret,
+          isSecret: isSecretValue(parameterValue),
           isSet: version.isSet
         }
       });
@@ -390,7 +384,7 @@ export default async function parameterValueRoutes(fastify) {
         });
       }
 
-      if (!canReadSecretValue(request, parameterValue)) {
+      if (!canReadParameterValue(request.orgRole, parameterValue)) {
         await fastify.audit.log({
           request,
           orgId,
@@ -403,7 +397,7 @@ export default async function parameterValueRoutes(fastify) {
             versionId,
             parameterId: parameterValue.parameterId,
             environmentId: parameterValue.environmentId,
-            isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret
+            isSecret: isSecretValue(parameterValue)
           }
         });
         return forbiddenSecretReply(reply);
@@ -476,7 +470,7 @@ export default async function parameterValueRoutes(fastify) {
             versionId: sourceVersion.id,
             parameterId: parameterValue.parameterId,
             environmentId: parameterValue.environmentId,
-            isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret,
+            isSecret: isSecretValue(parameterValue),
             isSetBefore: parameterValue.isSet,
             isSetAfter: sourceVersion.isSet
           }
@@ -544,7 +538,7 @@ export default async function parameterValueRoutes(fastify) {
         });
       }
 
-      if (!canReadSecretValue(request, parameterValue)) {
+      if (!canReadParameterValue(request.orgRole, parameterValue)) {
         await fastify.audit.log({
           request,
           orgId,
@@ -556,7 +550,7 @@ export default async function parameterValueRoutes(fastify) {
           metadata: {
             parameterId: parameterValue.parameterId,
             environmentId: parameterValue.environmentId,
-            isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret
+            isSecret: isSecretValue(parameterValue)
           }
         });
         return forbiddenSecretReply(reply);
@@ -572,7 +566,7 @@ export default async function parameterValueRoutes(fastify) {
         metadata: {
           parameterId: parameterValue.parameterId,
           environmentId: parameterValue.environmentId,
-          isSecret: parameterValue.environment.isSecret || parameterValue.parameter.isSecret,
+          isSecret: isSecretValue(parameterValue),
           isSet: parameterValue.isSet
         }
       });
@@ -630,7 +624,7 @@ export default async function parameterValueRoutes(fastify) {
         });
       }
 
-      if (!canReadSecretValue(request, existingValue)) {
+      if (!canReadParameterValue(request.orgRole, existingValue)) {
         await fastify.audit.log({
           request,
           orgId,
@@ -642,7 +636,7 @@ export default async function parameterValueRoutes(fastify) {
           metadata: {
             parameterId: existingValue.parameterId,
             environmentId: existingValue.environmentId,
-            isSecret: existingValue.environment.isSecret || existingValue.parameter.isSecret
+            isSecret: isSecretValue(existingValue)
           }
         });
         return forbiddenSecretReply(reply);
@@ -702,7 +696,7 @@ export default async function parameterValueRoutes(fastify) {
           metadata: {
             parameterId: existingValue.parameterId,
             environmentId: existingValue.environmentId,
-            isSecret: existingValue.environment.isSecret || existingValue.parameter.isSecret,
+            isSecret: isSecretValue(existingValue),
             isSetBefore: existingValue.isSet,
             isSetAfter: isSet,
             valueHashAfter: fastify.audit.hashSensitiveValue(normalizedValue)
