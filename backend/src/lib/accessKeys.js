@@ -1,12 +1,18 @@
 import crypto from 'node:crypto';
 import { uuidv7 } from 'uuidv7';
+import { SCOPES } from './rbac.js';
 
 export const ACCESS_KEY_SCOPES = [
   'config:read',
+  'config:reveal',
+  'config:write',
   'parameters:read',
   'parameters:write',
+  'parameters:delete',
   'apps:read',
-  'environments:read'
+  'apps:manage',
+  'environments:read',
+  'environments:manage'
 ];
 
 export const ACCESS_KEY_TTL_PRESETS = {
@@ -73,7 +79,7 @@ export function validateScopes(scopes) {
     throw new Error('At least one scope is required');
   }
   const unique = [...new Set(scopes)];
-  const invalid = unique.filter(scope => !ACCESS_KEY_SCOPES.includes(scope));
+  const invalid = unique.filter(scope => !SCOPES.includes(scope));
   if (invalid.length > 0) {
     throw new Error(`Invalid scope: ${invalid[0]}`);
   }

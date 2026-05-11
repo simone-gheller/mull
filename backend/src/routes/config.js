@@ -5,6 +5,7 @@
  */
 import { getConfigSchema } from '../openapi/configRoutes.js';
 import { decryptParameterValue } from '../crypto/envelope.js';
+import { canRevealConfig } from '../lib/rbac.js';
 
 export default async function configRoutes(fastify, _options) {
   const prisma = fastify.prisma;
@@ -24,7 +25,9 @@ export default async function configRoutes(fastify, _options) {
           a.name as app_name,
           e.id as env_id,
           e.org_id as env_org_id,
-          e.name as env_name
+          e.name as env_name,
+          e.tier as env_tier,
+          e.protected as env_protected
         FROM apps a
         CROSS JOIN environments e
         WHERE a.id = ${appId}::uuid
@@ -39,7 +42,7 @@ export default async function configRoutes(fastify, _options) {
         });
       }
 
-      const { app_id, app_org_id, app_name, env_id, env_org_id, env_name } = validation[0];
+      const { app_id, app_org_id, app_name, env_id, env_org_id, env_name, env_tier, env_protected } = validation[0];
 
       // Check both belong to same orgId
       if (app_org_id !== orgId || env_org_id !== orgId) {
@@ -66,6 +69,23 @@ export default async function configRoutes(fastify, _options) {
         });
       }
       if (!await fastify.enforceAccessKeyResource(request, reply, { appId, environmentId: envId })) return;
+      const environment = { id: env_id, name: env_name, tier: env_tier, protected: env_protected };
+      if (!canRevealConfig(request, { environment })) {
+        await fastify.audit.log({
+          request,
+          orgId,
+          action: 'config.fetch',
+          resourceType: 'config',
+          resourceId: `${appId}:${envId}`,
+          outcome: 'DENIED',
+          metadata: { appId, envId, reason: 'missing_config_reveal', environmentTier: env_tier, environmentProtected: env_protected }
+        });
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Requires config:reveal for this environment',
+          statusCode: 403
+        });
+      }
 
       // 2. Query config_inheritance view
       const results = await prisma.$queryRaw`

@@ -14,6 +14,9 @@ const SENSITIVE_METADATA_KEYS = new Set([
   'secret'
 ]);
 
+const UUID_V7_PATTERN = '[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+const ORG_PATH_PATTERN = new RegExp(`^/orgs/(${UUID_V7_PATTERN})(?:/|$)`, 'i');
+
 function sanitizeMetadata(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
   return Object.fromEntries(
@@ -32,6 +35,50 @@ function requestActorDisplay(request, user) {
     return request.auth.identityName || request.auth.credentialPrefix || request.auth.identityId;
   }
   return actorDisplay(user);
+}
+
+function pathFromUrl(url) {
+  try {
+    return new URL(url, 'http://safeconfig.local').pathname;
+  } catch {
+    return url;
+  }
+}
+
+function isUserOrgMember(user, orgId) {
+  return Boolean(user?.organizations?.some(org => org.id === orgId));
+}
+
+export function resolveHttpFailureOrgId(request) {
+  const paramsOrgId = request.params?.orgId;
+  if (paramsOrgId) return paramsOrgId;
+
+  const pathOrgId = pathFromUrl(request.url).match(ORG_PATH_PATTERN)?.[1];
+  if (pathOrgId && (request.auth?.orgId === pathOrgId || isUserOrgMember(request.user, pathOrgId))) {
+    return pathOrgId;
+  }
+
+  const bodyOrgId = request.body && typeof request.body === 'object' && !Array.isArray(request.body)
+    ? request.body.orgId
+    : null;
+  if (bodyOrgId && (request.auth?.orgId === bodyOrgId || isUserOrgMember(request.user, bodyOrgId))) {
+    return bodyOrgId;
+  }
+
+  if (request.auth?.identityType === 'SERVICE' && request.auth.orgId) {
+    return request.auth.orgId;
+  }
+
+  return null;
+}
+
+export function httpFailureTarget(request) {
+  const route = request.routeOptions?.url || request.routerPath || pathFromUrl(request.url);
+  return {
+    route,
+    path: pathFromUrl(request.url),
+    label: `${request.method} ${route}`
+  };
 }
 
 async function loadOrgPlan(client, orgId) {
@@ -106,19 +153,22 @@ async function auditPlugin(fastify) {
     if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
     if (reply.statusCode < 400) return;
 
-    const orgId = request.params?.orgId ?? request.user.organizations?.[0]?.id;
+    const orgId = resolveHttpFailureOrgId(request);
     if (!orgId) return;
+    const target = httpFailureTarget(request);
 
     await log({
       request,
       orgId,
       action: reply.statusCode === 401 || reply.statusCode === 403 ? 'http.request_denied' : 'http.request_failed',
       resourceType: 'http_request',
-      resourceId: request.url,
+      resourceId: target.route,
+      resourceLabel: target.label,
       outcome: reply.statusCode === 401 || reply.statusCode === 403 ? 'DENIED' : 'FAILURE',
       metadata: {
         method: request.method,
-        url: request.url,
+        route: target.route,
+        path: target.path,
         statusCode: reply.statusCode
       }
     });

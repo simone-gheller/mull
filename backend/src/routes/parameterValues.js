@@ -14,11 +14,7 @@ import {
   encryptedParameterValueVersionData
 } from '../crypto/envelope.js';
 import { getParameterValueVersionLimit } from '../lib/planLimits.js';
-import {
-  canReadParameterValue,
-  isSecretValue,
-  secretForbiddenResponse
-} from '../lib/secretPolicy.js';
+import { canRevealConfig, canWriteConfig } from '../lib/rbac.js';
 
 /**
  * @param {import('fastify').FastifyInstance} fastify
@@ -26,12 +22,12 @@ import {
 export default async function parameterValueRoutes(fastify) {
   const { prisma } = fastify;
 
-  function accessRole(request) {
-    return request.auth?.identityType === 'SERVICE' ? 'ADMIN' : request.orgRole;
-  }
-
-  function forbiddenSecretReply(reply) {
-    return reply.code(403).send(secretForbiddenResponse());
+  function forbiddenConfigReply(reply, scope = 'config:reveal') {
+    return reply.code(403).send({
+      error: 'Forbidden',
+      message: `Requires ${scope} for this environment`,
+      statusCode: 403
+    });
   }
 
   async function createVersionSnapshot(tx, { parameterValue, userId, changeType, rolledBackFromVersionId = null }) {
@@ -91,7 +87,6 @@ export default async function parameterValueRoutes(fastify) {
             id: true,
             key: true,
             appId: true,
-            isSecret: true
           }
         },
         environment: {
@@ -99,7 +94,8 @@ export default async function parameterValueRoutes(fastify) {
             id: true,
             name: true,
             orgId: true,
-            isSecret: true,
+            tier: true,
+            protected: true,
             organization: {
               select: {
                 id: true,
@@ -165,14 +161,14 @@ export default async function parameterValueRoutes(fastify) {
               id: true,
               appId: true,
               key: true,
-              isSecret: true,
             }
           },
           environment: {
             select: {
               id: true,
               name: true,
-              isSecret: true,
+              tier: true,
+              protected: true,
             }
           }
         },
@@ -200,7 +196,7 @@ export default async function parameterValueRoutes(fastify) {
             values: []
           };
         }
-        const canRead = canReadParameterValue(accessRole(request), pv);
+        const canRead = canRevealConfig(request, { environment: pv.environment });
         grouped[envName].values.push({
           id: pv.id,
           parameterId: pv.parameterId,
@@ -311,7 +307,7 @@ export default async function parameterValueRoutes(fastify) {
         environmentId: parameterValue.environmentId
       })) return;
 
-      if (!canReadParameterValue(accessRole(request), parameterValue)) {
+      if (!canRevealConfig(request, { environment: parameterValue.environment })) {
         await fastify.audit.log({
           request,
           orgId,
@@ -324,10 +320,11 @@ export default async function parameterValueRoutes(fastify) {
             versionId,
             parameterId: parameterValue.parameterId,
             environmentId: parameterValue.environmentId,
-            isSecret: isSecretValue(parameterValue)
+            protected: parameterValue.environment.protected,
+            tier: parameterValue.environment.tier
           }
         });
-        return forbiddenSecretReply(reply);
+        return forbiddenConfigReply(reply);
       }
 
       const version = await prisma.parameterValueVersion.findFirst({
@@ -358,7 +355,8 @@ export default async function parameterValueRoutes(fastify) {
           versionNumber: version.versionNumber,
           parameterId: parameterValue.parameterId,
           environmentId: parameterValue.environmentId,
-          isSecret: isSecretValue(parameterValue),
+          protected: parameterValue.environment.protected,
+          tier: parameterValue.environment.tier,
           isSet: version.isSet
         }
       });
@@ -379,7 +377,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.post(
     '/parameters/values/:id/rollback',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:write'), fastify.requireRole('ADMIN')],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('config:write', { loadEnvironment: true })],
       schema: rollbackParameterValueSchema
     },
     async (request, reply) => {
@@ -405,7 +403,7 @@ export default async function parameterValueRoutes(fastify) {
         environmentId: parameterValue.environmentId
       })) return;
 
-      if (!canReadParameterValue(accessRole(request), parameterValue)) {
+      if (!canWriteConfig(request, { environment: parameterValue.environment })) {
         await fastify.audit.log({
           request,
           orgId,
@@ -418,10 +416,11 @@ export default async function parameterValueRoutes(fastify) {
             versionId,
             parameterId: parameterValue.parameterId,
             environmentId: parameterValue.environmentId,
-            isSecret: isSecretValue(parameterValue)
+            protected: parameterValue.environment.protected,
+            tier: parameterValue.environment.tier
           }
         });
-        return forbiddenSecretReply(reply);
+        return forbiddenConfigReply(reply, 'config:write');
       }
 
       const sourceVersion = await prisma.parameterValueVersion.findFirst({
@@ -491,7 +490,8 @@ export default async function parameterValueRoutes(fastify) {
             versionId: sourceVersion.id,
             parameterId: parameterValue.parameterId,
             environmentId: parameterValue.environmentId,
-            isSecret: isSecretValue(parameterValue),
+            protected: parameterValue.environment.protected,
+            tier: parameterValue.environment.tier,
             isSetBefore: parameterValue.isSet,
             isSetAfter: sourceVersion.isSet
           }
@@ -530,7 +530,6 @@ export default async function parameterValueRoutes(fastify) {
               id: true,
               key: true,
               appId: true,
-              isSecret: true
             }
           },
           environment: {
@@ -538,7 +537,8 @@ export default async function parameterValueRoutes(fastify) {
               id: true,
               name: true,
               orgId: true,
-              isSecret: true
+              tier: true,
+              protected: true
             }
           }
         }
@@ -563,7 +563,7 @@ export default async function parameterValueRoutes(fastify) {
         environmentId: parameterValue.environmentId
       })) return;
 
-      if (!canReadParameterValue(accessRole(request), parameterValue)) {
+      if (!canRevealConfig(request, { environment: parameterValue.environment })) {
         await fastify.audit.log({
           request,
           orgId,
@@ -575,10 +575,11 @@ export default async function parameterValueRoutes(fastify) {
           metadata: {
             parameterId: parameterValue.parameterId,
             environmentId: parameterValue.environmentId,
-            isSecret: isSecretValue(parameterValue)
+            protected: parameterValue.environment.protected,
+            tier: parameterValue.environment.tier
           }
         });
-        return forbiddenSecretReply(reply);
+        return forbiddenConfigReply(reply);
       }
 
       await fastify.audit.log({
@@ -591,7 +592,8 @@ export default async function parameterValueRoutes(fastify) {
         metadata: {
           parameterId: parameterValue.parameterId,
           environmentId: parameterValue.environmentId,
-          isSecret: isSecretValue(parameterValue),
+          protected: parameterValue.environment.protected,
+          tier: parameterValue.environment.tier,
           isSet: parameterValue.isSet
         }
       });
@@ -614,7 +616,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.put(
     '/parameters/values/:id',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:write'), fastify.requireRole('ADMIN')],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('config:write', { loadEnvironment: true })],
       schema: updateParameterValueSchema
     },
     async (request, reply) => {
@@ -626,10 +628,10 @@ export default async function parameterValueRoutes(fastify) {
         where: { id: id },
         include: {
           parameter: {
-            select: { id: true, key: true, appId: true, isSecret: true }
+            select: { id: true, key: true, appId: true }
           },
           environment: {
-            select: { id: true, orgId: true, isSecret: true }
+            select: { id: true, orgId: true, tier: true, protected: true }
           }
         }
       });
@@ -653,7 +655,7 @@ export default async function parameterValueRoutes(fastify) {
         environmentId: existingValue.environmentId
       })) return;
 
-      if (!canReadParameterValue(accessRole(request), existingValue)) {
+      if (!canWriteConfig(request, { environment: existingValue.environment })) {
         await fastify.audit.log({
           request,
           orgId,
@@ -665,10 +667,11 @@ export default async function parameterValueRoutes(fastify) {
           metadata: {
             parameterId: existingValue.parameterId,
             environmentId: existingValue.environmentId,
-            isSecret: isSecretValue(existingValue)
+            protected: existingValue.environment.protected,
+            tier: existingValue.environment.tier
           }
         });
-        return forbiddenSecretReply(reply);
+        return forbiddenConfigReply(reply, 'config:write');
       }
 
       const normalizedValue = value ?? '';
@@ -725,7 +728,8 @@ export default async function parameterValueRoutes(fastify) {
           metadata: {
             parameterId: existingValue.parameterId,
             environmentId: existingValue.environmentId,
-            isSecret: isSecretValue(existingValue),
+            protected: existingValue.environment.protected,
+            tier: existingValue.environment.tier,
             isSetBefore: existingValue.isSet,
             isSetAfter: isSet,
             valueHashAfter: fastify.audit.hashSensitiveValue(normalizedValue)

@@ -1,7 +1,12 @@
 import fp from 'fastify-plugin';
 import { isUuidV7 } from '../schemas/common.js';
-import { isSecretValue, roleAtLeast } from '../lib/secretPolicy.js';
 import { hasScope, isAccessKeyToken, parseAccessKeyToken, verifyAccessKeyToken } from '../lib/accessKeys.js';
+import {
+  environmentToContext,
+  hasPermission,
+  roleAtLeast,
+  roleToAuthFields
+} from '../lib/rbac.js';
 
 function userDisplay(user) {
   return user?.displayName || user?.email || user?.id || null;
@@ -10,7 +15,15 @@ function userDisplay(user) {
 function toUserWithMemberships(raw) {
   return {
     ...raw,
-    organizations: raw.organizations.map(m => ({ id: m.orgId, name: m.org.name, role: m.role }))
+    organizations: raw.organizations.map(m => ({
+      id: m.orgId,
+      name: m.org.name,
+      roleId: m.roleId,
+      roleKey: m.role.key,
+      roleName: m.role.name,
+      role: m.role.key,
+      permissions: m.role.permissions
+    }))
   };
 }
 
@@ -26,7 +39,11 @@ function decorateTestJwtAuth(request, user) {
     credentialPrefix: null,
     orgId: null,
     orgRole: null,
-    scopes: ['*'],
+    roleId: null,
+    roleKey: null,
+    roleName: null,
+    permissions: [],
+    scopes: [],
     appId: null,
     environmentId: null,
     delegatedUserId: user.id
@@ -45,6 +62,10 @@ function decorateAccessKeyAuth(request, { accessKey, delegatedUser }) {
     credentialPrefix: accessKey.tokenPrefix,
     orgId: accessKey.identity.type === 'SERVICE' ? accessKey.identity.orgId : null,
     orgRole: null,
+    roleId: null,
+    roleKey: null,
+    roleName: null,
+    permissions: [],
     scopes: accessKey.scopes,
     appId: accessKey.appId,
     environmentId: accessKey.environmentId,
@@ -63,12 +84,12 @@ async function testAuthPlugin(fastify) {
           identity: {
             include: {
               ownerUser: {
-                include: { organizations: { include: { org: { select: { id: true, name: true } } } } }
+                include: { organizations: { include: { org: { select: { id: true, name: true } }, role: true } } }
               }
             }
           },
           createdByUser: {
-            include: { organizations: { include: { org: { select: { id: true, name: true } } } } }
+            include: { organizations: { include: { org: { select: { id: true, name: true } }, role: true } } }
           }
         }
       }) : null;
@@ -97,7 +118,7 @@ async function testAuthPlugin(fastify) {
 
     const raw = await fastify.prisma.user.findUnique({
       where: { id: userId },
-      include: { organizations: { include: { org: { select: { id: true, name: true } } } } }
+      include: { organizations: { include: { org: { select: { id: true, name: true } }, role: true } } }
     });
     if (!raw) {
       return reply.code(401).send({ error: 'Unauthorized', message: 'User not found', statusCode: 401 });
@@ -125,14 +146,40 @@ async function testAuthPlugin(fastify) {
     if (!membership) {
       return reply.code(403).send({ error: 'Forbidden', message: 'Not a member of this organization', statusCode: 403 });
     }
-    request.orgRole = membership.role;
+    request.orgRole = membership.roleKey;
+    const roleFields = roleToAuthFields({
+      id: membership.roleId,
+      key: membership.roleKey,
+      name: membership.roleName,
+      permissions: membership.permissions
+    });
     request.auth.orgId = orgId;
-    request.auth.orgRole = membership.role;
+    request.auth.orgRole = membership.roleKey;
+    request.auth.roleId = roleFields.roleId;
+    request.auth.roleKey = roleFields.roleKey;
+    request.auth.roleName = roleFields.roleName;
+    request.auth.permissions = roleFields.permissions;
   });
 
-  fastify.decorate('requireScope', (scope) => {
+  fastify.decorate('requireScope', (scope, options = {}) => {
     return async function (request, reply) {
-      if (hasScope(request.auth, scope)) return;
+      let context = options.context ?? {};
+      if (options.loadEnvironment && request.params?.id) {
+        const value = await fastify.prisma.parameterValue.findUnique({
+          where: { id: request.params.id },
+          select: { environment: { select: { id: true, tier: true, protected: true } } }
+        });
+        context = environmentToContext(value?.environment);
+      }
+      if (request.auth?.credentialType === 'ACCESS_KEY') {
+        const roleAuth = { ...request.auth, credentialType: 'SUPABASE_JWT', scopes: [] };
+        if (
+          hasScope(request.auth, scope) &&
+          (request.auth.identityType === 'SERVICE' || hasPermission(roleAuth, scope, context))
+        ) return;
+      } else if (hasPermission(request.auth, scope, context)) {
+        return;
+      }
       return reply.code(403).send({ error: 'Forbidden', message: `Requires scope ${scope}`, statusCode: 403 });
     };
   });
@@ -159,29 +206,7 @@ async function testAuthPlugin(fastify) {
 
   fastify.decorate('requireRole', (minRole, options = {}) => {
     return async function (request, reply) {
-      if (options.onlyIfSecret) {
-        try {
-          let secret = false;
-          const appId = request.params.appId;
-          if (appId) {
-            return;
-          } else if (request.params.id) {
-            const pv = await fastify.prisma.parameterValue.findUnique({
-              where: { id: request.params.id },
-              include: {
-                parameter: { select: { isSecret: true } },
-                environment: { select: { isSecret: true } }
-              }
-            });
-            if (pv) {
-              secret = isSecretValue(pv);
-            }
-          }
-          if (!secret) return;
-        } catch {
-          return;
-        }
-      }
+      if (options.onlyIfSecret) return;
       if (request.auth?.credentialType === 'ACCESS_KEY' && request.auth.identityType === 'SERVICE') {
         return;
       }

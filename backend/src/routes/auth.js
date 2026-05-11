@@ -34,7 +34,10 @@ export default async function authRoutes(fastify, _options) {
                 properties: {
                   id: { type: 'string' },
                   name: { type: 'string' },
-                  role: { type: 'string', enum: ['USER', 'ADMIN', 'OWNER'] }
+                  role: { type: 'string' },
+                  roleId: { type: 'string' },
+                  roleKey: { type: 'string' },
+                  roleName: { type: 'string' }
                 }
               }
             }
@@ -75,6 +78,9 @@ export default async function authRoutes(fastify, _options) {
             credentialPrefix: { type: 'string', nullable: true },
             orgId: { type: 'string', nullable: true },
             orgRole: { type: 'string', nullable: true },
+            roleId: { type: 'string', nullable: true },
+            roleKey: { type: 'string', nullable: true },
+            roleName: { type: 'string', nullable: true },
             scopes: { type: 'array', items: { type: 'string' } },
             appId: { type: 'string', nullable: true },
             environmentId: { type: 'string', nullable: true },
@@ -114,6 +120,9 @@ export default async function authRoutes(fastify, _options) {
       credentialPrefix: request.auth.credentialPrefix,
       orgId: request.auth.orgId,
       orgRole: request.auth.orgRole,
+      roleId: request.auth.roleId,
+      roleKey: request.auth.roleKey,
+      roleName: request.auth.roleName,
       scopes: request.auth.scopes,
       appId: request.auth.appId,
       environmentId: request.auth.environmentId,
@@ -155,9 +164,14 @@ export default async function authRoutes(fastify, _options) {
     const { name } = request.body;
     const orgId = uuidv7();
     const org = await fastify.prisma.$transaction(async (tx) => {
+      const ownerRole = await tx.role.findFirst({
+        where: { orgId: null, key: 'OWNER' },
+        select: { id: true, key: true }
+      });
+      if (!ownerRole) throw new Error('OWNER role is not seeded');
       const createdOrg = await tx.organization.create({ data: { id: orgId, name } });
       await tx.userOrganization.create({
-        data: { userId: request.user.id, orgId, role: 'OWNER' },
+        data: { userId: request.user.id, orgId, roleId: ownerRole.id },
       });
       await fastify.audit.log({
         request,
@@ -166,7 +180,7 @@ export default async function authRoutes(fastify, _options) {
         resourceType: 'org',
         resourceId: orgId,
         resourceLabel: name,
-        metadata: { role: 'OWNER' }
+        metadata: { role: ownerRole.key, roleId: ownerRole.id }
       }, { tx });
       return createdOrg;
     });

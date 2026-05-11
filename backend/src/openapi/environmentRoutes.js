@@ -24,7 +24,8 @@ export const listEnvironmentsSchema = {
           id: { type: 'string', description: 'Environment ID' },
           orgId: { type: 'string', description: 'Organization ID' },
           name: { type: 'string', description: 'Environment name' },
-          isSecret: { type: 'boolean', description: 'Whether all values in this environment are always masked' }
+          tier: { type: 'string', enum: ['DEVELOPMENT', 'STAGING', 'PRODUCTION', 'CUSTOM'] },
+          protected: { type: 'boolean', description: 'Whether writes and reveals require protected-environment permission' }
         }
       }
     },
@@ -53,10 +54,8 @@ export const createEnvironmentSchema = {
         minLength: 1,
         description: 'Environment name (unique within organization)'
       },
-      isSecret: {
-        type: 'boolean',
-        description: 'Whether all values in this environment are always masked'
-      }
+      tier: { type: 'string', enum: ['DEVELOPMENT', 'STAGING', 'PRODUCTION', 'CUSTOM'], default: 'CUSTOM' },
+      protected: { type: 'boolean', description: 'Whether writes and reveals require protected-environment permission' }
     }
   },
   response: {
@@ -66,7 +65,8 @@ export const createEnvironmentSchema = {
         id: { type: 'string', description: 'Environment ID' },
         orgId: { type: 'string', description: 'Organization ID' },
         name: { type: 'string', description: 'Environment name' },
-        isSecret: { type: 'boolean', description: 'Whether all values in this environment are always masked' }
+        tier: { type: 'string', enum: ['DEVELOPMENT', 'STAGING', 'PRODUCTION', 'CUSTOM'] },
+        protected: { type: 'boolean' }
       }
     },
     400: errorResponse,

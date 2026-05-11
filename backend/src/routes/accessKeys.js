@@ -1,6 +1,7 @@
 import { uuidv7 } from 'uuidv7';
 import { uuidV7Param } from '../schemas/common.js';
 import {
+  ACCESS_KEY_SCOPES,
   createAccessKeyToken,
   expiresAtFromPreset,
   validateScopes
@@ -10,7 +11,7 @@ const ttlPresetSchema = { type: 'string', enum: ['30d', '90d', '365d', 'never'],
 const scopeSchema = {
   type: 'array',
   minItems: 1,
-  items: { type: 'string', enum: ['config:read', 'parameters:read', 'parameters:write', 'apps:read', 'environments:read'] }
+  items: { type: 'string', enum: ACCESS_KEY_SCOPES }
 };
 
 const accessKeyResponse = {
@@ -199,7 +200,7 @@ export default async function accessKeyRoutes(fastify) {
   });
 
   fastify.get('/orgs/:orgId/access-keys', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireScope('access_keys:read')],
     schema: {
       tags: ['access-keys'],
       security: [{ bearerAuth: [] }],
@@ -220,7 +221,7 @@ export default async function accessKeyRoutes(fastify) {
   });
 
   fastify.post('/orgs/:orgId/access-keys', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireScope('access_keys:manage')],
     schema: {
       tags: ['access-keys'],
       security: [{ bearerAuth: [] }],
@@ -298,7 +299,7 @@ export default async function accessKeyRoutes(fastify) {
   });
 
   fastify.delete('/orgs/:orgId/access-keys/:keyId', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireScope('access_keys:manage')],
     schema: {
       tags: ['access-keys'],
       security: [{ bearerAuth: [] }],

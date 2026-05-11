@@ -97,7 +97,7 @@ export default async function appRoutes(fastify, _options) {
 
   // PATCH /apps/:appId - Update app
   fastify.patch('/apps/:appId', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('apps:manage')],
     schema: { params: appIdParamsSchema },
   }, async (request, reply) => {
     const { orgId, appId } = request.params;
@@ -156,7 +156,7 @@ export default async function appRoutes(fastify, _options) {
 
   // DELETE /apps/:appId - Delete app
   fastify.delete('/apps/:appId', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('apps:manage')],
     schema: { params: appIdParamsSchema },
   }, async (request, reply) => {
     const { orgId, appId } = request.params;
@@ -202,7 +202,7 @@ export default async function appRoutes(fastify, _options) {
 
   // POST /apps - Create app
   fastify.post('/apps', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('apps:manage')],
     schema: createAppSchema
   }, async (request, reply) => {
     const { name, parentId } = request.body;

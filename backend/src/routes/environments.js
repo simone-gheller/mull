@@ -27,7 +27,8 @@ export default async function environmentRoutes(fastify, _options) {
           id: true,
           orgId: true,
           name: true,
-          isSecret: true
+          tier: true,
+          protected: true
         },
         orderBy: { name: 'asc' }
       });
@@ -46,7 +47,7 @@ export default async function environmentRoutes(fastify, _options) {
 
   // DELETE /environments/:envId - Delete environment (ADMIN+)
   fastify.delete('/environments/:envId', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('environments:manage')],
     schema: deleteEnvironmentSchema,
   }, async (request, reply) => {
     const { orgId, envId } = request.params;
@@ -54,7 +55,7 @@ export default async function environmentRoutes(fastify, _options) {
     try {
       const env = await prisma.environment.findFirst({
         where: { id: envId, orgId },
-        select: { id: true, name: true, isSecret: true },
+        select: { id: true, name: true, tier: true, protected: true },
       });
 
       if (!env) {
@@ -69,7 +70,7 @@ export default async function environmentRoutes(fastify, _options) {
         resourceType: 'environment',
         resourceId: env.id,
         resourceLabel: env.name,
-        metadata: { isSecret: env.isSecret }
+        metadata: { tier: env.tier, protected: env.protected }
       });
       return reply.code(204).send();
 
@@ -79,12 +80,60 @@ export default async function environmentRoutes(fastify, _options) {
     }
   });
 
+  fastify.patch('/environments/:envId', {
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('environments:manage')],
+    schema: {
+      tags: ['environments'],
+      security: [{ bearerAuth: [] }],
+      params: deleteEnvironmentSchema.params,
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', minLength: 1, maxLength: 100 },
+          tier: { type: 'string', enum: ['DEVELOPMENT', 'STAGING', 'PRODUCTION', 'CUSTOM'] },
+          protected: { type: 'boolean' }
+        }
+      }
+    },
+  }, async (request, reply) => {
+    const { orgId, envId } = request.params;
+    const existing = await prisma.environment.findFirst({
+      where: { id: envId, orgId },
+      select: { id: true }
+    });
+    if (!existing) {
+      return reply.code(404).send({ error: 'Not Found', message: 'Environment not found', statusCode: 404 });
+    }
+
+    const tier = request.body.tier;
+    const environment = await prisma.environment.update({
+      where: { id: envId },
+      data: {
+        ...(request.body.name !== undefined ? { name: request.body.name.trim() } : {}),
+        ...(tier !== undefined ? { tier } : {}),
+        ...(request.body.protected !== undefined ? { protected: request.body.protected } : {})
+      },
+      select: { id: true, orgId: true, name: true, tier: true, protected: true }
+    });
+    await fastify.audit.log({
+      request,
+      orgId,
+      action: 'environment.update',
+      resourceType: 'environment',
+      resourceId: environment.id,
+      resourceLabel: environment.name,
+      metadata: { tier: environment.tier, protected: environment.protected }
+    });
+    return reply.send(environment);
+  });
+
   // POST /environments - Create environment
   fastify.post('/environments', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('environments:manage')],
     schema: createEnvironmentSchema
   }, async (request, reply) => {
-    const { name, isSecret } = request.body;
+    const { name, tier = 'CUSTOM' } = request.body;
+    const protectedValue = request.body.protected ?? tier === 'PRODUCTION';
     const { orgId } = request.params;
 
     try {
@@ -94,13 +143,15 @@ export default async function environmentRoutes(fastify, _options) {
           id: uuidv7(),
           orgId: orgId,
           name: name.trim(),
-          ...(isSecret !== undefined ? { isSecret } : {}),
+          tier,
+          protected: protectedValue,
         },
         select: {
           id: true,
           orgId: true,
           name: true,
-          isSecret: true
+          tier: true,
+          protected: true
         }
       });
 
@@ -121,7 +172,7 @@ export default async function environmentRoutes(fastify, _options) {
         resourceType: 'environment',
         resourceId: environment.id,
         resourceLabel: environment.name,
-        metadata: { isSecret: environment.isSecret, syncedParameterValues: syncedCount }
+        metadata: { tier: environment.tier, protected: environment.protected, syncedParameterValues: syncedCount }
       });
 
       return reply.code(201).send(environment);
