@@ -26,6 +26,10 @@ import {
 export default async function parameterValueRoutes(fastify) {
   const { prisma } = fastify;
 
+  function accessRole(request) {
+    return request.auth?.identityType === 'SERVICE' ? 'ADMIN' : request.orgRole;
+  }
+
   function forbiddenSecretReply(reply) {
     return reply.code(403).send(secretForbiddenResponse());
   }
@@ -114,7 +118,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.get(
     '/parameters/:appId/values',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:read')],
       schema: getParameterValuesSchema
     },
     async (request, reply) => {
@@ -139,6 +143,7 @@ export default async function parameterValueRoutes(fastify) {
           message: 'App does not belong to this organization'
         });
       }
+      if (!await fastify.enforceAccessKeyResource(request, reply, { appId })) return;
 
       // Get all parameters for this app
       const parameters = await prisma.parameter.findMany({
@@ -150,11 +155,15 @@ export default async function parameterValueRoutes(fastify) {
 
       // Get all parameter values for these parameters
       const parameterValues = await prisma.parameterValue.findMany({
-        where: { parameterId: { in: parameterIds } },
+        where: {
+          parameterId: { in: parameterIds },
+          ...(request.auth?.credentialType === 'ACCESS_KEY' && request.auth.environmentId ? { environmentId: request.auth.environmentId } : {})
+        },
         include: {
           parameter: {
             select: {
               id: true,
+              appId: true,
               key: true,
               isSecret: true,
             }
@@ -191,7 +200,7 @@ export default async function parameterValueRoutes(fastify) {
             values: []
           };
         }
-        const canRead = canReadParameterValue(request.orgRole, pv);
+        const canRead = canReadParameterValue(accessRole(request), pv);
         grouped[envName].values.push({
           id: pv.id,
           parameterId: pv.parameterId,
@@ -211,7 +220,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.get(
     '/parameters/values/:id/history',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:read')],
       schema: getParameterValueHistorySchema
     },
     async (request, reply) => {
@@ -231,6 +240,10 @@ export default async function parameterValueRoutes(fastify) {
           message: 'Parameter value does not belong to this organization'
         });
       }
+      if (!await fastify.enforceAccessKeyResource(request, reply, {
+        appId: parameterValue.parameter.appId,
+        environmentId: parameterValue.environmentId
+      })) return;
 
       const versions = await prisma.parameterValueVersion.findMany({
         where: { parameterValueId: id },
@@ -273,7 +286,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.get(
     '/parameters/values/:id/history/:versionId',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:read')],
       schema: revealParameterValueVersionSchema
     },
     async (request, reply) => {
@@ -293,8 +306,12 @@ export default async function parameterValueRoutes(fastify) {
           message: 'Parameter value does not belong to this organization'
         });
       }
+      if (!await fastify.enforceAccessKeyResource(request, reply, {
+        appId: parameterValue.parameter.appId,
+        environmentId: parameterValue.environmentId
+      })) return;
 
-      if (!canReadParameterValue(request.orgRole, parameterValue)) {
+      if (!canReadParameterValue(accessRole(request), parameterValue)) {
         await fastify.audit.log({
           request,
           orgId,
@@ -362,7 +379,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.post(
     '/parameters/values/:id/rollback',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:write'), fastify.requireRole('ADMIN')],
       schema: rollbackParameterValueSchema
     },
     async (request, reply) => {
@@ -383,8 +400,12 @@ export default async function parameterValueRoutes(fastify) {
           message: 'Parameter value does not belong to this organization'
         });
       }
+      if (!await fastify.enforceAccessKeyResource(request, reply, {
+        appId: parameterValue.parameter.appId,
+        environmentId: parameterValue.environmentId
+      })) return;
 
-      if (!canReadParameterValue(request.orgRole, parameterValue)) {
+      if (!canReadParameterValue(accessRole(request), parameterValue)) {
         await fastify.audit.log({
           request,
           orgId,
@@ -426,7 +447,7 @@ export default async function parameterValueRoutes(fastify) {
       const updatedValue = await prisma.$transaction(async tx => {
         await createVersionSnapshot(tx, {
           parameterValue,
-          userId: request.user.id,
+          userId: request.auth.delegatedUserId,
           changeType: 'ROLLBACK',
           rolledBackFromVersionId: sourceVersion.id
         });
@@ -494,7 +515,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.get(
     '/parameters/values/:id',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:read')],
       schema: getParameterValueByIdSchema
     },
     async (request, reply) => {
@@ -537,8 +558,12 @@ export default async function parameterValueRoutes(fastify) {
           message: 'Parameter value does not belong to this organization'
         });
       }
+      if (!await fastify.enforceAccessKeyResource(request, reply, {
+        appId: parameterValue.parameter.appId,
+        environmentId: parameterValue.environmentId
+      })) return;
 
-      if (!canReadParameterValue(request.orgRole, parameterValue)) {
+      if (!canReadParameterValue(accessRole(request), parameterValue)) {
         await fastify.audit.log({
           request,
           orgId,
@@ -589,7 +614,7 @@ export default async function parameterValueRoutes(fastify) {
   fastify.put(
     '/parameters/values/:id',
     {
-      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+      onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:write'), fastify.requireRole('ADMIN')],
       schema: updateParameterValueSchema
     },
     async (request, reply) => {
@@ -601,7 +626,7 @@ export default async function parameterValueRoutes(fastify) {
         where: { id: id },
         include: {
           parameter: {
-            select: { id: true, key: true, isSecret: true }
+            select: { id: true, key: true, appId: true, isSecret: true }
           },
           environment: {
             select: { id: true, orgId: true, isSecret: true }
@@ -623,8 +648,12 @@ export default async function parameterValueRoutes(fastify) {
           message: 'Parameter value does not belong to this organization'
         });
       }
+      if (!await fastify.enforceAccessKeyResource(request, reply, {
+        appId: existingValue.parameter.appId,
+        environmentId: existingValue.environmentId
+      })) return;
 
-      if (!canReadParameterValue(request.orgRole, existingValue)) {
+      if (!canReadParameterValue(accessRole(request), existingValue)) {
         await fastify.audit.log({
           request,
           orgId,
@@ -654,7 +683,7 @@ export default async function parameterValueRoutes(fastify) {
       const updatedValue = await prisma.$transaction(async tx => {
         await createVersionSnapshot(tx, {
           parameterValue: existingValue,
-          userId: request.user.id,
+          userId: request.auth.delegatedUserId,
           changeType: isSet ? 'UPDATE' : 'CLEAR'
         });
 

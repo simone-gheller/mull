@@ -7,6 +7,7 @@ import { useInvites } from '../hooks/useInvites';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Avatar } from '../components/settings/Avatar';
+import AccessKeysPanel from '../components/settings/AccessKeysPanel';
 import apiService from '../services/api';
 
 function relativeExpiry(dateStr) {
@@ -344,16 +345,7 @@ function MembersTab({ org, members, membersLoading, membersError, currentUserId,
 function TokensTab({ T }) {
   return (
     <Section T={T} title="Organization API Tokens" description="Shared tokens scoped to this org — visible to admins">
-      <div style={{ textAlign: 'center', padding: '24px 0 20px' }}>
-        <div style={{ fontFamily: FONTS.mono, fontSize: '22px', color: T.textMuted, marginBottom: '10px' }}>▷</div>
-        <div style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: '13px', color: T.textSecondary, marginBottom: '4px' }}>
-          Org tokens are not available yet.
-        </div>
-        <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted, marginBottom: '16px' }}>
-          Scoped machine credentials will appear here once token management ships.
-        </div>
-        <Btn T={T} variant="terminal" size="sm" icon="+" disabled>new org token</Btn>
-      </div>
+      <AccessKeysPanel T={T} mode="org" />
     </Section>
   );
 }

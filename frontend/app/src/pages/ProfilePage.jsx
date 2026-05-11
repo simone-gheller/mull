@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTheme, FONTS, Btn, Badge, Input } from '@mull/ui';
 import { useProfile } from '../hooks/useProfile';
 import { Avatar } from '../components/settings/Avatar';
+import AccessKeysPanel from '../components/settings/AccessKeysPanel';
 
 function Section({ title, description, children, T, danger }) {
   return (
@@ -167,11 +168,7 @@ export default function ProfilePage() {
 
       {/* Personal tokens */}
       <Section T={T} title="Personal API Tokens" description="Tokens scoped to your user — not shared with the org">
-        <div style={{ textAlign: 'center', padding: '16px 0' }}>
-          <div style={{ fontFamily: FONTS.mono, fontSize: '22px', color: T.textMuted, marginBottom: '10px' }}>▷</div>
-          <div style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: '13px', color: T.textSecondary, marginBottom: '4px' }}>Personal tokens coming soon</div>
-          <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>Tokens scoped to your user for CI/CD and API access.</div>
-        </div>
+        <AccessKeysPanel T={T} mode="personal" />
       </Section>
 
       {/* Danger zone */}

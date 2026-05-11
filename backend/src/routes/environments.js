@@ -12,14 +12,17 @@ export default async function environmentRoutes(fastify, _options) {
 
   // GET /environments - List environments
   fastify.get('/environments', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('environments:read')],
     schema: listEnvironmentsSchema
   }, async (request, reply) => {
     const { orgId } = request.params;
 
     try {
       const environments = await prisma.environment.findMany({
-        where: { orgId: orgId },
+        where: {
+          orgId: orgId,
+          ...(request.auth?.credentialType === 'ACCESS_KEY' && request.auth.environmentId ? { id: request.auth.environmentId } : {})
+        },
         select: {
           id: true,
           orgId: true,

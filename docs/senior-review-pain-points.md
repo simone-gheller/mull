@@ -1,7 +1,7 @@
 # Senior Review Pain Points
 
 Review date: 2026-05-09.
-Last updated after audit trail, audit retention, and hashed invite tokens: 2026-05-10.
+Last updated after access keys and identity auth model: 2026-05-11.
 
 This file is a backlog/reference document. Items marked **Resolved** were valid findings at review time and have since been addressed.
 
@@ -76,13 +76,20 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
 23. **Resolved — secret masking and authorization policy was scattered.**
    Backend secret value policy is centralized in `backend/src/lib/secretPolicy.js`. Route decorators, route handlers, grouped value redaction, resolved parameter access metadata, and tests now share the same role hierarchy and parameter/environment secrecy rules.
 
+24. **Resolved — scoped API/service tokens were missing.**
+   `Identity` + `AccessKey` now support personal access tokens and org service tokens with one-time raw display, hashed storage, prefix display, TTL presets, revoke, last-used tracking, scopes, optional app/environment bindings, `/auth/whoami`, frontend management UI, audit attribution, and backend integration coverage.
+
+25. **Resolved — personal tokens were a "coming soon" route.**
+   `/settings/tokens` now renders a real personal token management page, and the organization tokens tab manages service tokens.
+
 ## Current Critical Risks
 
-7. The rendered config endpoint returns full config to any authenticated organization member. `GET /orgs/:orgId/config/:appId/:envId` is audited, but it still uses user JWT auth only, with no service tokens, scopes, or dedicated runtime role gate.
+7. **Partially resolved — runtime config auth now has scoped access keys.**
+   `GET /orgs/:orgId/config/:appId/:envId` supports `config:read` access keys and optional app/environment bindings. Remaining risk: RBAC is still coarse (`USER`/`ADMIN`/`OWNER` plus key scopes), and OIDC/workload identity is not implemented.
 
 ## Backend And Security Debt
 
-12. API/service tokens are missing. A B2B config product needs scoped machine credentials for CI/CD, deploy systems, runtime config fetching, and rotation.
+12. Access key v1 is implemented, but rotation UX and OIDC/workload identity remain future work. OIDC should be modeled as an auth method on `Identity`, not as a replacement for `AccessKey`.
 
 17. The `config_inheritance` raw SQL/view path is still high risk. It now has direct `/config` integration coverage, but the path still deserves care because it is raw SQL and returns the product's most sensitive output.
 
@@ -90,7 +97,7 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
 
 ## Frontend And Product Debt
 
-24. Personal tokens are still a "coming soon" route.
+24. Access key UI exists for PATs and org service tokens. It should still receive product polish before public launch: clearer scope copy, safer revoke confirmation, and empty/loading/error states tuned for CLI users.
 
 28. The frontend has no automated tests. For current maturity, Playwright golden paths would be more valuable than component tests with heavy mocks.
 
@@ -104,17 +111,21 @@ This file is a backlog/reference document. Items marked **Resolved** were valid 
 
 32. Partially resolved: integration tests now cover role policy, config rendering, invite acceptance edge cases, encryption behavior, inheritance fallback, and the audit action matrix. Frontend route behavior and additional auth/role edge cases still need a quicker safety net.
 
+32a. Access key unit and integration coverage exists for parsing, hashing, whoami, service-token config fetch, missing-scope denial, and PAT role checks.
+
 33. Frontend production build succeeds, and route-level lazy loading now avoids a single route bundle. Chunk size should continue to be watched.
 
 34. Build output for `frontend/app` is no longer one large JS file after lazy route splitting, but aggregate JS remains worth monitoring for the current feature set.
 
 ## Relevant Missing Features
 
-35. Scoped org/app/environment API tokens with one-time display, hashed storage, rotation, revoke, last-used timestamp, and least-privilege scopes.
+35. Access key rotation flow and bulk revoke/disable identity controls.
 
 36. Member role-change auditing once role management ships.
 
-38. Role and permission management: change role, remove member, transfer ownership, protect against removing/downgrading the last owner, and redesign the coarse `USER`/`ADMIN` split into explicit capabilities such as config read/write and secret read/write.
+38. Role and permission management: change role, remove member, transfer ownership, protect against removing/downgrading the last owner, and redesign the coarse `USER`/`ADMIN` split into explicit capabilities such as config read/write and secret read/write. Access key scopes are a foundation for this future RBAC model but do not replace member-level RBAC yet.
+
+39. OIDC/workload identity auth methods for GitHub Actions, GitLab, Kubernetes, and cloud workloads.
 
 41. CI setup that can run backend integration tests against an ephemeral database.
 

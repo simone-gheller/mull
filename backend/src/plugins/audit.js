@@ -27,6 +27,13 @@ function actorDisplay(user) {
   return user.displayName || user.email || user.id;
 }
 
+function requestActorDisplay(request, user) {
+  if (request?.auth?.credentialType === 'ACCESS_KEY') {
+    return request.auth.identityName || request.auth.credentialPrefix || request.auth.identityId;
+  }
+  return actorDisplay(user);
+}
+
 async function loadOrgPlan(client, orgId) {
   const org = await client.organization.findUnique({
     where: { id: orgId },
@@ -53,8 +60,8 @@ async function auditPlugin(fastify) {
         id: uuidv7(),
         orgId,
         actorUserId: event.actorUserId ?? user?.id ?? null,
-        actorType: event.actorType ?? (user ? 'USER' : 'ANONYMOUS'),
-        actorDisplay: event.actorDisplay ?? actorDisplay(user),
+        actorType: event.actorType ?? (request?.auth?.credentialType === 'ACCESS_KEY' ? 'API_TOKEN' : (user ? 'USER' : 'ANONYMOUS')),
+        actorDisplay: event.actorDisplay ?? requestActorDisplay(request, user),
         action: event.action,
         resourceType: event.resourceType,
         resourceId: event.resourceId ?? null,
@@ -63,7 +70,16 @@ async function auditPlugin(fastify) {
         requestId: event.requestId ?? request?.id ?? null,
         ip: event.ip ?? request?.ip ?? null,
         userAgent: event.userAgent ?? request?.headers?.['user-agent'] ?? null,
-        metadata: sanitizeMetadata(event.metadata),
+        metadata: sanitizeMetadata({
+          ...(request?.auth?.credentialType === 'ACCESS_KEY' ? {
+            credentialId: request.auth.credentialId,
+            credentialPrefix: request.auth.credentialPrefix,
+            identityId: request.auth.identityId,
+            identityName: request.auth.identityName,
+            delegatedUserId: request.auth.delegatedUserId
+          } : {}),
+          ...event.metadata
+        }),
         expiresAt: getAuditExpiresAt(plan)
       }
     });

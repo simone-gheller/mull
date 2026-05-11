@@ -26,9 +26,13 @@ function buildSummary(items) {
 export default async function parameterRoutes(fastify, _options) {
   const prisma = fastify.prisma;
 
+  function accessRole(request) {
+    return request.auth?.identityType === 'SERVICE' ? 'ADMIN' : request.orgRole;
+  }
+
   // GET /parameters/resolved - Full inheritance chain for an app
   fastify.get('/parameters/resolved', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:read')],
     schema: resolvedParametersSchema,
   }, async (request, reply) => {
     const { orgId } = request.params;
@@ -46,6 +50,7 @@ export default async function parameterRoutes(fastify, _options) {
 
       if (!app) return reply.code(404).send({ error: 'Not Found', message: 'App not found', statusCode: 404 });
       if (app.orgId !== orgId) return reply.code(403).send({ error: 'Forbidden', message: 'App does not belong to this organization', statusCode: 403 });
+      if (!await fastify.enforceAccessKeyResource(request, reply, { appId })) return;
 
       let environment = null;
       if (environmentId) {
@@ -55,6 +60,7 @@ export default async function parameterRoutes(fastify, _options) {
         });
         if (!environment) return reply.code(404).send({ error: 'Not Found', message: 'Environment not found', statusCode: 404 });
         if (environment.orgId !== orgId) return reply.code(403).send({ error: 'Forbidden', message: 'Environment does not belong to this organization', statusCode: 403 });
+        if (!await fastify.enforceAccessKeyResource(request, reply, { environmentId })) return;
       }
 
       // Full chain from root to current: [...ancestors, appId]
@@ -123,7 +129,7 @@ export default async function parameterRoutes(fastify, _options) {
               .find(candidate => candidate?.isSet);
 
             if (!valueWinner) {
-              const access = describeValueAccess(request.orgRole, {
+              const access = describeValueAccess(accessRole(request), {
                 parameter: winner,
                 environment,
               });
@@ -141,7 +147,7 @@ export default async function parameterRoutes(fastify, _options) {
                 canWrite: access.canWrite,
               };
             } else {
-              const access = describeValueAccess(request.orgRole, {
+              const access = describeValueAccess(accessRole(request), {
                 parameter: valueWinner.parameter,
                 environment,
               });
@@ -199,7 +205,7 @@ export default async function parameterRoutes(fastify, _options) {
 
   // POST /parameters/override - Create or retrieve an override parameter in a child app
   fastify.post('/parameters/override', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:write'), fastify.requireRole('ADMIN')],
     schema: createParameterOverrideSchema,
   }, async (request, reply) => {
     const { orgId } = request.params;
@@ -217,6 +223,7 @@ export default async function parameterRoutes(fastify, _options) {
 
       if (!app) return reply.code(404).send({ error: 'Not Found', message: 'App not found', statusCode: 404 });
       if (app.orgId !== orgId) return reply.code(403).send({ error: 'Forbidden', message: 'App does not belong to this organization', statusCode: 403 });
+      if (!await fastify.enforceAccessKeyResource(request, reply, { appId })) return;
 
       // Find or create the override parameter
       let parameter = await prisma.parameter.findUnique({
@@ -274,7 +281,7 @@ export default async function parameterRoutes(fastify, _options) {
 
   // GET /parameters - List parameters for an app
   fastify.get('/parameters', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:read')],
     schema: listParametersSchema
   }, async (request, reply) => {
     const { orgId } = request.params;
@@ -302,6 +309,7 @@ export default async function parameterRoutes(fastify, _options) {
           statusCode: 403
         });
       }
+      if (!await fastify.enforceAccessKeyResource(request, reply, { appId })) return;
 
       // Get parameters for the app
       const parameters = await prisma.parameter.findMany({
@@ -330,7 +338,7 @@ export default async function parameterRoutes(fastify, _options) {
 
   // POST /parameters - Create parameter with empty values for all environments
   fastify.post('/parameters', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:write'), fastify.requireRole('ADMIN')],
     schema: createParameterSchema
   }, async (request, reply) => {
     const { appId, key, description, isSecret } = request.body;
@@ -358,6 +366,7 @@ export default async function parameterRoutes(fastify, _options) {
           statusCode: 403
         });
       }
+      if (!await fastify.enforceAccessKeyResource(request, reply, { appId })) return;
 
       // Create the parameter
       const parameter = await prisma.parameter.create({
@@ -428,7 +437,7 @@ export default async function parameterRoutes(fastify, _options) {
   });
 
   fastify.post('/exports/parameters', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('parameters:read')],
     schema: {
       tags: ['parameters'],
       security: [{ bearerAuth: [] }],
@@ -465,6 +474,7 @@ export default async function parameterRoutes(fastify, _options) {
       });
       return reply.code(403).send({ error: 'Forbidden', message: 'App does not belong to this organization', statusCode: 403 });
     }
+    if (!await fastify.enforceAccessKeyResource(request, reply, { appId })) return;
 
     const parameterCount = await prisma.parameter.count({ where: { appId } });
     await fastify.audit.log({

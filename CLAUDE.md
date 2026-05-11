@@ -128,6 +128,30 @@ model ParameterValue {
   encryptedAt     DateTime @map("encrypted_at")
   isSet           Boolean  @default(false) @map("is_set")
 }
+
+model Identity {
+  id          String       @id @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  type        IdentityType                         // USER | SERVICE
+  name        String
+  ownerUserId String?      @map("owner_user_id") @db.Uuid
+  disabledAt  DateTime?    @map("disabled_at")
+}
+
+model AccessKey {
+  id              String   @id @db.Uuid
+  identityId      String   @map("identity_id") @db.Uuid
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  name            String
+  tokenHash       String   @unique @map("token_hash")
+  tokenPrefix     String   @map("token_prefix")
+  scopes          String[]
+  appId           String?  @map("app_id") @db.Uuid
+  environmentId   String?  @map("environment_id") @db.Uuid
+  expiresAt       DateTime? @map("expires_at")
+  lastUsedAt      DateTime? @map("last_used_at")
+  revokedAt       DateTime? @map("revoked_at")
+}
 ```
 
 **Key invariants:**
@@ -137,6 +161,9 @@ model ParameterValue {
 - `Organization.users` does NOT exist — use `Organization.members` (the join table relation).
 - `ParameterValue.value` does NOT exist. Values are encrypted at rest.
 - `ParameterValue.isSet` is the non-secret state flag for inheritance. `false` means "unset locally / inherit"; `true` means "this local value shadows ancestors".
+- Access keys are modeled as `Identity` (actor) + `AccessKey` (credential). Raw access keys are shown once and never stored; DB stores only `tokenHash` and `tokenPrefix`.
+- PAT format is `mull_pat_<keyId>_<secret>`; org service-token format is `mull_st_<keyId>_<secret>`.
+- Access key scopes are `config:read`, `parameters:read`, `parameters:write`, `apps:read`, and `environments:read`. Optional `appId`/`environmentId` bindings restrict where the key can be used.
 
 ### User Creation Flow (Registration)
 
@@ -161,18 +188,44 @@ The `authenticate` backend decorator is a **pure lookup** — it never creates u
 ### Authentication (`backend/src/plugins/auth.js`)
 
 Decorators registered on Fastify:
-- **`authenticate`** — verifies Supabase JWT via JWKS, looks up user+orgs via Prisma, attaches `request.user = { ...user, organizations: [{id, name, role}] }`
-- **`validateOrgAccess`** — checks `request.user.organizations` for the `:orgId` param, sets `request.orgRole`. Returns 403 if not a member.
-- **`requireRole(role)`** — checks `request.orgRole` (not `request.user.role`). Must come after `validateOrgAccess` in preHandler array.
+- **`authenticate`** — accepts Supabase JWTs plus `mull_pat_*`/`mull_st_*` access keys. It normalizes every authenticated request into `request.auth`.
+- **`validateOrgAccess`** — for JWT/PAT checks user membership in `:orgId`; for service tokens checks the service identity belongs to `:orgId`.
+- **`requireScope(scope)`** — checks access-key scopes. JWT sessions have `scopes: ['*']`.
+- **`requireJwtAuth()`** — keeps account/org/admin management endpoints user-session only.
+- **`requireRole(role)`** — checks `request.orgRole` for human user/PAT requests. Service tokens use scopes and bindings, not member roles.
+- **`enforceAccessKeyResource(request, reply, { appId, environmentId })`** — enforces optional access-key app/environment bindings.
 
 Usage pattern: `preHandler: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('OWNER')]`
+
+`request.auth` shape:
+
+```js
+{
+  identityType,      // USER | SERVICE
+  identityId,
+  identityName,
+  credentialType,    // SUPABASE_JWT | ACCESS_KEY
+  credentialId,
+  credentialPrefix,
+  orgId,
+  orgRole,
+  scopes,
+  appId,
+  environmentId,
+  delegatedUserId
+}
+```
+
+`request.user` remains for compatibility. For service tokens it is the delegated owner/creator user used for legacy `createdByUserId`, while audit records the access key identity as the real actor.
 
 ### Route Structure
 
 **Auth routes** (no org context — `backend/src/routes/auth.js`):
 - `GET /auth/me` — returns `{ id, email, displayName, organizations: [{id, name, role}] }`
+- `GET /auth/whoami` — returns normalized actor/auth context for JWT, PAT, and service-token callers; use for CLI/SDK org discovery
 - `PATCH /auth/me` — update displayName
 - `POST /orgs` — create additional org for authenticated user (OWNER role assigned)
+- `GET/POST/DELETE /auth/access-keys` — personal access token management
 - `POST /auth/admin/example` — example admin-only endpoint
 
 **Org-scoped routes** (all prefixed `/orgs/:orgId`, all have `validateOrgAccess`):
@@ -187,6 +240,7 @@ Usage pattern: `preHandler: [fastify.authenticate, fastify.validateOrgAccess, fa
 - `GET/PATCH /orgs/:orgId`
 - `GET /orgs/:orgId/members`
 - `GET/POST/DELETE /orgs/:orgId/invites`
+- `GET/POST/DELETE /orgs/:orgId/access-keys` — org service-token management
 
 **Invite routes outside org prefix**:
 - `GET /invites/:token` — public invite preview
@@ -229,7 +283,7 @@ State: `{ user, orgs, orgId, isAuthenticated, loading, error }`.
 /settings       → Layout (ProtectedRoute)
   /settings/profile
   /settings/security
-  /settings/tokens        (coming soon)
+  /settings/tokens        (personal access token management)
   /settings/org
 ```
 
@@ -284,10 +338,14 @@ State: `{ user, orgs, orgId, isAuthenticated, loading, error }`.
 - `parameterValues.test.js` — GET /orgs/:orgId/parameters/:appId/values, GET/PUT /orgs/:orgId/parameters/values/:id
 - `auth.test.js` — GET/PATCH /auth/me, POST /orgs
 - `orgs.test.js` — GET/PATCH /orgs/:orgId, GET /orgs/:orgId/members
+- `config.test.js` — GET /orgs/:orgId/config/:appId/:envId inherited config rendering
+- `auditEvents.test.js` — tenant-visible audit event matrix
+- `accessKeys.test.js` — PAT/service-token creation, `/auth/whoami`, scope denial, service-token config fetch, PAT role checks
 - `envelope.test.js` — unit tests for envelope encryption roundtrip/tamper/AAD failures
+- `accessKeys.test.js` (unit) — token parsing, hashing, scope validation
 - `parameters.test.js` also covers `/parameters/resolved` inheritance fallback for blank child values
 
-**Non coperto:** `GET /orgs/:orgId/config/:appId/:envId` (raw SQL + view `config_inheritance`), `POST /orgs/:orgId/parameters/override`, full invitation acceptance edge cases.
+**Non coperto:** frontend route behavior and E2E golden paths; additional invite edge cases beyond current acceptance coverage.
 
 **Nota sul formato risposta**: `GET /orgs/:orgId/parameters/:appId/values` ritorna un oggetto `{ [envName]: { environmentId, values: [{id, parameterId, parameterKey, isSet, value}] } }`, non un array. `value` è `null` quando `isSet=false` o quando il valore è redatto.
 
@@ -305,36 +363,14 @@ Gli shortcut globali sono implementati in `frontend/app/src/components/layout/La
 - Arrow keys + Space navigano l'albero AppTreeA
 - Nessun conflitto tra shortcut globali e input nelle pagine
 
-### Backend unreachable detection
-Quando il backend API è giù, l'utente resta sulla dashboard con org name `'...'` e tutte le chiamate API falliscono silenziosamente. Implementare:
-1. **`frontend/app/src/lib/api.js`** — response interceptor axios: distingue errori di rete (`!error.response`) da errori HTTP normali (401/403/500). Espone `onBackendStatusChange(fn)` callback.
-2. **`frontend/app/src/context/AuthContext.jsx`** — aggiunge `backendDown` state, registra il callback, fa polling su `/health` ogni 10s quando è down, ri-fetcha i dati utente al recovery.
-3. **`frontend/app/src/App.jsx`** — `BackendStatusBanner` component inline: legge `backendDown` da `useAuth()`, mostra banner sticky con colori `T.amber` / `T.amberBg` / `T.amberBorder`. Errori HTTP normali non triggherano il banner.
-
-### Ripensare testMode in auth.js
-Attualmente `src/plugins/auth.js` contiene un branch `if (options.testMode)` che registra decorator alternativi per i test (`authenticate`, `validateOrgAccess`, `requireRole`). Questo accoppia la logica di test al codice di produzione. Valutare alternative più pulite: mock del plugin a livello di Fastify, plugin separato solo per test, o iniezione diretta di `request.user` tramite hook `onRequest`.
-
-### Audit log (parameter values)
-Tracciare chi ha modificato un valore, in quale environment, da/a quale valore, con timestamp.
-- Schema: nuovo model `ParameterValueAudit` (id, parameterValueId, userId, oldValue, newValue, changedAt)
-- Backend: `PUT /parameters/values/:id` popola record audit dopo ogni update
-- Frontend: sezione `// audit` in `frontend/app/src/pages/ParameterDetail.jsx` — sostituisce il placeholder `// history`
-
-### Version history (parameter values)
-Visualizzare la storia dei valori per un parametro+environment specifico.
-- Derivabile dall'audit log (stesso model, query filtrata per `parameterValueId`)
-- Frontend: sezione `// history` già presente come placeholder in `ParameterDetail.jsx`
-- Utile per rollback manuale a un valore precedente
+### Access key / RBAC next steps
+- Implement access key rotation UX: create replacement, revoke old key, and show migration state.
+- Add service identity disable/enable controls and bulk revoke for all keys on an identity.
+- Model future OIDC/workload identity as auth methods on `Identity` (GitHub Actions, GitLab, Kubernetes, cloud workloads).
+- Redesign member permissions beyond coarse `USER`/`ADMIN`/`OWNER`, using access-key scopes as the conceptual foundation for explicit capabilities.
 
 ### Toast notification adoption
 `ToastProvider` exists in `frontend/app/src/context/ToastContext.jsx` and wraps app routes. Continue adopting it in remaining create/delete/export/error paths; today it is used at least for parameter creation.
-
-### Export parametri (Projects.jsx)
-Il bottone export è già presente nel detail panel di `/dashboard/apps` (`handleExport` è stub vuoto). Implementare:
-- Chiamare `apiService.getResolvedParameters(selectedApp.id)` + `apiService.getParameterValues(selectedApp.id)` in parallelo
-- Costruire oggetto JSON: `{ app: { id, name }, exportedAt: ISO string, parameters: [{ key, description, isSecret, values: { [envName]: value } }] }`
-- Creare blob, generare URL temporaneo con `URL.createObjectURL`, triggerare download con `<a download>` sintetico, revocare URL
-- Notifica toast `'parameters exported'` al completamento
 
 ### Frontend tests
 Il frontend (`frontend/app/`) non ha nessun framework di test installato. Opzioni valutate:

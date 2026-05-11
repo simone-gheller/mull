@@ -4,7 +4,6 @@ import { useTheme, FONTS } from '@mull/ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import Layout from './components/layout/Layout';
-import ComingSoon from './components/ui/ComingSoon';
 
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
@@ -16,6 +15,7 @@ const Environments = lazy(() => import('./pages/Environments'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const SecurityPage = lazy(() => import('./pages/SecurityPage'));
+const PersonalTokensPage = lazy(() => import('./pages/PersonalTokensPage'));
 const OrgSettingsPage = lazy(() => import('./pages/OrgSettingsPage'));
 const InviteAcceptPage = lazy(() => import('./pages/InviteAcceptPage'));
 
@@ -90,7 +90,7 @@ function AppRoutes() {
           <Route index element={<Navigate to="/settings/profile" replace />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="security" element={<SecurityPage />} />
-          <Route path="tokens" element={<ComingSoon section="settings" feature="personal tokens" icon="▷" title="Personal Tokens" description="Create tokens scoped to your user account for API access." />} />
+          <Route path="tokens" element={<PersonalTokensPage />} />
           <Route path="org" element={<OrgSettingsPage />} />
         </Route>
 

@@ -10,7 +10,7 @@ export default async function configRoutes(fastify, _options) {
   const prisma = fastify.prisma;
 
   fastify.get('/config/:appId/:envId', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('config:read')],
     schema: getConfigSchema
   }, async (request, reply) => {
     const { appId, envId, orgId } = request.params;
@@ -65,6 +65,7 @@ export default async function configRoutes(fastify, _options) {
           statusCode: 403
         });
       }
+      if (!await fastify.enforceAccessKeyResource(request, reply, { appId, environmentId: envId })) return;
 
       // 2. Query config_inheritance view
       const results = await prisma.$queryRaw`

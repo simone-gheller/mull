@@ -18,6 +18,20 @@ class ApiService {
     return response.data;
   }
 
+  async getPersonalAccessKeys() {
+    const response = await apiClient.get('/auth/access-keys');
+    return response.data;
+  }
+
+  async createPersonalAccessKey(data) {
+    const response = await apiClient.post('/auth/access-keys', data);
+    return response.data;
+  }
+
+  async revokePersonalAccessKey(keyId) {
+    await apiClient.delete(`/auth/access-keys/${keyId}`);
+  }
+
   // Org
   async getOrg() {
     const response = await apiClient.get(`/orgs/${this.orgId}`);
@@ -37,6 +51,20 @@ class ApiService {
     const suffix = search.toString() ? `?${search.toString()}` : '';
     const response = await apiClient.get(`/orgs/${this.orgId}/audit-events${suffix}`);
     return response.data;
+  }
+
+  async getOrgAccessKeys() {
+    const response = await apiClient.get(`/orgs/${this.orgId}/access-keys`);
+    return response.data;
+  }
+
+  async createOrgAccessKey(data) {
+    const response = await apiClient.post(`/orgs/${this.orgId}/access-keys`, data);
+    return response.data;
+  }
+
+  async revokeOrgAccessKey(keyId) {
+    await apiClient.delete(`/orgs/${this.orgId}/access-keys/${keyId}`);
   }
 
   // Members

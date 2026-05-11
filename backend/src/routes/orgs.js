@@ -29,7 +29,7 @@ export default async function orgRoutes(fastify, _options) {
    * Returns org details and member count
    */
   fastify.get('/', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth()],
     schema: {
       tags: ['orgs'],
       description: 'Get organization details',
@@ -64,7 +64,7 @@ export default async function orgRoutes(fastify, _options) {
    * Update organization name (OWNER only)
    */
   fastify.patch('/', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('OWNER')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireRole('OWNER')],
     schema: {
       tags: ['orgs'],
       description: 'Update organization',
@@ -114,7 +114,7 @@ export default async function orgRoutes(fastify, _options) {
    * Returns all members of the organization
    */
   fastify.get('/members', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth()],
     schema: {
       tags: ['orgs'],
       description: 'List organization members',
@@ -157,7 +157,7 @@ export default async function orgRoutes(fastify, _options) {
    * Invite a user. If already registered → direct add. Otherwise → email via nodemailer.
    */
   fastify.post('/invites', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireRole('ADMIN')],
     schema: {
       tags: ['orgs'],
       security: [{ bearerAuth: [] }],
@@ -233,7 +233,7 @@ export default async function orgRoutes(fastify, _options) {
    * List PENDING non-expired invites for this org.
    */
   fastify.get('/invites', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireRole('ADMIN')],
     schema: { tags: ['orgs'], security: [{ bearerAuth: [] }], params: orgIdParamsSchema },
   }, async (request, reply) => {
     const { orgId } = request.params;
@@ -260,7 +260,7 @@ export default async function orgRoutes(fastify, _options) {
    * Mark invite as REVOKED (record kept for audit).
    */
   fastify.delete('/invites/:inviteId', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireRole('ADMIN')],
     schema: {
       tags: ['orgs'],
       security: [{ bearerAuth: [] }],
@@ -293,7 +293,7 @@ export default async function orgRoutes(fastify, _options) {
   });
 
   fastify.get('/audit-events', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireRole('ADMIN')],
     schema: {
       tags: ['orgs'],
       security: [{ bearerAuth: [] }],
