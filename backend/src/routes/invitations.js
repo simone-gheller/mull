@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { hasEnterpriseSso, isSsoSessionForConnection } from '../lib/sso.js';
 
 function tokenFingerprint(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -26,7 +27,18 @@ export default async function invitationRoutes(fastify) {
     const invite = await fastify.prisma.orgInvite.findUnique({
       where: { tokenHash },
       include: {
-        org: { select: { name: true } },
+        org: {
+          select: {
+            name: true,
+            plan: true,
+            authPolicy: true,
+            ssoConnections: {
+              where: { status: 'ACTIVE' },
+              select: { supabaseSsoProviderId: true, name: true, domains: true },
+              take: 1
+            }
+          }
+        },
         inviter: { select: { email: true, displayName: true } },
         role: { select: { id: true, key: true, name: true } },
       },
@@ -60,6 +72,8 @@ export default async function invitationRoutes(fastify) {
       return reply.status(410).send({ error: 'Gone', message: 'Invitation has expired' });
     }
 
+    const connection = invite.org.ssoConnections?.[0] ?? null;
+    const ssoRequired = hasEnterpriseSso(invite.org.plan) && invite.org.authPolicy?.ssoMode === 'REQUIRED' && connection;
     return reply.send({
       orgName: invite.org.name,
       inviterEmail: invite.inviter.email,
@@ -69,6 +83,12 @@ export default async function invitationRoutes(fastify) {
       roleName: invite.role.name,
       email: invite.email,
       expiresAt: invite.expiresAt,
+      sso: ssoRequired ? {
+        required: true,
+        providerId: connection.supabaseSsoProviderId,
+        name: connection.name,
+        domains: connection.domains
+      } : { required: false }
     });
   });
 
@@ -95,7 +115,19 @@ export default async function invitationRoutes(fastify) {
     const invite = await fastify.prisma.orgInvite.findUnique({
       where: { tokenHash },
       include: {
-        org: { select: { id: true, name: true } },
+        org: {
+          select: {
+            id: true,
+            name: true,
+            plan: true,
+            authPolicy: true,
+            ssoConnections: {
+              where: { status: 'ACTIVE' },
+              select: { supabaseSsoProviderId: true },
+              take: 1
+            }
+          }
+        },
         role: { select: { id: true, key: true, name: true } }
       },
     });
@@ -157,6 +189,26 @@ export default async function invitationRoutes(fastify) {
         error: 'Forbidden',
         message: 'This invitation was sent to a different email address',
         invitedEmail: invite.email,
+      });
+    }
+
+    const connection = invite.org.ssoConnections?.[0] ?? null;
+    const ssoRequired = hasEnterpriseSso(invite.org.plan) && invite.org.authPolicy?.ssoMode === 'REQUIRED' && connection;
+    if (ssoRequired && !isSsoSessionForConnection(request.auth, connection)) {
+      await fastify.audit.log({
+        request,
+        orgId: invite.orgId,
+        action: 'invite.accept',
+        resourceType: 'invite',
+        resourceId: invite.id,
+        resourceLabel: invite.email,
+        outcome: 'DENIED',
+        metadata: { reason: 'sso_required', tokenHash }
+      });
+      return reply.status(403).send({
+        error: 'Forbidden',
+        message: 'This organization requires company SSO',
+        code: 'ORG_SSO_REQUIRED'
       });
     }
 

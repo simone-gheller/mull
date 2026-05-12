@@ -16,8 +16,10 @@
 import fp from 'fastify-plugin';
 import jwt from '@fastify/jwt';
 import buildGetJwks from 'get-jwks';
+import { uuidv7 } from 'uuidv7';
 import { isUuidV7 } from '../schemas/common.js';
 import { hasScope, isAccessKeyToken, parseAccessKeyToken, verifyAccessKeyToken } from '../lib/accessKeys.js';
+import { hasEnterpriseSso, inferSupabaseAuthMetadata, isSsoSessionForConnection } from '../lib/sso.js';
 import {
   environmentToContext,
   hasPermission,
@@ -44,7 +46,7 @@ function toUserWithMemberships(raw) {
   };
 }
 
-function decorateSupabaseJwtAuth(request, user) {
+function decorateSupabaseJwtAuth(request, user, authMetadata = {}) {
   request.user = user;
   request.accessKey = null;
   request.auth = {
@@ -63,7 +65,11 @@ function decorateSupabaseJwtAuth(request, user) {
     scopes: [],
     appId: null,
     environmentId: null,
-    delegatedUserId: user.id
+    delegatedUserId: user.id,
+    authProvider: authMetadata.provider ?? 'email',
+    authProviderId: authMetadata.providerId ?? null,
+    ssoProviderId: authMetadata.ssoProviderId ?? null,
+    isSsoSession: Boolean(authMetadata.isSsoSession)
   };
 }
 
@@ -86,8 +92,70 @@ function decorateAccessKeyAuth(request, { accessKey, identity, delegatedUser }) 
     scopes: accessKey.scopes,
     appId: accessKey.appId,
     environmentId: accessKey.environmentId,
-    delegatedUserId: delegatedUser.id
+    delegatedUserId: delegatedUser.id,
+    authProvider: null,
+    authProviderId: null,
+    ssoProviderId: null,
+    isSsoSession: false
   };
+}
+
+async function findUserBySupabaseAccount(fastify, supabaseUser, authMetadata) {
+  const account = await fastify.prisma.userAuthAccount.findUnique({
+    where: { supabaseId: supabaseUser.id },
+    include: {
+      user: {
+        include: {
+          organizations: {
+            include: {
+              org: { select: { id: true, name: true } },
+              role: true
+            }
+          }
+        }
+      }
+    }
+  });
+  if (account) {
+    await fastify.prisma.userAuthAccount.update({
+      where: { id: account.id },
+      data: {
+        provider: authMetadata.provider,
+        providerId: authMetadata.providerId,
+        ssoProviderId: authMetadata.ssoProviderId,
+        email: supabaseUser.email ?? account.email,
+        lastUsedAt: new Date()
+      }
+    });
+    return account.user;
+  }
+
+  const legacy = await fastify.prisma.user.findUnique({
+    where: { supabaseId: supabaseUser.id },
+    include: {
+      organizations: {
+        include: {
+          org: { select: { id: true, name: true } },
+          role: true
+        }
+      }
+    }
+  });
+  if (!legacy) return null;
+
+  await fastify.prisma.userAuthAccount.create({
+    data: {
+      id: uuidv7(),
+      userId: legacy.id,
+      supabaseId: supabaseUser.id,
+      provider: authMetadata.provider,
+      providerId: authMetadata.providerId,
+      ssoProviderId: authMetadata.ssoProviderId,
+      email: supabaseUser.email ?? legacy.email,
+      lastUsedAt: new Date()
+    }
+  });
+  return legacy;
 }
 
 async function authPlugin(fastify, options) {
@@ -221,19 +289,8 @@ fastify.decorate('authenticate', async function (request, reply) {
       });
     }
 
-    const { id: supabaseId } = supabaseUser;
-
-    const raw = await fastify.prisma.user.findUnique({
-      where: { supabaseId },
-      include: {
-        organizations: {
-          include: {
-            org: { select: { id: true, name: true } },
-            role: true
-          }
-        }
-      }
-    });
+    const authMetadata = inferSupabaseAuthMetadata(supabaseUser);
+    const raw = await findUserBySupabaseAccount(fastify, supabaseUser, authMetadata);
 
     if (!raw) {
       return reply.code(401).send({
@@ -243,7 +300,7 @@ fastify.decorate('authenticate', async function (request, reply) {
       });
     }
 
-    decorateSupabaseJwtAuth(request, toUserWithMemberships(raw));
+    decorateSupabaseJwtAuth(request, toUserWithMemberships(raw), authMetadata);
 
   } catch (err) {
     fastify.log.warn({ error: err.message }, 'Authentication failed');
@@ -295,6 +352,34 @@ fastify.decorate('authenticate', async function (request, reply) {
     request.auth.roleKey = roleFields.roleKey;
     request.auth.roleName = roleFields.roleName;
     request.auth.permissions = roleFields.permissions;
+
+    if (request.auth?.credentialType !== 'SUPABASE_JWT') return;
+
+    const org = await fastify.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: {
+        plan: true,
+        authPolicy: true,
+        ssoConnections: {
+          where: { status: 'ACTIVE' },
+          select: { supabaseSsoProviderId: true },
+          take: 1
+        }
+      }
+    });
+    const policy = org?.authPolicy;
+    const connection = org?.ssoConnections?.[0] ?? null;
+    const enforcementActive = hasEnterpriseSso(org?.plan) && policy?.ssoMode === 'REQUIRED' && connection;
+    if (!enforcementActive) return;
+    if (isSsoSessionForConnection(request.auth, connection)) return;
+    if (policy.allowPasswordFallbackForOwners && membership.roleKey === 'OWNER') return;
+
+    return reply.code(403).send({
+      error: 'Forbidden',
+      message: 'This organization requires company SSO',
+      statusCode: 403,
+      code: 'ORG_SSO_REQUIRED'
+    });
   });
 
   fastify.decorate('requireScope', (scope, options = {}) => {

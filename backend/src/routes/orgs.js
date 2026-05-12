@@ -2,6 +2,7 @@ import { uuidv7 } from 'uuidv7';
 import crypto from 'node:crypto';
 import { uuidV7Param } from '../schemas/common.js';
 import { isPaidPlan, SYSTEM_ROLE_KEYS, validatePermissions } from '../lib/rbac.js';
+import { hasEnterpriseSso, normalizeDomain } from '../lib/sso.js';
 
 function tokenFingerprint(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -128,6 +129,177 @@ export default async function orgRoutes(fastify, _options) {
     });
 
     return reply.send(org);
+  });
+
+  fastify.get('/sso', {
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireScope('org:read')],
+    schema: {
+      tags: ['orgs'],
+      description: 'Get organization SSO settings',
+      security: [{ bearerAuth: [] }],
+      params: orgIdParamsSchema
+    }
+  }, async (request, reply) => {
+    const { orgId } = request.params;
+    const org = await fastify.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: {
+        plan: true,
+        authPolicy: true,
+        ssoConnections: { orderBy: { createdAt: 'desc' } }
+      }
+    });
+    const eligible = hasEnterpriseSso(org?.plan);
+    return reply.send({
+      eligible,
+      plan: org?.plan ?? 'FREE',
+      policy: {
+        ssoMode: org?.authPolicy?.ssoMode ?? 'OFF',
+        allowPasswordFallbackForOwners: org?.authPolicy?.allowPasswordFallbackForOwners ?? true,
+        enforcementSuspended: !eligible
+      },
+      connection: org?.ssoConnections?.[0] ? {
+        id: org.ssoConnections[0].id,
+        supabaseSsoProviderId: org.ssoConnections[0].supabaseSsoProviderId,
+        name: org.ssoConnections[0].name,
+        domains: org.ssoConnections[0].domains,
+        status: org.ssoConnections[0].status
+      } : null
+    });
+  });
+
+  fastify.patch('/sso', {
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireJwtAuth(), fastify.requireScope('org:update')],
+    schema: {
+      tags: ['orgs'],
+      description: 'Update organization SSO policy and manual-assisted connection metadata',
+      security: [{ bearerAuth: [] }],
+      params: orgIdParamsSchema,
+      body: {
+        type: 'object',
+        properties: {
+          ssoMode: { type: 'string', enum: ['OFF', 'OPTIONAL', 'REQUIRED'] },
+          allowPasswordFallbackForOwners: { type: 'boolean' },
+          connection: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              supabaseSsoProviderId: { type: 'string', format: 'uuid' },
+              name: { type: 'string', minLength: 1, maxLength: 255 },
+              domains: { type: 'array', items: { type: 'string', minLength: 3, maxLength: 255 } },
+              status: { type: 'string', enum: ['DRAFT', 'ACTIVE', 'DISABLED'] }
+            }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    const { orgId } = request.params;
+    const org = await fastify.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { plan: true, ssoConnections: { orderBy: { createdAt: 'desc' }, take: 1 } }
+    });
+    if (!hasEnterpriseSso(org?.plan)) {
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: 'Enterprise SSO requires Business or Custom plan',
+        statusCode: 403,
+        code: 'FEATURE_NOT_AVAILABLE'
+      });
+    }
+
+    const existing = org.ssoConnections[0] ?? null;
+    const connectionInput = request.body.connection;
+    if (connectionInput && (!connectionInput.supabaseSsoProviderId || !connectionInput.name || !connectionInput.domains?.length)) {
+      return reply.code(400).send({
+        error: 'Bad Request',
+        message: 'SSO connection requires provider ID, name, and at least one domain',
+        statusCode: 400
+      });
+    }
+    const nextMode = request.body.ssoMode;
+    if (nextMode && nextMode !== 'OFF') {
+      const hasActiveConnection = connectionInput
+        ? connectionInput.status === 'ACTIVE'
+        : existing?.status === 'ACTIVE';
+      if (!hasActiveConnection) {
+        return reply.code(409).send({
+          error: 'Conflict',
+          message: 'An active SSO connection is required before enabling SSO',
+          statusCode: 409
+        });
+      }
+    }
+
+    const result = await fastify.prisma.$transaction(async tx => {
+      const policy = await tx.orgAuthPolicy.upsert({
+        where: { orgId },
+        create: {
+          orgId,
+          ssoMode: request.body.ssoMode ?? 'OFF',
+          allowPasswordFallbackForOwners: request.body.allowPasswordFallbackForOwners ?? true
+        },
+        update: {
+          ...(request.body.ssoMode !== undefined ? { ssoMode: request.body.ssoMode } : {}),
+          ...(request.body.allowPasswordFallbackForOwners !== undefined
+            ? { allowPasswordFallbackForOwners: request.body.allowPasswordFallbackForOwners }
+            : {})
+        }
+      });
+
+      let connection = existing;
+      if (connectionInput) {
+        const data = {
+          supabaseSsoProviderId: connectionInput.supabaseSsoProviderId,
+          name: connectionInput.name?.trim(),
+          domains: (connectionInput.domains ?? []).map(normalizeDomain).filter(Boolean),
+          status: connectionInput.status ?? 'DRAFT'
+        };
+        connection = existing
+          ? await tx.orgSsoConnection.update({
+              where: { id: existing.id },
+              data
+            })
+          : await tx.orgSsoConnection.create({
+              data: {
+                id: uuidv7(),
+                orgId,
+                ...data
+              }
+            });
+      }
+
+      await fastify.audit.log({
+        request,
+        orgId,
+        action: 'org.sso_update',
+        resourceType: 'org',
+        resourceId: orgId,
+        metadata: {
+          ssoMode: policy.ssoMode,
+          allowPasswordFallbackForOwners: policy.allowPasswordFallbackForOwners,
+          connectionStatus: connection?.status ?? null
+        }
+      }, { tx });
+      return { policy, connection };
+    });
+
+    return reply.send({
+      eligible: true,
+      plan: org.plan,
+      policy: {
+        ssoMode: result.policy.ssoMode,
+        allowPasswordFallbackForOwners: result.policy.allowPasswordFallbackForOwners,
+        enforcementSuspended: false
+      },
+      connection: result.connection ? {
+        id: result.connection.id,
+        supabaseSsoProviderId: result.connection.supabaseSsoProviderId,
+        name: result.connection.name,
+        domains: result.connection.domains,
+        status: result.connection.status
+      } : null
+    });
   });
 
   /**

@@ -6,6 +6,7 @@ import {
   expiresAtFromPreset,
   validateScopes
 } from '../lib/accessKeys.js';
+import { hasEnterpriseSso, isSsoSessionForConnection } from '../lib/sso.js';
 
 const ttlPresetSchema = { type: 'string', enum: ['30d', '90d', '365d', 'never'], default: '90d' };
 const scopeSchema = {
@@ -61,6 +62,31 @@ async function validateBinding(fastify, orgId, { appId, environmentId }) {
     if (!env || env.orgId !== orgId) return 'environmentId does not belong to this organization';
   }
   return null;
+}
+
+async function enforcePersonalTokenSso(fastify, request, reply, orgId) {
+  const org = await fastify.prisma.organization.findUnique({
+    where: { id: orgId },
+    select: {
+      plan: true,
+      authPolicy: true,
+      ssoConnections: {
+        where: { status: 'ACTIVE' },
+        select: { supabaseSsoProviderId: true },
+        take: 1
+      }
+    }
+  });
+  const connection = org?.ssoConnections?.[0] ?? null;
+  const requiresSso = hasEnterpriseSso(org?.plan) && org?.authPolicy?.ssoMode === 'REQUIRED' && connection;
+  if (!requiresSso || isSsoSessionForConnection(request.auth, connection)) return true;
+  reply.code(403).send({
+    error: 'Forbidden',
+    message: 'Creating personal access tokens for this organization requires company SSO',
+    statusCode: 403,
+    code: 'ORG_SSO_REQUIRED'
+  });
+  return false;
 }
 
 async function findOrCreateUserIdentity(tx, { orgId, user }) {
@@ -120,6 +146,7 @@ export default async function accessKeyRoutes(fastify) {
     const { orgId, name, appId = null, environmentId = null, ttl = '90d' } = request.body;
     const membership = request.user.organizations?.find(org => org.id === orgId);
     if (!membership) return reply.code(403).send({ error: 'Forbidden', message: 'Not a member of this organization', statusCode: 403 });
+    if (!await enforcePersonalTokenSso(fastify, request, reply, orgId)) return;
     const bindingError = await validateBinding(fastify, orgId, { appId, environmentId });
     if (bindingError) return reply.code(400).send({ error: 'Bad Request', message: bindingError, statusCode: 400 });
 

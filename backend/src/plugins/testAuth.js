@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin';
 import { isUuidV7 } from '../schemas/common.js';
 import { hasScope, isAccessKeyToken, parseAccessKeyToken, verifyAccessKeyToken } from '../lib/accessKeys.js';
+import { hasEnterpriseSso, isSsoSessionForConnection } from '../lib/sso.js';
 import {
   environmentToContext,
   hasPermission,
@@ -28,6 +29,7 @@ function toUserWithMemberships(raw) {
 }
 
 function decorateTestJwtAuth(request, user) {
+  const ssoProviderId = request.headers['x-test-sso-provider-id'] ?? null;
   request.user = user;
   request.accessKey = null;
   request.auth = {
@@ -46,7 +48,11 @@ function decorateTestJwtAuth(request, user) {
     scopes: [],
     appId: null,
     environmentId: null,
-    delegatedUserId: user.id
+    delegatedUserId: user.id,
+    authProvider: ssoProviderId ? `sso:${ssoProviderId}` : (request.headers['x-test-auth-provider'] ?? 'email'),
+    authProviderId: request.headers['x-test-auth-provider-id'] ?? null,
+    ssoProviderId,
+    isSsoSession: Boolean(ssoProviderId)
   };
 }
 
@@ -69,7 +75,11 @@ function decorateAccessKeyAuth(request, { accessKey, delegatedUser }) {
     scopes: accessKey.scopes,
     appId: accessKey.appId,
     environmentId: accessKey.environmentId,
-    delegatedUserId: delegatedUser.id
+    delegatedUserId: delegatedUser.id,
+    authProvider: null,
+    authProviderId: null,
+    ssoProviderId: null,
+    isSsoSession: false
   };
 }
 
@@ -159,6 +169,34 @@ async function testAuthPlugin(fastify) {
     request.auth.roleKey = roleFields.roleKey;
     request.auth.roleName = roleFields.roleName;
     request.auth.permissions = roleFields.permissions;
+
+    if (request.auth?.credentialType !== 'SUPABASE_JWT') return;
+
+    const org = await fastify.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: {
+        plan: true,
+        authPolicy: true,
+        ssoConnections: {
+          where: { status: 'ACTIVE' },
+          select: { supabaseSsoProviderId: true },
+          take: 1
+        }
+      }
+    });
+    const policy = org?.authPolicy;
+    const connection = org?.ssoConnections?.[0] ?? null;
+    const enforcementActive = hasEnterpriseSso(org?.plan) && policy?.ssoMode === 'REQUIRED' && connection;
+    if (!enforcementActive) return;
+    if (isSsoSessionForConnection(request.auth, connection)) return;
+    if (policy.allowPasswordFallbackForOwners && membership.roleKey === 'OWNER') return;
+
+    return reply.code(403).send({
+      error: 'Forbidden',
+      message: 'This organization requires company SSO',
+      statusCode: 403,
+      code: 'ORG_SSO_REQUIRED'
+    });
   });
 
   fastify.decorate('requireScope', (scope, options = {}) => {

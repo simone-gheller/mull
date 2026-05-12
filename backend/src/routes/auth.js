@@ -1,4 +1,5 @@
 import { uuidv7 } from 'uuidv7';
+import { domainFromEmail, hasEnterpriseSso, normalizeDomain } from '../lib/sso.js';
 
 /**
  * Authentication Routes
@@ -9,6 +10,90 @@ import { uuidv7 } from 'uuidv7';
  */
 
 export default async function authRoutes(fastify, _options) {
+  fastify.post('/auth/login-discovery', {
+    schema: {
+      tags: ['auth'],
+      description: 'Discover whether an email domain should use enterprise SSO',
+      body: {
+        type: 'object',
+        required: ['email'],
+        properties: { email: { type: 'string', format: 'email' } }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            primary: { type: 'string' },
+            sso: {
+              type: 'object',
+              properties: {
+                available: { type: 'boolean' },
+                required: { type: 'boolean' },
+                providerId: { type: 'string' },
+                orgId: { type: 'string' },
+                orgName: { type: 'string' },
+                name: { type: 'string' },
+                domain: { type: 'string' }
+              }
+            },
+            password: {
+              type: 'object',
+              properties: {
+                available: { type: 'boolean' }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    const domain = normalizeDomain(domainFromEmail(request.body.email));
+    if (!domain) {
+      return reply.send({
+        primary: 'password',
+        sso: { available: false },
+        password: { available: true }
+      });
+    }
+
+    const connection = await fastify.prisma.orgSsoConnection.findFirst({
+      where: { status: 'ACTIVE', domains: { has: domain } },
+      include: {
+        org: {
+          select: {
+            id: true,
+            name: true,
+            plan: true,
+            authPolicy: true
+          }
+        }
+      }
+    });
+
+    if (!connection || !hasEnterpriseSso(connection.org.plan)) {
+      return reply.send({
+        primary: 'password',
+        sso: { available: false },
+        password: { available: true }
+      });
+    }
+
+    const required = connection.org.authPolicy?.ssoMode === 'REQUIRED';
+    return reply.send({
+      primary: 'sso',
+      sso: {
+        available: true,
+        required,
+        providerId: connection.supabaseSsoProviderId,
+        orgId: connection.orgId,
+        orgName: connection.org.name,
+        name: connection.name,
+        domain
+      },
+      password: { available: !required }
+    });
+  });
+
 /**
    * GET /auth/me
    * Returns authenticated user information
@@ -85,6 +170,9 @@ export default async function authRoutes(fastify, _options) {
             appId: { type: 'string', nullable: true },
             environmentId: { type: 'string', nullable: true },
             delegatedUserId: { type: 'string', nullable: true },
+            authProvider: { type: 'string', nullable: true },
+            ssoProviderId: { type: 'string', nullable: true },
+            isSsoSession: { type: 'boolean' },
             organizations: {
               type: 'array',
               items: {
@@ -127,6 +215,9 @@ export default async function authRoutes(fastify, _options) {
       appId: request.auth.appId,
       environmentId: request.auth.environmentId,
       delegatedUserId: request.auth.delegatedUserId,
+      authProvider: request.auth.authProvider,
+      ssoProviderId: request.auth.ssoProviderId,
+      isSsoSession: request.auth.isSsoSession,
       organizations
     });
   });
