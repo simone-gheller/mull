@@ -342,7 +342,17 @@ export async function buildTestContext() {
           id: uuidv7(),
           supabaseId,
           email,
-          displayName: overrides.displayName || null
+          displayName: overrides.displayName || null,
+          authAccounts: {
+            create: {
+              id: uuidv7(),
+              supabaseId,
+              provider: overrides.provider || 'email',
+              providerId: overrides.providerId || supabaseId,
+              ssoProviderId: overrides.ssoProviderId || null,
+              email
+            }
+          }
         },
         select: { id: true, supabaseId: true, email: true, displayName: true }
       });
