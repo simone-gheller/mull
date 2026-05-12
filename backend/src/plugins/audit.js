@@ -86,7 +86,7 @@ async function loadOrgPlan(client, orgId) {
     where: { id: orgId },
     select: { plan: true }
   });
-  return org?.plan ?? 'STARTER';
+  return org?.plan ?? 'FREE';
 }
 
 async function auditPlugin(fastify) {

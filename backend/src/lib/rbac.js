@@ -199,7 +199,7 @@ export function environmentToContext(environment) {
 }
 
 export function isPaidPlan(plan) {
-  return plan === 'PRO' || plan === 'ENTERPRISE';
+  return plan === 'TEAM' || plan === 'BUSINESS' || plan === 'ENTERPRISE';
 }
 
 export function roleAtLeast(roleKey, minimumRoleKey) {

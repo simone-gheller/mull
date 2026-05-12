@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { Readable } from 'node:stream';
 import fastifyEnv from '@fastify/env';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
@@ -21,6 +22,7 @@ import parameterValueRoutes from './routes/parameterValues.js';
 import orgRoutes from './routes/orgs.js';
 import invitationRoutes from './routes/invitations.js';
 import accessKeyRoutes from './routes/accessKeys.js';
+import billingRoutes from './routes/billing.js';
 import { envSchema } from './config.js';
 
 /**
@@ -51,6 +53,20 @@ export function buildApp(options = {}) {
 
   // Validate required env vars at startup — server won't start if any are missing
   fastify.register(fastifyEnv, { schema: envSchema, dotenv: true });
+
+  fastify.addHook('preParsing', async (request, _reply, payload) => {
+    if (request.method !== 'POST' || request.url.split('?')[0] !== '/webhooks/paddle') {
+      return payload;
+    }
+
+    const chunks = [];
+    for await (const chunk of payload) {
+      chunks.push(Buffer.from(chunk));
+    }
+    const rawBody = Buffer.concat(chunks);
+    request.rawBody = rawBody.toString('utf8');
+    return Readable.from(rawBody);
+  });
 
   fastify.register(cors, {
     origin: (origin, callback) => {
@@ -99,6 +115,7 @@ export function buildApp(options = {}) {
   fastify.register(authRoutes);
   fastify.register(invitationRoutes);
   fastify.register(accessKeyRoutes);
+  fastify.register(billingRoutes);
 
   // Org-scoped routes - all use /orgs/:orgId prefix
   fastify.register(configRoutes, { prefix: '/orgs/:orgId' });
