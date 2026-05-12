@@ -158,7 +158,6 @@ export default function Apps() {
         parameters: (resolved.items ?? []).map(item => ({
           key: item.key,
           description: item.parameter?.description ?? null,
-          isSecret: Boolean(item.parameter?.isSecret),
           values: valuesByParameterKey.get(item.key) ?? {},
         })),
       };

@@ -21,14 +21,17 @@ export default async function appRoutes(fastify, _options) {
 
   // GET /apps - List apps
   fastify.get('/apps', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('apps:read')],
     schema: listAppsSchema
   }, async (request, reply) => {
     const { orgId } = request.params;
 
     try {
       const apps = await prisma.app.findMany({
-        where: { orgId: orgId },
+        where: {
+          orgId: orgId,
+          ...(request.auth?.credentialType === 'ACCESS_KEY' && request.auth.appId ? { id: request.auth.appId } : {})
+        },
         select: {
           id: true,
           orgId: true,
@@ -62,7 +65,7 @@ export default async function appRoutes(fastify, _options) {
 
   // GET /apps/:appId - Get single app
   fastify.get('/apps/:appId', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('apps:read')],
     schema: { params: appIdParamsSchema },
   }, async (request, reply) => {
     const { orgId, appId } = request.params;
@@ -87,13 +90,14 @@ export default async function appRoutes(fastify, _options) {
     if (app.orgId !== orgId) {
       return reply.code(403).send({ error: 'Forbidden', message: 'App does not belong to this organization', statusCode: 403 });
     }
+    if (!await fastify.enforceAccessKeyResource(request, reply, { appId })) return;
 
     return reply.send(app);
   });
 
   // PATCH /apps/:appId - Update app
   fastify.patch('/apps/:appId', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('apps:manage')],
     schema: { params: appIdParamsSchema },
   }, async (request, reply) => {
     const { orgId, appId } = request.params;
@@ -152,7 +156,7 @@ export default async function appRoutes(fastify, _options) {
 
   // DELETE /apps/:appId - Delete app
   fastify.delete('/apps/:appId', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('apps:manage')],
     schema: { params: appIdParamsSchema },
   }, async (request, reply) => {
     const { orgId, appId } = request.params;
@@ -198,7 +202,7 @@ export default async function appRoutes(fastify, _options) {
 
   // POST /apps - Create app
   fastify.post('/apps', {
-    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('apps:manage')],
     schema: createAppSchema
   }, async (request, reply) => {
     const { name, parentId } = request.body;

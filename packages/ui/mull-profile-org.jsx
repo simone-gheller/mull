@@ -496,7 +496,7 @@ function OrgPage({ T }) {
                 padding: "8px 12px", fontFamily: FONTS.mono, fontSize: "12px", color: T.textSecondary, outline: "none" }}>
                 <option>member</option><option>admin</option><option>viewer</option>
               </select>
-              <Btn variant="primary" size="md" T={T}>send invite</Btn>
+              <Btn variant="primary" size="md" T={T}>+ send invite</Btn>
             </div>
           </div>
 

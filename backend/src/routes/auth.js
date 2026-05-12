@@ -14,7 +14,7 @@ export default async function authRoutes(fastify, _options) {
    * Returns authenticated user information
    */
   fastify.get('/auth/me', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.requireJwtAuth()],
     schema: {
       tags: ['auth'],
       description: 'Get authenticated user information',
@@ -34,7 +34,10 @@ export default async function authRoutes(fastify, _options) {
                 properties: {
                   id: { type: 'string' },
                   name: { type: 'string' },
-                  role: { type: 'string', enum: ['USER', 'ADMIN', 'OWNER'] }
+                  role: { type: 'string' },
+                  roleId: { type: 'string' },
+                  roleKey: { type: 'string' },
+                  roleName: { type: 'string' }
                 }
               }
             }
@@ -54,12 +57,87 @@ export default async function authRoutes(fastify, _options) {
   });
 
   /**
+   * GET /auth/whoami
+   * Returns API actor/auth context for JWTs, PATs, and service tokens.
+   */
+  fastify.get('/auth/whoami', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      tags: ['auth'],
+      description: 'Inspect the current authenticated actor',
+      security: [{ bearerAuth: [] }],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            identityType: { type: 'string' },
+            identityId: { type: 'string' },
+            identityName: { type: 'string', nullable: true },
+            credentialType: { type: 'string' },
+            credentialId: { type: 'string', nullable: true },
+            credentialPrefix: { type: 'string', nullable: true },
+            orgId: { type: 'string', nullable: true },
+            orgRole: { type: 'string', nullable: true },
+            roleId: { type: 'string', nullable: true },
+            roleKey: { type: 'string', nullable: true },
+            roleName: { type: 'string', nullable: true },
+            scopes: { type: 'array', items: { type: 'string' } },
+            appId: { type: 'string', nullable: true },
+            environmentId: { type: 'string', nullable: true },
+            delegatedUserId: { type: 'string', nullable: true },
+            organizations: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  role: { type: 'string', nullable: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    let organizations = request.user?.organizations ?? [];
+
+    if (request.auth.identityType === 'SERVICE') {
+      const org = await fastify.prisma.organization.findUnique({
+        where: { id: request.auth.orgId },
+        select: { id: true, name: true }
+      });
+      organizations = org ? [{ id: org.id, name: org.name, role: null }] : [];
+    }
+
+    return reply.send({
+      identityType: request.auth.identityType,
+      identityId: request.auth.identityId,
+      identityName: request.auth.identityName,
+      credentialType: request.auth.credentialType,
+      credentialId: request.auth.credentialId,
+      credentialPrefix: request.auth.credentialPrefix,
+      orgId: request.auth.orgId,
+      orgRole: request.auth.orgRole,
+      roleId: request.auth.roleId,
+      roleKey: request.auth.roleKey,
+      roleName: request.auth.roleName,
+      scopes: request.auth.scopes,
+      appId: request.auth.appId,
+      environmentId: request.auth.environmentId,
+      delegatedUserId: request.auth.delegatedUserId,
+      organizations
+    });
+  });
+
+  /**
    * POST /orgs
    * Create a new organization for the authenticated user.
    * Used both during initial registration (after OTP) and for adding org to existing users.
    */
   fastify.post('/orgs', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.requireJwtAuth()],
     schema: {
       tags: ['orgs'],
       description: 'Create a new organization',
@@ -86,9 +164,14 @@ export default async function authRoutes(fastify, _options) {
     const { name } = request.body;
     const orgId = uuidv7();
     const org = await fastify.prisma.$transaction(async (tx) => {
+      const ownerRole = await tx.role.findFirst({
+        where: { orgId: null, key: 'OWNER' },
+        select: { id: true, key: true }
+      });
+      if (!ownerRole) throw new Error('OWNER role is not seeded');
       const createdOrg = await tx.organization.create({ data: { id: orgId, name } });
       await tx.userOrganization.create({
-        data: { userId: request.user.id, orgId, role: 'OWNER' },
+        data: { userId: request.user.id, orgId, roleId: ownerRole.id },
       });
       await fastify.audit.log({
         request,
@@ -97,7 +180,7 @@ export default async function authRoutes(fastify, _options) {
         resourceType: 'org',
         resourceId: orgId,
         resourceLabel: name,
-        metadata: { role: 'OWNER' }
+        metadata: { role: ownerRole.key, roleId: ownerRole.id }
       }, { tx });
       return createdOrg;
     });
@@ -110,7 +193,7 @@ export default async function authRoutes(fastify, _options) {
    * but can be extended in the future 
    */
   fastify.patch('/auth/me', {
-    onRequest: [fastify.authenticate],
+    onRequest: [fastify.authenticate, fastify.requireJwtAuth()],
     schema: {
       tags: ['auth'],
       description: 'Update authenticated user profile',
@@ -164,7 +247,7 @@ export default async function authRoutes(fastify, _options) {
    * Example admin-only route to demonstrate role-based access control
    */
   fastify.post('/auth/admin/example', {
-    onRequest: [fastify.authenticate, fastify.requireRole('ADMIN')],
+    onRequest: [fastify.authenticate, fastify.requireJwtAuth(), fastify.requireRole('ADMIN')],
     schema: {
       tags: ['auth'],
       description: 'Example admin-only endpoint',

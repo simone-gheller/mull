@@ -59,7 +59,7 @@ function EnvRow({ row, editLabel, canWrite, selected, T, onEdit, onSelect }) {
     }}>
       {/* ENV */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <Badge T={T} variant={row.isSecret ? 'warning' : 'default'}>{row.env}</Badge>
+        <Badge T={T} variant={row.protected ? 'warning' : 'default'}>{row.env}</Badge>
         {row.isInherited && (
           <span style={{
             fontFamily: FONTS.mono, fontSize: '9px', color: T.amber,
@@ -118,7 +118,7 @@ function EnvRow({ row, editLabel, canWrite, selected, T, onEdit, onSelect }) {
             {editLabel}
           </Btn>
         ) : (
-          <DisabledActionTooltip T={T} message="edit disabled · requires admin">
+          <DisabledActionTooltip T={T} message="edit disabled · requires config write">
             <Btn T={T} variant="secondary" size="sm" disabled>
               {editLabel}
             </Btn>
@@ -435,7 +435,6 @@ export default function ParameterDetail() {
         overrideSourceAppId:  param.overridden?.appId ?? '',
         overrideSourceParamId: param.overridden?.parameterId ?? '',
         overrideFromAppName:  param.overridden?.appName ?? '',
-        isSecret:             param.parameter.isSecret,
       };
       setResolved(r);
 
@@ -444,8 +443,8 @@ export default function ParameterDetail() {
         apiService.getParameterValues(r.sourceAppId),
         apiService.getEnvironments(),
       ]);
-      const envSecretById = Object.fromEntries(
-        (Array.isArray(envList) ? envList : []).map(e => [e.id, e.isSecret])
+      const envById = Object.fromEntries(
+        (Array.isArray(envList) ? envList : []).map(e => [e.id, e])
       );
 
       let sourceGrouped = null;
@@ -483,7 +482,8 @@ export default function ParameterDetail() {
           isRedacted,
           isInherited,
           inheritedFrom: isInherited ? r.overrideFromAppName : null,
-          isSecret: r.isSecret || (envSecretById[envData.environmentId] ?? false),
+          protected: envById[envData.environmentId]?.protected ?? false,
+          tier: envById[envData.environmentId]?.tier ?? 'CUSTOM',
         });
       }
 
@@ -588,8 +588,8 @@ export default function ParameterDetail() {
   }
 
   const { isOwn, isOverride, sourceAppName, overrideFromAppName, currentAppName } = resolved ?? {};
-  const orgRole = orgs.find(o => o.id === orgId)?.role ?? 'USER';
-  const canWriteValues = ['ADMIN', 'OWNER'].includes(orgRole);
+  const orgRole = orgs.find(o => o.id === orgId)?.role ?? 'DEVELOPER';
+  const canWriteValues = ['DEVELOPER', 'ADMIN', 'OWNER'].includes(orgRole);
   const selectedEnvName = envValues.find(row => row.valueId === selectedValueId)?.env ?? '';
   const editLabel = isOwn ? 'edit' : 'override';
   const modalMode = isOwn ? 'own' : 'inherited';
@@ -660,7 +660,7 @@ export default function ParameterDetail() {
                 key={row.env}
                 row={row}
                 editLabel={editLabel}
-                canWrite={canWriteValues}
+                canWrite={canWriteValues && (!row.protected || ['ADMIN', 'OWNER'].includes(orgRole))}
                 selected={row.valueId === selectedValueId}
                 T={T}
                 onEdit={setEditingRow}

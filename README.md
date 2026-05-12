@@ -57,8 +57,10 @@ npm run dev:app        # http://localhost:5173
 
 ## Docs
 
+- [Documentation map](docs/README.md)
 - [API reference](docs/API.md)
 - [ER model](docs/er-model.md)
+- [Access key identity walkthrough](docs/access-key-identity-walkthrough.md)
 - [Envelope encryption](docs/envelope-encryption-implementation-plan.md)
 - [Resolved parameters and inheritance](docs/resolved-parameters-redesign-plan.md)
 - [Senior review backlog](docs/senior-review-pain-points.md)
@@ -70,10 +72,12 @@ npm run dev:app        # http://localhost:5173
 - **Blank-as-inherit semantics** — empty string clears a local value and falls back to ancestors
 - **Multi-environment** — dev, staging, production, or any custom env
 - **Supabase auth** — JWT verified via JWKS, local OTP flow, Google OAuth support
-- **Role-based access** — OWNER / ADMIN / USER per organization
+- **Role-based access** — org roles are presets of scopes (`OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`) with paid custom roles
+- **Access keys** — personal access tokens and org service tokens with scopes, hashed storage, one-time display, revoke, expiry, and audit attribution
+- **Audit + history** — tenant-visible audit events and encrypted parameter value version history
 
 ## Current caveats
 
-- `/config/:appId/:envId` is still authenticated with user JWTs, not scoped machine tokens.
-- Audit log and version history are not implemented yet.
-- The frontend production app currently builds as one large JS chunk (~703 kB minified, ~201 kB gzip).
+- OIDC/workload identity is not implemented yet; it is planned as a future auth method on the `Identity` model.
+- Frontend automated tests are still not installed; backend integration tests require local Supabase/Postgres.
+- Aggregate frontend JS size should continue to be monitored as features grow.

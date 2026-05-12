@@ -171,7 +171,7 @@ export async function buildTestContext() {
      * @returns {Promise<{id: string, orgId: string, name: string}>}
      */
     async buildEnv(options = {}) {
-      const { orgId, name } = options;
+      const { orgId, name, tier = 'CUSTOM' } = options;
 
       if (!orgId) {
         throw new Error('buildEnv requires orgId');
@@ -183,12 +183,16 @@ export async function buildTestContext() {
         data: {
           id: uuidv7(),
           orgId: orgId,
-          name: envName
+          name: envName,
+          tier,
+          protected: options.protected ?? tier === 'PRODUCTION'
         },
         select: {
           id: true,
           orgId: true,
-          name: true
+          name: true,
+          tier: true,
+          protected: true
         }
       });
 
@@ -352,17 +356,27 @@ export async function buildTestContext() {
      * @param {Object} options
      * @param {string} options.userId
      * @param {string} options.orgId
-     * @param {string} [options.role] - 'USER' | 'ADMIN' | 'OWNER' (default: 'OWNER')
+     * @param {string} [options.role] - 'VIEWER' | 'DEVELOPER' | 'ADMIN' | 'OWNER' (default: 'OWNER')
      */
     async buildOrgMembership({ userId, orgId, role = 'OWNER' }) {
-      await prisma.userOrganization.create({ data: { userId, orgId, role } });
+      const roleKey = role === 'USER' ? 'DEVELOPER' : role;
+      const roleRecord = await this.getSystemRole(roleKey);
+      if (!roleRecord) throw new Error(`Role ${roleKey} not found`);
+      await prisma.userOrganization.create({ data: { userId, orgId, roleId: roleRecord.id } });
+    },
+
+    async getSystemRole(key) {
+      return prisma.role.findFirst({
+        where: { orgId: null, key },
+        select: { id: true, key: true, name: true }
+      });
     },
 
     /**
      * Build user + add them to an org in one call
      * @param {Object} org - Org object with id
      * @param {Object} [options]
-     * @param {string} [options.role] - 'USER' | 'ADMIN' | 'OWNER' (default: 'OWNER')
+     * @param {string} [options.role] - 'VIEWER' | 'DEVELOPER' | 'ADMIN' | 'OWNER' (default: 'OWNER')
      * @param {Object} [options.userOverrides] - overrides for buildUser
      * @returns {Promise<{id: string, supabaseId: string, email: string, displayName: string|null}>}
      */

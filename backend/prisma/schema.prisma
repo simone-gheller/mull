@@ -26,6 +26,8 @@ model Organization {
   environments Environment[]
   invites      OrgInvite[]
   auditEvents  AuditEvent[]
+  identities   Identity[]
+  roles        Role[]
 
   @@map("organizations")
 }
@@ -45,6 +47,7 @@ model App {
   parent       App?         @relation("AppHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   children     App[]        @relation("AppHierarchy") // Inverse relation (optional but convenient)
   parameters   Parameter[]
+  accessKeys   AccessKey[]
 
   @@unique([orgId, name])
   @@index([orgId])
@@ -54,15 +57,17 @@ model App {
 }
 
 model Environment {
-  id       String  @id @db.Uuid
-  orgId    String  @map("org_id") @db.Uuid
-  name     String  @db.VarChar(100)
-  isSecret Boolean @default(false) @map("is_secret")
+  id        String          @id @db.Uuid
+  orgId     String          @map("org_id") @db.Uuid
+  name      String          @db.VarChar(100)
+  tier      EnvironmentTier @default(CUSTOM)
+  protected Boolean         @default(false)
 
   // Relations
   organization           Organization            @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   parameterValues        ParameterValue[]
   parameterValueVersions ParameterValueVersion[]
+  accessKeys             AccessKey[]
 
   @@unique([orgId, name])
   @@index([orgId])
@@ -74,7 +79,6 @@ model Parameter {
   appId       String  @map("app_id") @db.Uuid
   key         String  @db.VarChar(255)
   description String? @db.Text
-  isSecret    Boolean @default(false) @map("is_secret")
 
   // Relations
   app      App                     @relation(fields: [appId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -166,6 +170,9 @@ model User {
   sentInvites            OrgInvite[]             @relation("SentInvites")
   parameterValueVersions ParameterValueVersion[]
   auditEvents            AuditEvent[]
+  ownedIdentities        Identity[]              @relation("IdentityOwner")
+  createdAccessKeys      AccessKey[]             @relation("AccessKeyCreator")
+  createdRoles           Role[]                  @relation("RoleCreator")
 
   @@index([supabaseId])
   @@index([email])
@@ -173,16 +180,18 @@ model User {
 }
 
 model UserOrganization {
-  userId String   @map("user_id") @db.Uuid
-  orgId  String   @map("org_id") @db.Uuid
-  role   UserRole @default(USER)
+  userId String @map("user_id") @db.Uuid
+  orgId  String @map("org_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
 
   user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  role Role         @relation(fields: [roleId], references: [id], onDelete: Restrict)
 
   @@id([userId, orgId])
   @@index([userId])
   @@index([orgId])
+  @@index([roleId])
   @@map("user_organizations")
 }
 
@@ -190,7 +199,7 @@ model OrgInvite {
   id         String       @id @db.Uuid
   orgId      String       @map("org_id") @db.Uuid
   email      String       @db.VarChar(255)
-  role       UserRole     @default(USER)
+  roleId     String       @map("role_id") @db.Uuid
   tokenHash  String       @unique @map("token_hash") @db.VarChar(64)
   invitedBy  String       @map("invited_by") @db.Uuid
   status     InviteStatus @default(PENDING)
@@ -200,10 +209,35 @@ model OrgInvite {
 
   org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   inviter User         @relation("SentInvites", fields: [invitedBy], references: [id])
+  role    Role         @relation(fields: [roleId], references: [id], onDelete: Restrict)
 
   @@index([orgId])
+  @@index([roleId])
   @@index([tokenHash])
   @@map("org_invites")
+}
+
+model Role {
+  id              String   @id @db.Uuid
+  orgId           String?  @map("org_id") @db.Uuid
+  key             String   @db.VarChar(100)
+  name            String   @db.VarChar(255)
+  description     String?  @db.Text
+  kind            RoleKind @default(CUSTOM)
+  permissions     Json    @default("[]")
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  org            Organization?      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdByUser  User?              @relation("RoleCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  memberships    UserOrganization[]
+  invites        OrgInvite[]
+
+  @@unique([orgId, key])
+  @@index([orgId])
+  @@index([createdByUserId])
+  @@map("roles")
 }
 
 enum InviteStatus {
@@ -268,8 +302,67 @@ enum AuditOutcome {
   FAILURE
 }
 
-enum UserRole {
+enum RoleKind {
+  SYSTEM
+  CUSTOM
+}
+
+enum EnvironmentTier {
+  DEVELOPMENT
+  STAGING
+  PRODUCTION
+  CUSTOM
+}
+
+model Identity {
+  id          String       @id @db.Uuid
+  orgId       String       @map("org_id") @db.Uuid
+  type        IdentityType
+  name        String       @db.VarChar(255)
+  ownerUserId String?      @map("owner_user_id") @db.Uuid
+  disabledAt  DateTime?    @map("disabled_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ownerUser  User?        @relation("IdentityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  accessKeys AccessKey[]
+
+  @@index([orgId])
+  @@index([ownerUserId])
+  @@map("identities")
+}
+
+model AccessKey {
+  id              String    @id @db.Uuid
+  identityId      String    @map("identity_id") @db.Uuid
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  name            String    @db.VarChar(255)
+  tokenHash       String    @unique @map("token_hash") @db.VarChar(64)
+  tokenPrefix     String    @map("token_prefix") @db.VarChar(128)
+  scopes          String[]  @default([])
+  appId           String?   @map("app_id") @db.Uuid
+  environmentId   String?   @map("environment_id") @db.Uuid
+  expiresAt       DateTime? @map("expires_at")
+  lastUsedAt      DateTime? @map("last_used_at")
+  revokedAt       DateTime? @map("revoked_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  identity      Identity     @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  createdByUser User         @relation("AccessKeyCreator", fields: [createdByUserId], references: [id])
+  app           App?         @relation(fields: [appId], references: [id], onDelete: Cascade)
+  environment   Environment? @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  @@index([identityId])
+  @@index([createdByUserId])
+  @@index([appId])
+  @@index([environmentId])
+  @@index([tokenHash])
+  @@map("access_keys")
+}
+
+enum IdentityType {
   USER
-  ADMIN
-  OWNER
+  SERVICE
 }

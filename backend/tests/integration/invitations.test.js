@@ -23,14 +23,15 @@ describe('Invitation Routes', () => {
     test('should not mutate role when invited user is already a member', async () => {
       const org = await ctx.buildOrg();
       const inviter = await ctx.buildUserInOrg(org, { role: 'OWNER' });
-      const member = await ctx.buildUserInOrg(org, { role: 'USER' });
+      const member = await ctx.buildUserInOrg(org, { role: 'DEVELOPER' });
+      const adminRole = await ctx.getSystemRole('ADMIN');
       const rawToken = `token-${uuidv7()}`;
       const invite = await ctx.prisma.orgInvite.create({
         data: {
           id: uuidv7(),
           orgId: org.id,
           email: member.email,
-          role: 'ADMIN',
+          roleId: adminRole.id,
           tokenHash: tokenHash(rawToken),
           invitedBy: inviter.id,
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
@@ -48,8 +49,9 @@ describe('Invitation Routes', () => {
 
       const membership = await ctx.prisma.userOrganization.findUnique({
         where: { userId_orgId: { userId: member.id, orgId: org.id } },
+        include: { role: { select: { key: true } } }
       });
-      assert.strictEqual(membership.role, 'USER');
+      assert.strictEqual(membership.role.key, 'DEVELOPER');
 
       const storedInvite = await ctx.prisma.orgInvite.findUnique({ where: { id: invite.id } });
       assert.strictEqual(storedInvite.status, 'PENDING');

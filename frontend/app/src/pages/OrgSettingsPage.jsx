@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { useTheme, FONTS, Btn, Badge, Input } from '@mull/ui';
 import { useOrg } from '../hooks/useOrg';
 import { useMembers } from '../hooks/useMembers';
@@ -7,6 +7,7 @@ import { useInvites } from '../hooks/useInvites';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Avatar } from '../components/settings/Avatar';
+import AccessKeysPanel from '../components/settings/AccessKeysPanel';
 import apiService from '../services/api';
 
 function relativeExpiry(dateStr) {
@@ -69,12 +70,13 @@ function Skeleton({ height = 40, T }) {
   return <div style={{ height, borderRadius: '6px', background: T.elevated, border: `1px solid ${T.border}`, marginBottom: '8px' }} />;
 }
 
-const ROLE_VARIANT = { OWNER: 'warning', ADMIN: 'info', USER: 'default', VIEWER: 'default' };
-const TABS = ['members', 'tokens', 'billing', 'audit', 'settings'];
+const ROLE_VARIANT = { OWNER: 'warning', ADMIN: 'info', DEVELOPER: 'success', VIEWER: 'default' };
+const TABS = ['members', 'roles', 'tokens', 'billing', 'audit', 'settings'];
+const MEMBERS_PAGE_SIZE = 10;
 
 // ── Role select ──────────────────────────────────────────────
 
-function RoleSelect({ value, onChange, T }) {
+function RoleSelect({ value, onChange, roles, T, allowOwner = false, disabled = false }) {
   const [open, setOpen] = useState(false);
   const [hov, setHov] = useState(null);
   const ref = useRef(null);
@@ -86,33 +88,47 @@ function RoleSelect({ value, onChange, T }) {
     return () => document.removeEventListener('mousedown', h);
   }, [open]);
 
-  const options = [
-    { value: 'USER', label: 'member' },
-    { value: 'ADMIN', label: 'admin' },
-  ];
+  const options = (roles ?? [])
+    .filter(role => allowOwner || role.key !== 'OWNER')
+    .map(role => ({ value: role.id, label: role.name || role.key.toLowerCase() }));
   const selected = options.find(o => o.value === value) ?? options[0];
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={ref} style={{ position: 'relative', width: '100%' }}>
+      <style>{`.org-role-menu::-webkit-scrollbar { display: none; }`}</style>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        disabled={disabled}
+        onClick={() => !disabled && setOpen(o => !o)}
         style={{
-          display: 'flex', alignItems: 'center', gap: '6px', minWidth: '90px',
+          display: 'flex', alignItems: 'center', gap: '6px', width: '100%',
           background: T.surface, border: `1px solid ${open ? T.borderHover : T.border}`,
           borderRadius: '4px', padding: '8px 12px',
           fontFamily: FONTS.mono, fontSize: '12px', color: T.textSecondary,
-          cursor: 'pointer', transition: 'border-color 0.1s',
+          cursor: disabled ? 'not-allowed' : 'pointer', transition: 'border-color 0.1s',
+          opacity: disabled ? 0.55 : 1,
         }}
       >
-        <span style={{ flex: 1, textAlign: 'left' }}>{selected.label}</span>
+        <span style={{ flex: 1, textAlign: 'left' }}>{selected?.label ?? 'role'}</span>
         <ChevronDown size={12} color={T.textMuted} strokeWidth={1.5} />
       </button>
       {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
-          background: T.surface, border: `1px solid ${T.border}`, borderRadius: '4px',
-          zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.2)', overflow: 'hidden',
+        <div className="org-role-menu" style={{
+          position: 'absolute',
+          top: '50%',
+          left: 0,
+          right: 0,
+          transform: 'translateY(-50%)',
+          background: '#101315',
+          border: `1px solid ${T.borderHover}`,
+          borderRadius: '6px',
+          zIndex: 80,
+          boxShadow: '0 14px 36px rgba(0,0,0,0.44)',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+          maxHeight: '144px',
         }}>
           {options.map(opt => (
             <div
@@ -121,14 +137,20 @@ function RoleSelect({ value, onChange, T }) {
               onMouseLeave={() => setHov(null)}
               onClick={() => { onChange(opt.value); setOpen(false); }}
               style={{
-                padding: '8px 12px', cursor: 'pointer',
+                minHeight: '48px',
+                padding: '0 12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
                 fontFamily: FONTS.mono, fontSize: '12px',
                 color: opt.value === value ? T.textPrimary : T.textSecondary,
-                background: hov === opt.value ? T.elevated : (opt.value === value ? T.overlay : 'transparent'),
+                background: hov === opt.value ? '#202428' : (opt.value === value ? '#1a1f23' : 'transparent'),
                 transition: 'background 0.1s',
               }}
             >
-              {opt.label}
+              <span style={{ flex: 1 }}>{opt.label}</span>
+              {opt.value === value && <Check size={14} color={T.textPrimary} strokeWidth={2} />}
             </div>
           ))}
         </div>
@@ -139,20 +161,48 @@ function RoleSelect({ value, onChange, T }) {
 
 // ── Members tab ──────────────────────────────────────────────
 
-function MemberRow({ member, isYou, T }) {
+function MemberRow({ member, isYou, roles, onUpdateRole, onRemove, T }) {
   const [hover, setHover] = useState(false);
+  const [savingRole, setSavingRole] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const role = member.role.toLowerCase();
-  const variant = ROLE_VARIANT[member.role] ?? 'default';
   const name = member.displayName || member.email.split('@')[0];
+  const selectedRoleId = member.roleId ?? roles.find(option => option.key === member.role)?.id ?? '';
+  const isOwner = member.role === 'OWNER';
+  const canEditRole = !isYou && !isOwner;
+  const canRemove = !isYou && !isOwner;
+
+  const handleRoleChange = async (roleId) => {
+    if (!roleId || roleId === selectedRoleId) return;
+    setSavingRole(true);
+    try {
+      await onUpdateRole(member, roleId);
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setRemoving(true);
+    try {
+      await onRemove(member);
+    } finally {
+      setRemoving(false);
+    }
+  };
 
   return (
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        display: 'grid', gridTemplateColumns: '1fr auto auto auto',
+        display: 'grid', gridTemplateColumns: 'minmax(190px, 1fr) minmax(260px, 1.2fr) 180px 120px',
         gap: '16px', alignItems: 'center',
-        padding: '10px 0', borderBottom: `1px solid ${T.border}`,
+        padding: '12px 14px', borderBottom: `1px solid ${T.border}`,
+        margin: '0 -14px',
+        borderRadius: '6px',
+        background: hover ? T.overlay : 'transparent',
+        transition: 'background 0.12s ease',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -167,21 +217,58 @@ function MemberRow({ member, isYou, T }) {
               }}>you</span>
             )}
           </div>
-          <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>{member.email}</div>
         </div>
       </div>
 
-      <div />
+      <div style={{
+        fontFamily: FONTS.display,
+        fontSize: '12px',
+        color: T.textSecondary,
+        minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}>
+        {member.email}
+      </div>
 
-      <Badge T={T} variant={variant}>{role}</Badge>
+      <div>
+        {canEditRole ? (
+          <RoleSelect
+            value={selectedRoleId}
+            onChange={handleRoleChange}
+            roles={roles}
+            disabled={savingRole || removing}
+            T={T}
+          />
+        ) : (
+          <div>
+            <div style={{
+              fontFamily: FONTS.mono, fontSize: '12px', color: T.textSecondary,
+              background: T.elevated, border: `1px solid ${T.border}`,
+              borderRadius: '4px', padding: '8px 12px',
+            }}>
+              {role}
+            </div>
+            {isYou && (
+              <div style={{ marginTop: '5px', fontFamily: FONTS.display, fontSize: '10px', color: T.textMuted }}>
+                your own role is locked
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
-      <div style={{ width: '60px', display: 'flex', justifyContent: 'flex-end' }}>
-        {hover && !isYou && member.role !== 'OWNER' && (
-          <button style={{
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        {(hover || removing) && canRemove && (
+          <button
+            onClick={handleRemove}
+            disabled={removing || savingRole}
+            style={{
             background: 'none', border: 'none', cursor: 'pointer',
             fontFamily: FONTS.mono, fontSize: '11px', color: T.red, padding: '3px 6px',
           }}>
-            remove
+            {removing ? '…' : 'remove'}
           </button>
         )}
       </div>
@@ -189,20 +276,26 @@ function MemberRow({ member, isYou, T }) {
   );
 }
 
-function InviteBar({ onSendInvite, T }) {
+function InviteBar({ onSendInvite, roles, T }) {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('USER');
+  const [roleId, setRoleId] = useState('');
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'success'|'error', msg }
 
+  useEffect(() => {
+    if (!roleId && roles?.length) {
+      const fallback = roles.find(role => role.key === 'DEVELOPER') ?? roles.find(role => role.key !== 'OWNER');
+      if (fallback) setRoleId(fallback.id);
+    }
+  }, [roles, roleId]);
+
   const handleSend = async () => {
-    if (!email.trim()) return;
+    if (!email.trim() || !roleId) return;
     setSending(true);
     setFeedback(null);
     try {
-      const result = await onSendInvite({ email: email.trim(), role });
+      const result = await onSendInvite({ email: email.trim(), roleId });
       setEmail('');
-      setRole('USER');
       setFeedback({ type: 'success', msg: 'Invite sent' });
       setTimeout(() => setFeedback(null), 3500);
     } catch (e) {
@@ -215,23 +308,43 @@ function InviteBar({ onSendInvite, T }) {
   return (
     <div style={{ marginBottom: '20px' }}>
       <div style={{
-        display: 'flex', gap: '10px',
         background: T.surface, border: `1px solid ${T.border}`,
         borderRadius: '6px', padding: '16px',
       }}>
-        <div style={{ flex: 1 }}>
-          <Input
-            T={T}
-            placeholder="colleague@company.com"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSend()}
-          />
+        <div style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.textPrimary, marginBottom: '14px' }}>
+          add user to your org
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-          <RoleSelect value={role} onChange={setRole} T={T} />
-          <Btn T={T} variant="primary" size="md" onClick={handleSend} disabled={sending || !email.trim()}>
-            {sending ? 'sending…' : 'send invite'}
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(260px, 520px) 180px 132px',
+          gap: '10px',
+          alignItems: 'end',
+          maxWidth: '860px',
+        }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted }}>email</span>
+            <Input
+              T={T}
+              placeholder="colleague@company.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSend()}
+            />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted }}>role</span>
+            <RoleSelect value={roleId} onChange={setRoleId} roles={roles} T={T} />
+          </label>
+          <Btn
+            T={T}
+            variant="primary"
+            size="md"
+            onClick={handleSend}
+            disabled={sending || !email.trim() || !roleId}
+            style={{ width: '100%', justifyContent: 'center', whiteSpace: 'nowrap' }}
+          >
+            {sending ? 'sending…' : '+ send invite'}
           </Btn>
         </div>
       </div>
@@ -300,7 +413,34 @@ function InviteRow({ invite, onCancel, T }) {
   );
 }
 
-function MembersTab({ org, members, membersLoading, membersError, currentUserId, invites, invitesLoading, onSendInvite, onCancelInvite, T }) {
+function MembersTab({ org, members, membersLoading, membersError, currentUserId, invites, invitesLoading, roles, onSendInvite, onCancelInvite, onUpdateMemberRole, onRemoveMember, T }) {
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberPage, setMemberPage] = useState(1);
+  const memberCountRef = useRef(null);
+  const normalizedSearch = memberSearch.trim().toLowerCase();
+  const filteredMembers = useMemo(() => {
+    if (!normalizedSearch) return members;
+    return members.filter(member => {
+      const email = String(member.email ?? '');
+      const name = String(member.displayName || email.split('@')[0] || '');
+      const role = String(member.roleName || member.role || '');
+      return `${name} ${email} ${role}`.toLowerCase().includes(normalizedSearch);
+    });
+  }, [members, normalizedSearch]);
+  const filterActive = normalizedSearch.length > 0;
+  const pageCount = Math.max(1, Math.ceil(filteredMembers.length / MEMBERS_PAGE_SIZE));
+  const safePage = Math.min(memberPage, pageCount);
+  const pageStart = (safePage - 1) * MEMBERS_PAGE_SIZE;
+  const pageMembers = filteredMembers.slice(pageStart, pageStart + MEMBERS_PAGE_SIZE);
+
+  useEffect(() => {
+    setMemberPage(1);
+  }, [memberSearch, members.length]);
+
+  useEffect(() => {
+    if (memberPage > pageCount) setMemberPage(pageCount);
+  }, [memberPage, pageCount]);
+
   if (membersLoading) {
     return <><Skeleton height={56} T={T} /><Skeleton height={200} T={T} /></>;
   }
@@ -314,14 +454,162 @@ function MembersTab({ org, members, membersLoading, membersError, currentUserId,
 
   return (
     <div>
-      <InviteBar onSendInvite={onSendInvite} T={T} />
+      <InviteBar onSendInvite={onSendInvite} roles={roles} T={T} />
 
       <UsageBar T={T} label="seats" used={members.length} total={25} unit="members" />
 
       <Section T={T} title="Active Members">
-        {members.map(m => (
-          <MemberRow key={m.id} member={m} isYou={m.id === currentUserId} T={T} />
-        ))}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: '12px',
+          alignItems: 'center',
+          marginBottom: '14px',
+        }}>
+          <div style={{ position: 'relative', width: 'min(100%, 320px)' }}>
+            <style>{`.member-search-input::-webkit-search-cancel-button { cursor: pointer; }`}</style>
+            <Search size={14} color={T.textMuted} strokeWidth={1.8} style={{
+              position: 'absolute',
+              left: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              pointerEvents: 'none',
+            }} />
+            <input
+              className="member-search-input"
+              type="search"
+              placeholder="search members..."
+              value={memberSearch}
+              onChange={event => setMemberSearch(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  memberCountRef.current?.focus();
+                }
+              }}
+              style={{
+                width: '100%',
+                height: '36px',
+                background: filterActive ? T.elevated : T.surface,
+                border: `1px solid ${filterActive ? T.borderHover : T.border}`,
+                borderRadius: '4px',
+                padding: '0 12px 0 34px',
+                color: T.textPrimary,
+                fontFamily: FONTS.mono,
+                fontSize: '12px',
+                outline: 'none',
+                opacity: filterActive ? 1 : 0.72,
+                boxShadow: filterActive ? `0 0 0 1px ${T.borderHover} inset` : 'none',
+                transition: 'opacity 0.12s ease, background 0.12s ease, border-color 0.12s ease',
+              }}
+            />
+          </div>
+          <div
+            ref={memberCountRef}
+            tabIndex={-1}
+            style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted, flexShrink: 0, outline: 'none' }}
+          >
+            {filteredMembers.length} / {members.length} members
+          </div>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(190px, 1fr) minmax(260px, 1.2fr) 180px 120px',
+          gap: '16px',
+          padding: '0 14px 9px',
+          borderBottom: `1px solid ${T.border}`,
+          fontFamily: FONTS.mono,
+          fontSize: '10px',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          color: T.textMuted,
+        }}>
+          <div>member</div>
+          <div>email</div>
+          <div>role</div>
+          <div style={{ textAlign: 'right' }}>actions</div>
+        </div>
+        {pageMembers.length === 0 ? (
+          <div style={{
+            padding: '18px 0',
+            fontFamily: FONTS.mono,
+            fontSize: '11px',
+            color: T.textMuted,
+          }}>
+            no members match "{memberSearch}"
+          </div>
+        ) : (
+          pageMembers.map(m => (
+            <MemberRow
+              key={m.id}
+              member={m}
+              isYou={m.id === currentUserId}
+              roles={roles}
+              onUpdateRole={onUpdateMemberRole}
+              onRemove={onRemoveMember}
+              T={T}
+            />
+          ))
+        )}
+        {filteredMembers.length > MEMBERS_PAGE_SIZE && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+            paddingTop: '12px',
+          }}>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>
+              showing {pageStart + 1}-{Math.min(pageStart + MEMBERS_PAGE_SIZE, filteredMembers.length)} of {filteredMembers.length}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setMemberPage(page => Math.max(1, page - 1))}
+                disabled={safePage === 1}
+                style={{
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: T.surface,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: '4px',
+                  color: T.textSecondary,
+                  cursor: safePage === 1 ? 'not-allowed' : 'pointer',
+                  opacity: safePage === 1 ? 0.45 : 1,
+                }}
+              >
+                <ChevronLeft size={15} strokeWidth={1.8} />
+              </button>
+              <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>
+                {safePage} / {pageCount}
+              </span>
+              <button
+                type="button"
+                onClick={() => setMemberPage(page => Math.min(pageCount, page + 1))}
+                disabled={safePage === pageCount}
+                style={{
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: T.surface,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: '4px',
+                  color: T.textSecondary,
+                  cursor: safePage === pageCount ? 'not-allowed' : 'pointer',
+                  opacity: safePage === pageCount ? 0.45 : 1,
+                }}
+              >
+                <ChevronRight size={15} strokeWidth={1.8} />
+              </button>
+            </div>
+          </div>
+        )}
       </Section>
 
       <Section T={T} title="Pending Invites">
@@ -344,17 +632,359 @@ function MembersTab({ org, members, membersLoading, membersError, currentUserId,
 function TokensTab({ T }) {
   return (
     <Section T={T} title="Organization API Tokens" description="Shared tokens scoped to this org — visible to admins">
-      <div style={{ textAlign: 'center', padding: '24px 0 20px' }}>
-        <div style={{ fontFamily: FONTS.mono, fontSize: '22px', color: T.textMuted, marginBottom: '10px' }}>▷</div>
-        <div style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: '13px', color: T.textSecondary, marginBottom: '4px' }}>
-          Org tokens are not available yet.
-        </div>
-        <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted, marginBottom: '16px' }}>
-          Scoped machine credentials will appear here once token management ships.
-        </div>
-        <Btn T={T} variant="terminal" size="sm" icon="+" disabled>new org token</Btn>
-      </div>
+      <AccessKeysPanel T={T} mode="org" />
     </Section>
+  );
+}
+
+const ROLE_SCOPE_GROUPS = [
+  { key: 'org', label: 'Organization', scopes: ['org:read', 'org:update'] },
+  { key: 'members', label: 'Members', scopes: ['members:read', 'members:manage', 'roles:read', 'roles:manage'] },
+  { key: 'apps', label: 'Apps & Environments', scopes: ['apps:read', 'apps:manage', 'environments:read', 'environments:manage'] },
+  { key: 'parameters', label: 'Parameters', scopes: ['parameters:read', 'parameters:write', 'parameters:delete'] },
+  { key: 'config', label: 'Config Values', scopes: ['config:read', 'config:reveal', 'config:write'] },
+  { key: 'security', label: 'Security & Audit', scopes: ['access_keys:read', 'access_keys:manage', 'audit:read'] }
+];
+
+const ROLE_SCOPES = ROLE_SCOPE_GROUPS.flatMap(group => group.scopes);
+
+function ScopePill({ scope, active, onClick, disabled = false, T }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        padding: '6px 9px',
+        borderRadius: '4px',
+        border: `1px solid ${active ? T.termGreenBorder : T.border}`,
+        background: active ? T.termGreenBg : T.elevated,
+        color: active ? T.termGreen : T.textSecondary,
+        fontFamily: FONTS.mono,
+        fontSize: '11px',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+    >
+      {scope}
+    </button>
+  );
+}
+
+function ScopeGroups({ selectedScopes, onToggle, disabled = false, T }) {
+  const selected = new Set(selectedScopes);
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
+      {ROLE_SCOPE_GROUPS.map(group => (
+        <div key={group.key} style={{ border: `1px solid ${T.border}`, borderRadius: '6px', padding: '12px', background: T.overlay }}>
+          <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '9px' }}>
+            {group.label}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px' }}>
+            {group.scopes.map(scope => (
+              <ScopePill
+                key={scope}
+                scope={scope}
+                active={selected.has(scope)}
+                disabled={disabled}
+                onClick={() => onToggle?.(scope)}
+                T={T}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RoleScopeDetails({ role, T }) {
+  const selected = new Set((role.permissions ?? []).map(permission => permission.scope));
+  return (
+    <div style={{ padding: '0 14px 14px', borderBottom: `1px solid ${T.border}`, background: T.surface }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px', paddingTop: '12px' }}>
+        {ROLE_SCOPE_GROUPS.map(group => {
+          const scopes = group.scopes.filter(scope => selected.has(scope));
+          return (
+            <div key={group.key} style={{ border: `1px solid ${T.border}`, borderRadius: '6px', padding: '10px', background: T.overlay }}>
+              <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
+                {group.label}
+              </div>
+              {scopes.length === 0 ? (
+                <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted }}>no scopes</div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {scopes.map(scope => (
+                    <span key={scope} style={{
+                      padding: '4px 7px',
+                      borderRadius: '4px',
+                      border: `1px solid ${T.border}`,
+                      background: T.elevated,
+                      color: T.textSecondary,
+                      fontFamily: FONTS.mono,
+                      fontSize: '10px',
+                    }}>
+                      {scope}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CreateRoleModal({ open, paid, name, setName, permissions, setPermissions, saving, onCreate, onClose, T }) {
+  if (!open) return null;
+  const selected = new Set(permissions);
+  const toggle = scope => {
+    setPermissions(prev => prev.includes(scope) ? prev.filter(item => item !== scope) : [...prev, scope]);
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 200,
+      background: 'rgba(0,0,0,0.62)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px',
+    }}>
+      <div style={{
+        width: 'min(820px, 100%)',
+        maxHeight: 'min(760px, 92vh)',
+        overflowY: 'auto',
+        background: T.surface,
+        border: `1px solid ${T.border}`,
+        borderRadius: '8px',
+        boxShadow: '0 24px 80px rgba(0,0,0,0.48)',
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '16px 18px',
+          borderBottom: `1px solid ${T.border}`,
+          background: T.overlay,
+        }}>
+          <div>
+            <div style={{ fontFamily: FONTS.mono, fontSize: '13px', color: T.textPrimary }}>create custom role</div>
+            <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted, marginTop: '2px' }}>
+              Name the role and choose the scopes it grants.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              width: '30px',
+              height: '30px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: T.surface,
+              border: `1px solid ${T.border}`,
+              borderRadius: '4px',
+              color: T.textMuted,
+              cursor: 'pointer',
+            }}
+          >
+            <X size={15} strokeWidth={1.8} />
+          </button>
+        </div>
+
+        <div style={{ padding: '18px' }}>
+          {!paid && (
+            <div style={{
+              marginBottom: '14px',
+              padding: '10px 12px',
+              border: `1px solid ${T.amberBorder}`,
+              background: T.amberBg,
+              color: T.amber,
+              borderRadius: '4px',
+              fontFamily: FONTS.display,
+              fontSize: '12px',
+            }}>
+              Custom roles are available on paid plans.
+            </div>
+          )}
+
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted }}>role name</span>
+            <Input T={T} value={name} placeholder="Platform engineer" onChange={e => setName(e.target.value)} disabled={!paid || saving} />
+          </label>
+
+          <ScopeGroups
+            selectedScopes={permissions}
+            onToggle={toggle}
+            disabled={!paid || saving}
+            T={T}
+          />
+
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+            marginTop: '18px',
+          }}>
+            <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>
+              {selected.size} / {ROLE_SCOPES.length} scopes selected
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Btn T={T} variant="secondary" size="sm" onClick={onClose} disabled={saving}>cancel</Btn>
+              <Btn T={T} variant="primary" size="sm" onClick={onCreate} disabled={!paid || saving || !name.trim()}>
+                {saving ? 'creating...' : 'create role'}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RoleRow({ role, open, onToggle, T }) {
+  const permissionCount = (role.permissions ?? []).length;
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          width: '100%',
+          display: 'grid',
+          gridTemplateColumns: 'minmax(220px, 1fr) 120px 120px 28px',
+          gap: '16px',
+          alignItems: 'center',
+          padding: '12px 14px',
+          background: open ? T.overlay : 'transparent',
+          border: 'none',
+          borderBottom: `1px solid ${T.border}`,
+          color: 'inherit',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {role.name}
+          </div>
+          <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {role.description || role.key}
+          </div>
+        </div>
+        <Badge T={T} variant={role.kind === 'SYSTEM' ? 'default' : 'info'}>{role.kind.toLowerCase()}</Badge>
+        <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>{permissionCount} scopes</div>
+        <ChevronDown
+          size={15}
+          color={T.textMuted}
+          strokeWidth={1.8}
+          style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.18s ease' }}
+        />
+      </button>
+      <div
+        aria-hidden={!open}
+        style={{
+          maxHeight: open ? '520px' : 0,
+          opacity: open ? 1 : 0,
+          overflow: 'hidden',
+          transition: 'max-height 0.28s ease, opacity 0.18s ease',
+        }}
+      >
+        <div style={{
+          transform: open ? 'translateY(0)' : 'translateY(-8px)',
+          transition: 'transform 0.28s ease',
+        }}>
+          <RoleScopeDetails role={role} T={T} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RolesTab({ org, roles, onRefresh, T }) {
+  const { toast } = useToast();
+  const paid = org?.plan === 'PRO' || org?.plan === 'ENTERPRISE';
+  const [modalOpen, setModalOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [permissions, setPermissions] = useState(['org:read', 'apps:read', 'environments:read', 'parameters:read', 'config:read']);
+  const [saving, setSaving] = useState(false);
+  const [openRoleId, setOpenRoleId] = useState(null);
+
+  const create = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await apiService.createRole({ name: name.trim(), permissions: permissions.map(scope => ({ scope })) });
+      setName('');
+      setPermissions(['org:read', 'apps:read', 'environments:read', 'parameters:read', 'config:read']);
+      setModalOpen(false);
+      await onRefresh();
+      toast('role created');
+    } catch (error) {
+      toast('role creation failed', 'error', error.response?.data?.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <Section T={T} title="Org Roles" description="Roles are org-wide presets of scopes. Custom roles are available on paid plans.">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
+          <Btn T={T} variant="primary" size="sm" onClick={() => setModalOpen(true)}>
+            + create role
+          </Btn>
+        </div>
+        <div style={{ border: `1px solid ${T.border}`, borderRadius: '6px', overflow: 'hidden' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(220px, 1fr) 120px 120px 28px',
+            gap: '16px',
+            padding: '0 14px 9px',
+            borderBottom: `1px solid ${T.border}`,
+            fontFamily: FONTS.mono,
+            fontSize: '10px',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: T.textMuted,
+          }}>
+            <div>role</div>
+            <div>kind</div>
+            <div>permissions</div>
+            <div />
+          </div>
+          {roles.map(role => (
+            <RoleRow
+              key={role.id}
+              role={role}
+              open={openRoleId === role.id}
+              onToggle={() => setOpenRoleId(current => current === role.id ? null : role.id)}
+              T={T}
+            />
+          ))}
+        </div>
+      </Section>
+
+      <CreateRoleModal
+        open={modalOpen}
+        paid={paid}
+        name={name}
+        setName={setName}
+        permissions={permissions}
+        setPermissions={setPermissions}
+        saving={saving}
+        onCreate={create}
+        onClose={() => setModalOpen(false)}
+        T={T}
+      />
+    </div>
   );
 }
 
@@ -706,12 +1336,23 @@ export default function OrgSettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { org, loading: orgLoading, error: orgError, update: updateOrg } = useOrg();
-  const { members, loading: membersLoading, error: membersError } = useMembers();
+  const { members, loading: membersLoading, error: membersError, refetch: refetchMembers } = useMembers();
   const { invites, loading: invitesLoading, sendInvite: _sendInvite, revokeInvite } = useInvites();
+  const [roles, setRoles] = useState([]);
 
-  const sendInvite = async ({ email, role }) => {
+  const loadRoles = async () => {
     try {
-      const result = await _sendInvite({ email, role });
+      setRoles(await apiService.getRoles());
+    } catch (error) {
+      toast('failed to load roles', 'error', error.response?.data?.message);
+    }
+  };
+
+  useEffect(() => { loadRoles(); }, []);
+
+  const sendInvite = async ({ email, roleId }) => {
+    try {
+      const result = await _sendInvite({ email, roleId });
       toast('invite sent', 'success', email);
       return result;
     } catch (e) {
@@ -728,6 +1369,32 @@ export default function OrgSettingsPage() {
     } catch (e) {
       const message = e.response?.data?.message || 'Failed to revoke invite';
       toast('revoke failed', 'error', message);
+      throw e;
+    }
+  };
+
+  const updateMemberRole = async (member, roleId) => {
+    const nextRole = roles.find(role => role.id === roleId);
+    try {
+      await apiService.updateMemberRole(member.id, roleId);
+      await refetchMembers();
+      toast('member role updated', 'success', `${member.email} → ${nextRole?.name ?? 'role'}`);
+    } catch (e) {
+      const message = e.response?.data?.message || 'Failed to update member role';
+      toast('role update failed', 'error', message);
+      throw e;
+    }
+  };
+
+  const removeMember = async (member) => {
+    if (!window.confirm(`Remove ${member.email} from this organization?`)) return;
+    try {
+      await apiService.removeMember(member.id);
+      await refetchMembers();
+      toast('member removed', 'success', member.email);
+    } catch (e) {
+      const message = e.response?.data?.message || 'Failed to remove member';
+      toast('remove failed', 'error', message);
       throw e;
     }
   };
@@ -836,10 +1503,14 @@ export default function OrgSettingsPage() {
             currentUserId={user?.id}
             invites={invites}
             invitesLoading={invitesLoading}
+            roles={roles}
             onSendInvite={sendInvite}
             onCancelInvite={cancelInvite}
+            onUpdateMemberRole={updateMemberRole}
+            onRemoveMember={removeMember}
           />
         )}
+        {tab === 'roles' && <RolesTab T={T} org={org} roles={roles} onRefresh={loadRoles} />}
         {tab === 'tokens'  && <TokensTab T={T} />}
         {tab === 'billing' && <BillingTab T={T} memberCount={org?.memberCount ?? members.length} />}
         {tab === 'audit'   && <AuditTab T={T} />}

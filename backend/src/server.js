@@ -20,6 +20,7 @@ import parameterRoutes from './routes/parameters.js';
 import parameterValueRoutes from './routes/parameterValues.js';
 import orgRoutes from './routes/orgs.js';
 import invitationRoutes from './routes/invitations.js';
+import accessKeyRoutes from './routes/accessKeys.js';
 import { envSchema } from './config.js';
 
 /**
@@ -62,7 +63,7 @@ export function buildApp(options = {}) {
         callback(new Error(`Origin ${origin} not allowed`));
       }
     },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
@@ -97,6 +98,7 @@ export function buildApp(options = {}) {
   // Auth routes - no prefix (no org context)
   fastify.register(authRoutes);
   fastify.register(invitationRoutes);
+  fastify.register(accessKeyRoutes);
 
   // Org-scoped routes - all use /orgs/:orgId prefix
   fastify.register(configRoutes, { prefix: '/orgs/:orgId' });

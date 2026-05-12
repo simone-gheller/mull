@@ -28,6 +28,7 @@ export default async function invitationRoutes(fastify) {
       include: {
         org: { select: { name: true } },
         inviter: { select: { email: true, displayName: true } },
+        role: { select: { id: true, key: true, name: true } },
       },
     });
 
@@ -63,7 +64,9 @@ export default async function invitationRoutes(fastify) {
       orgName: invite.org.name,
       inviterEmail: invite.inviter.email,
       inviterName: invite.inviter.displayName,
-      role: invite.role,
+      role: invite.role.key,
+      roleId: invite.role.id,
+      roleName: invite.role.name,
       email: invite.email,
       expiresAt: invite.expiresAt,
     });
@@ -91,7 +94,10 @@ export default async function invitationRoutes(fastify) {
 
     const invite = await fastify.prisma.orgInvite.findUnique({
       where: { tokenHash },
-      include: { org: { select: { id: true, name: true } } },
+      include: {
+        org: { select: { id: true, name: true } },
+        role: { select: { id: true, key: true, name: true } }
+      },
     });
 
     if (!invite) {
@@ -156,7 +162,7 @@ export default async function invitationRoutes(fastify) {
 
     const existingMembership = await fastify.prisma.userOrganization.findUnique({
       where: { userId_orgId: { userId: request.user.id, orgId: invite.orgId } },
-      select: { role: true },
+      select: { role: { select: { key: true } } },
     });
     if (existingMembership) {
       await fastify.audit.log({
@@ -167,18 +173,18 @@ export default async function invitationRoutes(fastify) {
         resourceId: invite.id,
         resourceLabel: invite.email,
         outcome: 'DENIED',
-        metadata: { reason: 'already_member', role: existingMembership.role, tokenHash }
+        metadata: { reason: 'already_member', role: existingMembership.role.key, tokenHash }
       });
       return reply.status(409).send({
         error: 'Conflict',
         message: 'User is already a member of this organization',
-        role: existingMembership.role,
+        role: existingMembership.role.key,
       });
     }
 
     await fastify.prisma.$transaction([
       fastify.prisma.userOrganization.create({
-        data: { userId: request.user.id, orgId: invite.orgId, role: invite.role },
+        data: { userId: request.user.id, orgId: invite.orgId, roleId: invite.roleId },
       }),
       fastify.prisma.orgInvite.update({
         where: { id: invite.id },
@@ -193,13 +199,13 @@ export default async function invitationRoutes(fastify) {
       resourceType: 'invite',
       resourceId: invite.id,
       resourceLabel: invite.email,
-      metadata: { role: invite.role, tokenHash }
+      metadata: { role: invite.role.key, roleId: invite.roleId, tokenHash }
     });
 
     return reply.send({
       orgId: invite.orgId,
       orgName: invite.org.name,
-      role: invite.role,
+      role: invite.role.key,
     });
   });
 }

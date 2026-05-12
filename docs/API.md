@@ -6,16 +6,72 @@ Current contract status: pre-release, no backward-compatibility guarantees yet.
 
 ## Authentication
 
-All endpoints except `/health`, `/auth/*`, and `GET /invites/:token` require a Supabase Bearer JWT. `POST /invites/accept` is authenticated.
+Browser/user management endpoints use a Supabase Bearer JWT. Runtime and automation endpoints can also use mull access keys where a route declares the required scope.
 
 ```bash
 curl http://localhost:3000/auth/me \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+Access key formats:
+
+```txt
+mull_pat_<keyId>_<secret>  # personal access token
+mull_st_<keyId>_<secret>   # organization service token
+```
+
+Access key scopes:
+
+```txt
+config:read
+parameters:read
+parameters:write
+apps:read
+environments:read
+```
+
+Management endpoints for orgs, members, invites, audit, billing, and access-key creation/revocation require a Supabase user session. Access keys are shown only once on creation; the database stores a hash and prefix only.
+
+```bash
+curl http://localhost:3000/orgs/$ORG_ID/config/$APP_ID/$ENV_ID \
+  -H "Authorization: Bearer $MULL_SERVICE_TOKEN"
+```
+
 Registration is not a backend REST endpoint. The frontend calls `supabase.auth.signUp()`; a PostgreSQL trigger on `auth.users` creates `public.users`, `public.organizations`, and `public.user_organizations` atomically.
 
 Google OAuth uses the same trigger path.
+
+### Access Keys
+
+Personal tokens:
+
+```txt
+GET    /auth/access-keys
+POST   /auth/access-keys
+DELETE /auth/access-keys/:keyId
+```
+
+Service tokens:
+
+```txt
+GET    /orgs/:orgId/access-keys
+POST   /orgs/:orgId/access-keys
+DELETE /orgs/:orgId/access-keys/:keyId
+```
+
+Create body:
+
+```json
+{
+  "name": "github deploy",
+  "scopes": ["config:read"],
+  "ttl": "90d",
+  "appId": "019...",
+  "environmentId": "019..."
+}
+```
+
+`ttl` can be `30d`, `90d`, `365d`, or `never`. `appId` and `environmentId` are optional bindings.
 
 ## Organization Context
 
@@ -25,13 +81,15 @@ Most product endpoints are org-scoped:
 /orgs/:orgId/...
 ```
 
-`validateOrgAccess` checks that the authenticated user is a member of `:orgId` and sets `request.orgRole`.
+`validateOrgAccess` checks that the authenticated user is a member of `:orgId` and sets `request.orgRole` as a compatibility alias for the role key.
 
-Roles are per organization:
+Roles are per organization and are presets of scopes:
 
 ```txt
-OWNER > ADMIN > USER
+OWNER > ADMIN > DEVELOPER > VIEWER
 ```
+
+Custom roles are org-scoped and paid-plan only. Config values are secret-by-default; `config:reveal` controls plaintext access, and protected environments can restrict reveal/write through permission conditions.
 
 ## Auth
 
@@ -48,9 +106,40 @@ Returns the current backend user and memberships.
     {
       "id": "019dfe08-8b5f-7fec-86f4-b8675bf9580f",
       "name": "acme-corp",
-      "role": "OWNER"
+      "role": "OWNER",
+      "roleId": "019...",
+      "roleKey": "OWNER",
+      "roleName": "Owner"
     }
   ]
+}
+```
+
+### `GET /auth/whoami`
+
+Returns the authenticated API actor for Supabase JWTs, personal access tokens, and service tokens. Use this for CLI/SDK bootstrap when the caller needs org IDs.
+
+```bash
+curl http://localhost:3000/auth/whoami \
+  -H "Authorization: Bearer $MULL_TOKEN"
+```
+
+```json
+{
+  "identityType": "USER",
+  "identityName": "Ada Lovelace",
+  "credentialType": "ACCESS_KEY",
+  "credentialPrefix": "mull_pat_019...",
+  "scopes": ["config:read"],
+  "organizations": [
+    {
+      "id": "019...",
+      "name": "acme",
+      "role": "OWNER"
+    }
+  ],
+  "appId": null,
+  "environmentId": null
 }
 ```
 
@@ -121,19 +210,21 @@ Returns org environments.
     "id": "019...",
     "orgId": "019...",
     "name": "production",
-    "isSecret": true
+    "tier": "PRODUCTION",
+    "protected": true
   }
 ]
 ```
 
-`isSecret=true` means values in that environment are treated as secret regardless of parameter-level secrecy.
+All values are sensitive by default. `protected=true` means reveal/write requires a permission that allows protected environments.
 
 ### `POST /orgs/:orgId/environments`
 
 ```json
 {
   "name": "staging",
-  "isSecret": false
+  "tier": "STAGING",
+  "protected": false
 }
 ```
 
@@ -157,8 +248,7 @@ Returns parameter definitions directly owned by the app. This endpoint does not 
     "id": "019...",
     "appId": "019...",
     "key": "DATABASE_URL",
-    "description": "Primary database URL",
-    "isSecret": true
+    "description": "Primary database URL"
   }
 ]
 ```
@@ -169,8 +259,7 @@ Returns parameter definitions directly owned by the app. This endpoint does not 
 {
   "appId": "019...",
   "key": "DATABASE_URL",
-  "description": "Primary database URL",
-  "isSecret": true
+  "description": "Primary database URL"
 }
 ```
 
@@ -190,7 +279,7 @@ Response:
 ```json
 {
   "app": { "id": "019...", "name": "api" },
-  "environment": { "id": "019...", "name": "production", "isSecret": true },
+  "environment": { "id": "019...", "name": "production", "tier": "PRODUCTION", "protected": true },
   "summary": {
     "total": 3,
     "local": 1,
@@ -205,8 +294,7 @@ Response:
         "id": "019...",
         "appId": "019...",
         "appName": "api",
-        "description": "Primary database URL",
-        "isSecret": true
+        "description": "Primary database URL"
       },
       "overridden": {
         "parameterId": "019...",
@@ -221,7 +309,6 @@ Response:
         "value": "postgres://example",
         "sourceAppId": "019...",
         "sourceAppName": "root",
-        "isSecret": true,
         "isSet": true,
         "canRead": true,
         "canWrite": true
@@ -341,7 +428,7 @@ Implementation:
 - The view returns encrypted columns only.
 - Node decrypts the already-resolved rows in memory.
 
-Caveat: this endpoint currently uses authenticated user JWTs. Scoped service tokens for runtime/CI config fetches are still backlog.
+Access keys can call this endpoint when they have `config:read`. Optional access-key `appId` and `environmentId` bindings are enforced before rendering.
 
 Successful config fetches create `config.fetch` audit events with app/environment metadata and parameter count, never rendered plaintext values.
 
@@ -374,7 +461,8 @@ Response:
       "resourceLabel": "DATABASE_URL",
       "outcome": "SUCCESS",
       "metadata": {
-        "isSecret": true,
+        "protected": true,
+        "tier": "PRODUCTION",
         "isSet": true
       },
       "createdAt": "2026-05-10T12:00:00.000Z",
@@ -422,10 +510,10 @@ The backend hashes the received token and never persists the raw token.
 
 - IDs are UUIDv7 for app-created rows.
 - `User.role` and `User.organizationId` do not exist.
-- Roles live in `UserOrganization`.
+- Memberships point to `Role` via `UserOrganization.roleId`.
 - `ParameterValue.value` does not exist.
 - `ParameterValue.isSet` is the inheritance state flag.
-- `Environment.isSecret` and `Parameter.isSecret` both contribute to secret gating.
+- `Environment.protected` and `Environment.tier` feed RBAC conditions; `Parameter.isSecret` and `Environment.isSecret` no longer exist.
 - `OrgInvite.token` does not exist; invite lookup uses `tokenHash` / `token_hash`.
 - `AuditEvent` stores tenant-visible activity metadata with per-row retention.
 
