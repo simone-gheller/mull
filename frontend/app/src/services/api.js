@@ -67,6 +67,21 @@ class ApiService {
     await apiClient.delete(`/orgs/${this.orgId}/access-keys/${keyId}`);
   }
 
+  async getBilling() {
+    const response = await apiClient.get(`/orgs/${this.orgId}/billing`);
+    return response.data;
+  }
+
+  async createBillingCheckout(data) {
+    const response = await apiClient.post(`/orgs/${this.orgId}/billing/checkout`, data);
+    return response.data;
+  }
+
+  async createBillingPortalSession() {
+    const response = await apiClient.post(`/orgs/${this.orgId}/billing/portal`);
+    return response.data;
+  }
+
   // Members
   async getMembers() {
     const response = await apiClient.get(`/orgs/${this.orgId}/members`);

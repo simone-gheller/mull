@@ -378,7 +378,7 @@ const Landing = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {/* Starter Plan */}
+            {/* Free Plan */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -386,13 +386,13 @@ const Landing = () => {
               transition={{ delay: 0.1 }}
             >
               <Card className="h-full p-8 text-center relative">
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">Starter</h3>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">Free</h3>
                 <div className="text-4xl font-bold text-blue-600 mb-2">Free</div>
                 <p className="text-gray-500 mb-8">Perfect for small projects</p>
                 <ul className="space-y-3 mb-8 text-left">
                   <li className="flex items-center">
                     <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span>Up to 5 projects</span>
+                    <span>3 apps</span>
                   </li>
                   <li className="flex items-center">
                     <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
@@ -418,7 +418,7 @@ const Landing = () => {
               </Card>
             </motion.div>
 
-            {/* Pro Plan */}
+            {/* Team Plan */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -431,17 +431,17 @@ const Landing = () => {
                     Most Popular
                   </span>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">Pro</h3>
-                <div className="text-4xl font-bold text-blue-600 mb-2">$29<span className="text-lg text-gray-500">/mo</span></div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">Team</h3>
+                <div className="text-4xl font-bold text-blue-600 mb-2">$49<span className="text-lg text-gray-500">/mo</span></div>
                 <p className="text-gray-500 mb-8">For growing teams</p>
                 <ul className="space-y-3 mb-8 text-left">
                   <li className="flex items-center">
                     <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span>Unlimited projects</span>
+                    <span>25 apps</span>
                   </li>
                   <li className="flex items-center">
                     <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span>10,000 parameters</span>
+                    <span>2,500 values</span>
                   </li>
                   <li className="flex items-center">
                     <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
@@ -453,7 +453,7 @@ const Landing = () => {
                   </li>
                   <li className="flex items-center">
                     <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span>Team collaboration</span>
+                    <span>Custom roles</span>
                   </li>
                 </ul>
                 <Button 
@@ -462,7 +462,7 @@ const Landing = () => {
                   variant="primary" 
                   className="w-full"
                 >
-                  Start Pro Trial
+                  Start Team Trial
                 </Button>
               </Card>
             </motion.div>
@@ -481,7 +481,7 @@ const Landing = () => {
                 <ul className="space-y-3 mb-8 text-left">
                   <li className="flex items-center">
                     <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span>Everything in Pro</span>
+                    <span>Everything in Business</span>
                   </li>
                   <li className="flex items-center">
                     <CheckCircle className="w-5 h-5 text-green-500 mr-3" />

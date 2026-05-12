@@ -18,6 +18,33 @@ function relativeExpiry(dateStr) {
   return `expires in ${days}d`;
 }
 
+function formatPlan(plan) {
+  return String(plan || 'FREE').toLowerCase().replace(/^\w/, c => c.toUpperCase());
+}
+
+function formatLimit(value) {
+  return value === null ? 'unlimited' : value;
+}
+
+function loadPaddleScript() {
+  if (window.Paddle) return Promise.resolve(window.Paddle);
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-paddle-js]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.Paddle), { once: true });
+      existing.addEventListener('error', reject, { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.paddle.com/paddle/v2/paddle.js';
+    script.async = true;
+    script.dataset.paddleJs = 'true';
+    script.onload = () => resolve(window.Paddle);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
 // ── Shared primitives ────────────────────────────────────────
 
 function Section({ title, description, children, T, danger }) {
@@ -45,21 +72,22 @@ function Section({ title, description, children, T, danger }) {
 }
 
 function UsageBar({ label, used, total, unit, T }) {
-  const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0;
+  const unlimited = total === null;
+  const pct = unlimited ? 0 : total > 0 ? Math.min((used / total) * 100, 100) : 0;
   const color = pct > 85 ? T.red : pct > 65 ? T.amber : T.termGreen;
   return (
     <div style={{ marginBottom: '14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
         <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textSecondary }}>{label}</span>
         <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>
-          {used} / {total} {unit}
+          {unlimited ? `${used} / unlimited ${unit}` : `${used} / ${total} ${unit}`}
         </span>
       </div>
       <div style={{ height: '4px', background: T.elevated, borderRadius: '2px', overflow: 'hidden' }}>
         <div style={{
-          height: '100%', width: `${pct}%`, background: color,
+          height: '100%', width: `${unlimited ? 100 : pct}%`, background: unlimited ? T.borderHover : color,
           borderRadius: '2px', transition: 'width 0.6s ease',
-          boxShadow: `0 0 6px ${color}40`,
+          boxShadow: unlimited ? 'none' : `0 0 6px ${color}40`,
         }} />
       </div>
     </div>
@@ -910,7 +938,7 @@ function RoleRow({ role, open, onToggle, T }) {
 
 function RolesTab({ org, roles, onRefresh, T }) {
   const { toast } = useToast();
-  const paid = org?.plan === 'PRO' || org?.plan === 'ENTERPRISE';
+  const paid = org?.plan === 'TEAM' || org?.plan === 'BUSINESS' || org?.plan === 'ENTERPRISE';
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState('');
   const [permissions, setPermissions] = useState(['org:read', 'apps:read', 'environments:read', 'parameters:read', 'config:read']);
@@ -990,7 +1018,75 @@ function RolesTab({ org, roles, onRefresh, T }) {
 
 // ── Billing tab ──────────────────────────────────────────────
 
-function BillingTab({ memberCount, T }) {
+function BillingTab({ T }) {
+  const { toast } = useToast();
+  const [billing, setBilling] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      setBilling(await apiService.getBilling());
+    } catch (error) {
+      toast('billing unavailable', 'error', error.response?.data?.message || error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const openCheckout = async (plan, interval = 'month') => {
+    setBusy(`${plan}-${interval}`);
+    try {
+      const checkout = await apiService.createBillingCheckout({ plan, interval });
+      const Paddle = await loadPaddleScript();
+      if (checkout.environment === 'sandbox') Paddle.Environment.set('sandbox');
+      if (!window.__mullPaddleInitialized) {
+        Paddle.Initialize({
+          token: checkout.clientToken,
+          checkout: { settings: { displayMode: 'overlay', variant: 'one-page', theme: 'dark', locale: 'en' } }
+        });
+        window.__mullPaddleInitialized = true;
+      }
+      Paddle.Checkout.open({
+        items: checkout.items,
+        customer: checkout.customer,
+        customData: checkout.customData,
+        settings: checkout.settings
+      });
+    } catch (error) {
+      toast('checkout failed', 'error', error.response?.data?.message || error.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const openPortal = async () => {
+    setBusy('portal');
+    try {
+      const session = await apiService.createBillingPortalSession();
+      if (session.url) window.location.href = session.url;
+    } catch (error) {
+      toast('portal failed', 'error', error.response?.data?.message || error.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (loading) return <Skeleton height={160} T={T} />;
+
+  const plan = billing?.plan || 'FREE';
+  const subscription = billing?.subscription;
+  const limits = billing?.limits || {};
+  const usage = billing?.usage || {};
+  const paid = plan !== 'FREE';
+  const headline = plan === 'FREE' ? '$0' : plan === 'TEAM' ? '$49' : plan === 'BUSINESS' ? '$149' : 'custom';
+  const renewal = subscription?.currentPeriodEnd
+    ? new Date(subscription.currentPeriodEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+
   return (
     <div>
       <div style={{
@@ -1003,34 +1099,62 @@ function BillingTab({ memberCount, T }) {
             CURRENT PLAN
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span style={{ fontFamily: FONTS.display, fontWeight: 700, fontSize: '28px', color: T.textPrimary }}>$0</span>
-            <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>/month</span>
+            <span style={{ fontFamily: FONTS.display, fontWeight: 700, fontSize: '28px', color: T.textPrimary }}>{headline}</span>
+            {plan !== 'ENTERPRISE' && <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>/month</span>}
             <span style={{
               fontFamily: FONTS.mono, fontSize: '11px', letterSpacing: '0.06em',
               padding: '3px 10px', borderRadius: '3px', textTransform: 'uppercase',
               background: T.elevated, color: T.textMuted, border: `1px solid ${T.border}`,
-            }}>Hobby</span>
+            }}>{formatPlan(plan)}</span>
+            {subscription?.status && <span style={{
+              fontFamily: FONTS.mono, fontSize: '11px', letterSpacing: '0.06em',
+              padding: '3px 10px', borderRadius: '3px', textTransform: 'uppercase',
+              background: T.overlay, color: T.textSecondary, border: `1px solid ${T.border}`,
+            }}>{subscription.status.toLowerCase()}</span>}
           </div>
           <div style={{ fontFamily: FONTS.display, fontSize: '12px', color: T.textSecondary, marginTop: '4px' }}>
-            Free tier — no billing card required
+            {renewal ? `${subscription.cancelAtPeriodEnd ? 'Access ends' : 'Next renewal'} ${renewal}` : 'No billing card required'}
           </div>
         </div>
-        <Btn T={T} variant="warning" size="sm" disabled>upgrade plan</Btn>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {paid && <Btn T={T} variant="secondary" size="sm" onClick={openPortal} disabled={busy === 'portal'}>manage billing</Btn>}
+          {plan !== 'BUSINESS' && plan !== 'ENTERPRISE' && (
+            <Btn T={T} variant="warning" size="sm" onClick={() => openCheckout(plan === 'FREE' ? 'TEAM' : 'BUSINESS')} disabled={!!busy}>
+              {plan === 'FREE' ? 'upgrade team' : 'upgrade business'}
+            </Btn>
+          )}
+          {plan === 'ENTERPRISE' && <Btn T={T} variant="secondary" size="sm" disabled>contact support</Btn>}
+        </div>
       </div>
 
       <Section T={T} title="Usage This Period">
-        <UsageBar T={T} label="members" used={memberCount} total={3} unit="members" />
-        <div style={{
-          marginTop: '14px',
-          padding: '12px 14px',
-          background: T.overlay,
-          border: `1px solid ${T.border}`,
-          borderRadius: '4px',
-          fontFamily: FONTS.display,
-          fontSize: '12px',
-          color: T.textMuted,
-        }}>
-          API usage metrics coming soon.
+        <UsageBar T={T} label="members" used={usage.members ?? 0} total={limits.members} unit="members" />
+        <UsageBar T={T} label="apps" used={usage.apps ?? 0} total={limits.apps} unit="apps" />
+        <UsageBar T={T} label="values" used={usage.parameterValues ?? 0} total={limits.parameterValues} unit="values" />
+        <UsageBar T={T} label="service tokens" used={usage.serviceTokens ?? 0} total={limits.serviceTokens} unit="tokens" />
+        <div style={{ display: 'flex', gap: '8px', marginTop: '14px', flexWrap: 'wrap' }}>
+          <Badge T={T} variant={limits.customRoles ? 'success' : 'default'}>{limits.customRoles ? 'custom roles' : 'no custom roles'}</Badge>
+          <Badge T={T} variant="default">{formatLimit(limits.auditRetentionDays)} day audit</Badge>
+          <Badge T={T} variant="default">{formatLimit(limits.parameterValueVersions)} versions</Badge>
+        </div>
+      </Section>
+
+      <Section T={T} title="Self-Serve Plans" description="Annual billing includes two months free.">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+          {[
+            { plan: 'TEAM', price: '$49', yearly: '$490/year', text: '5 members, 25 apps, 90-day audit' },
+            { plan: 'BUSINESS', price: '$149', yearly: '$1490/year', text: '15 members, 100 apps, 1-year audit' }
+          ].map(tier => (
+            <div key={tier.plan} style={{ border: `1px solid ${T.border}`, borderRadius: '6px', padding: '14px', background: T.overlay }}>
+              <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textPrimary, marginBottom: '8px' }}>{tier.plan.toLowerCase()}</div>
+              <div style={{ fontFamily: FONTS.display, fontSize: '24px', fontWeight: 700, color: T.textPrimary }}>{tier.price}<span style={{ fontSize: '11px', color: T.textMuted }}> /mo</span></div>
+              <div style={{ fontFamily: FONTS.display, fontSize: '12px', color: T.textMuted, margin: '6px 0 14px' }}>{tier.text}</div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <Btn T={T} variant="secondary" size="sm" onClick={() => openCheckout(tier.plan, 'month')} disabled={!!busy}>{busy === `${tier.plan}-month` ? 'opening...' : 'monthly'}</Btn>
+                <Btn T={T} variant="secondary" size="sm" onClick={() => openCheckout(tier.plan, 'year')} disabled={!!busy}>{busy === `${tier.plan}-year` ? 'opening...' : tier.yearly}</Btn>
+              </div>
+            </div>
+          ))}
         </div>
       </Section>
     </div>
@@ -1248,7 +1372,7 @@ function SettingsTab({ org, onUpdateOrg, T }) {
   const ssoRows = [
     { label: 'Google Workspace SSO', value: 'Not configured', active: false },
     { label: 'GitHub Org SSO', value: 'Not configured', active: false },
-    { label: 'SAML SSO', value: 'Available on Growth plan', active: false, locked: true },
+    { label: 'SAML SSO', value: 'Available on Enterprise plan', active: false, locked: true },
   ];
 
   return (
@@ -1411,7 +1535,10 @@ export default function OrgSettingsPage() {
     }
   };
 
-  const [tab, setTab] = useState('members');
+  const [tab, setTab] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    return TABS.includes(requested) ? requested : 'members';
+  });
 
   const orgName = org?.name ?? user?.organization?.name ?? 'organization';
 
@@ -1512,7 +1639,7 @@ export default function OrgSettingsPage() {
         )}
         {tab === 'roles' && <RolesTab T={T} org={org} roles={roles} onRefresh={loadRoles} />}
         {tab === 'tokens'  && <TokensTab T={T} />}
-        {tab === 'billing' && <BillingTab T={T} memberCount={org?.memberCount ?? members.length} />}
+        {tab === 'billing' && <BillingTab T={T} />}
         {tab === 'audit'   && <AuditTab T={T} />}
         {tab === 'settings' && <SettingsTab T={T} org={org} onUpdateOrg={updateOrgWithToast} />}
       </div>
