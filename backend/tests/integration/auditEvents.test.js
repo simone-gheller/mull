@@ -154,7 +154,7 @@ test.describe('audit events', () => {
     const createdOrg = JSON.parse(createOrgResponse.body);
     ctx.track('orgs', createdOrg.id);
 
-    const org = await ctx.buildOrg({ plan: 'PRO' });
+    const org = await ctx.buildOrg({ plan: 'TEAM' });
     const owner = await ctx.buildUserInOrg(org, { role: 'OWNER' });
     const invitedUser = await ctx.buildUser({ email: `audit-invite-${uuidv7()}@test.com` });
 

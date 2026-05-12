@@ -397,8 +397,8 @@ describe('ParameterValue Routes', () => {
       assert.strictEqual(rollbackHistory.rolledBackFromVersionId, history[0].id);
     });
 
-    test('should snapshot clear operations and keep newest five versions on Starter', async () => {
-      const org = await ctx.buildOrg({ plan: 'STARTER' });
+    test('should snapshot clear operations and keep newest five versions on Free', async () => {
+      const org = await ctx.buildOrg({ plan: 'FREE' });
       const user = await ctx.buildUserInOrg(org, { role: 'ADMIN' });
       const app = await ctx.buildApp({ orgId: org.id });
       const env = await ctx.buildEnv({ orgId: org.id, name: 'dev' });
@@ -433,8 +433,8 @@ describe('ParameterValue Routes', () => {
       assert.strictEqual(history[4].isSet, true);
     });
 
-    test('should keep more than Starter history on Pro and not prune Enterprise', async () => {
-      const proOrg = await ctx.buildOrg({ plan: 'PRO' });
+    test('should keep more than Free history on Team and not prune Enterprise', async () => {
+      const proOrg = await ctx.buildOrg({ plan: 'TEAM' });
       const enterpriseOrg = await ctx.buildOrg({ plan: 'ENTERPRISE' });
       const proUser = await ctx.buildUserInOrg(proOrg, { role: 'ADMIN' });
       const enterpriseUser = await ctx.buildUserInOrg(enterpriseOrg, { role: 'ADMIN' });

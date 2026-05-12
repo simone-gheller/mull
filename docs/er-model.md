@@ -37,7 +37,7 @@ erDiagram
     ORGANIZATION {
         uuid id PK
         string name
-        enum plan "STARTER, PRO, ENTERPRISE"
+        enum plan "FREE, TEAM, BUSINESS, ENTERPRISE"
     }
 
     USER_ORGANIZATION {
@@ -217,5 +217,4 @@ See [Access Key Identity Walkthrough](access-key-identity-walkthrough.md) for th
 These concepts are product/backlog items and are intentionally absent from the current schema:
 
 - OIDC/workload identity auth methods
-- billing/subscription tables
 - SSO connections
