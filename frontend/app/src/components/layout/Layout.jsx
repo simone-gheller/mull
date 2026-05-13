@@ -3,6 +3,8 @@ import { Outlet } from 'react-router-dom';
 import { useTheme, FONTS } from '@mull/ui';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { supabase } from '../../lib/supabase';
+import apiService from '../../services/api';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { CommandPalette } from '../CommandPalette';
@@ -12,10 +14,11 @@ const PENDING_TOAST_KEY = 'pending_toast';
 
 export default function Layout() {
   const { T } = useTheme();
-  const { orgId } = useAuth();
+  const { orgId, user } = useAuth();
   const { toast } = useToast();
   const [cmdOpen,      setCmdOpen]      = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [ssoRequired, setSsoRequired] = useState(null);
 
   useEffect(() => {
     const pending = sessionStorage.getItem(PENDING_TOAST_KEY);
@@ -53,6 +56,28 @@ export default function Layout() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const discovery = user?.email ? await apiService.discoverLogin(user.email) : null;
+        setSsoRequired(discovery?.sso?.available ? discovery.sso : { available: false });
+      } catch {
+        setSsoRequired({ available: false });
+      }
+    };
+    window.addEventListener('mull:sso-required', handler);
+    return () => window.removeEventListener('mull:sso-required', handler);
+  }, [user?.email]);
+
+  const continueWithSso = async () => {
+    if (!ssoRequired?.providerId) return;
+    const { data } = await supabase.auth.signInWithSSO({
+      providerId: ssoRequired.providerId,
+      options: { redirectTo: `${window.location.origin}/oauth/callback` },
+    });
+    if (data?.url) window.location.href = data.url;
+  };
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: T.bg }}>
       <style>{`
@@ -69,6 +94,46 @@ export default function Layout() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <Header />
         <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
+          {ssoRequired && (
+            <div style={{
+              marginBottom: '16px',
+              padding: '14px 16px',
+              borderRadius: '6px',
+              border: `1px solid ${T.amberBorder ?? T.border}`,
+              background: T.amberBg ?? T.overlay,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '14px',
+            }}>
+              <div>
+                <div style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.textPrimary, marginBottom: '2px' }}>
+                  company SSO required
+                </div>
+                <div style={{ fontFamily: FONTS.display, fontSize: '12px', color: T.textMuted }}>
+                  {ssoRequired.available ? `${ssoRequired.orgName} requires SSO for this organization.` : 'This organization requires company SSO.'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={continueWithSso}
+                disabled={!ssoRequired.providerId}
+                style={{
+                  background: T.surface,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: '4px',
+                  color: T.textSecondary,
+                  cursor: ssoRequired.providerId ? 'pointer' : 'not-allowed',
+                  fontFamily: FONTS.mono,
+                  fontSize: '11px',
+                  padding: '8px 10px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                continue with SSO
+              </button>
+            </div>
+          )}
           <Outlet key={orgId} />
         </main>
       </div>

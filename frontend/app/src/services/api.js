@@ -18,6 +18,11 @@ class ApiService {
     return response.data;
   }
 
+  async discoverLogin(email) {
+    const response = await apiClient.post('/auth/login-discovery', { email });
+    return response.data;
+  }
+
   async getPersonalAccessKeys() {
     const response = await apiClient.get('/auth/access-keys');
     return response.data;
@@ -40,6 +45,16 @@ class ApiService {
 
   async updateOrg(data) {
     const response = await apiClient.patch(`/orgs/${this.orgId}`, data);
+    return response.data;
+  }
+
+  async getOrgSsoSettings() {
+    const response = await apiClient.get(`/orgs/${this.orgId}/sso`);
+    return response.data;
+  }
+
+  async updateOrgSsoSettings(data) {
+    const response = await apiClient.patch(`/orgs/${this.orgId}/sso`, data);
     return response.data;
   }
 

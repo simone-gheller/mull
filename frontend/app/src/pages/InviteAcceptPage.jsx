@@ -15,7 +15,7 @@ export default function InviteAcceptPage() {
 
   const [invite, setInvite] = useState(null);
   const [loadError, setLoadError] = useState(null);
-  const [status, setStatus] = useState('loading'); // loading | auto-accepting | mismatch | error
+  const [status, setStatus] = useState('loading'); // loading | auto-accepting | mismatch | sso-required | error
 
   useEffect(() => {
     if (!token) { setLoadError('Invalid invitation link.'); setStatus('error'); return; }
@@ -54,10 +54,24 @@ export default function InviteAcceptPage() {
         navigate('/dashboard', { replace: true });
       })
       .catch(e => {
+        if (e.response?.data?.code === 'ORG_SSO_REQUIRED') {
+          setStatus('sso-required');
+          return;
+        }
         setLoadError(e.response?.data?.message || 'Failed to accept invitation.');
         setStatus('error');
       });
   }, [invite, user, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const continueWithSso = async () => {
+    const providerId = invite?.sso?.providerId;
+    if (!providerId) return;
+    const { data } = await supabase.auth.signInWithSSO({
+      providerId,
+      options: { redirectTo: `${window.location.origin}/oauth/callback` },
+    });
+    if (data?.url) window.location.href = data.url;
+  };
 
   const containerStyle = {
     minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -119,6 +133,27 @@ export default function InviteAcceptPage() {
             navigate(`/login?invite=${token}`);
           }}>
             sign out and use correct account
+          </Btn>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'sso-required') {
+    return (
+      <div style={containerStyle}>
+        <div style={cardStyle}>
+          <div style={{ fontFamily: FONTS.mono, fontSize: '22px', color: T.textMuted, textAlign: 'center' }}>◇</div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: '15px', color: T.textPrimary, marginBottom: '8px' }}>
+              Company SSO required
+            </div>
+            <div style={{ fontFamily: FONTS.display, fontSize: '12px', color: T.textMuted, lineHeight: 1.6 }}>
+              {invite.orgName} requires company SSO before this invite can be accepted.
+            </div>
+          </div>
+          <Btn T={T} variant="primary" size="md" onClick={continueWithSso}>
+            continue with {invite.orgName} SSO
           </Btn>
         </div>
       </div>

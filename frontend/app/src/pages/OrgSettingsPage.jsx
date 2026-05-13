@@ -19,6 +19,7 @@ function relativeExpiry(dateStr) {
 }
 
 function formatPlan(plan) {
+  if (plan === 'ENTERPRISE') return 'Custom';
   return String(plan || 'FREE').toLowerCase().replace(/^\w/, c => c.toUpperCase());
 }
 
@@ -1347,13 +1348,47 @@ function AuditTab({ T }) {
 // ── Settings tab ─────────────────────────────────────────────
 
 function SettingsTab({ org, onUpdateOrg, T }) {
+  const { toast } = useToast();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
+  const [sso, setSso] = useState(null);
+  const [ssoLoading, setSsoLoading] = useState(true);
+  const [ssoSaving, setSsoSaving] = useState(false);
+  const [ssoMode, setSsoMode] = useState('OFF');
+  const [ownerFallback, setOwnerFallback] = useState(true);
+  const [connection, setConnection] = useState({
+    supabaseSsoProviderId: '',
+    name: '',
+    domains: '',
+    status: 'DRAFT',
+  });
 
   useEffect(() => {
     if (org?.name != null) setName(org.name);
   }, [org?.name]);
+
+  const loadSso = async () => {
+    setSsoLoading(true);
+    try {
+      const settings = await apiService.getOrgSsoSettings();
+      setSso(settings);
+      setSsoMode(settings.policy?.ssoMode ?? 'OFF');
+      setOwnerFallback(settings.policy?.allowPasswordFallbackForOwners ?? true);
+      setConnection({
+        supabaseSsoProviderId: settings.connection?.supabaseSsoProviderId ?? '',
+        name: settings.connection?.name ?? '',
+        domains: (settings.connection?.domains ?? []).join(', '),
+        status: settings.connection?.status ?? 'DRAFT',
+      });
+    } catch (e) {
+      toast('sso settings unavailable', 'error', e.response?.data?.message || e.message);
+    } finally {
+      setSsoLoading(false);
+    }
+  };
+
+  useEffect(() => { loadSso(); }, [org?.id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -1369,11 +1404,33 @@ function SettingsTab({ org, onUpdateOrg, T }) {
     }
   };
 
-  const ssoRows = [
-    { label: 'Google Workspace SSO', value: 'Not configured', active: false },
-    { label: 'GitHub Org SSO', value: 'Not configured', active: false },
-    { label: 'SAML SSO', value: 'Available on Enterprise plan', active: false, locked: true },
-  ];
+  const saveSso = async () => {
+    setSsoSaving(true);
+    try {
+      const hasConnectionInput = connection.supabaseSsoProviderId || connection.name || connection.domains;
+      const updated = await apiService.updateOrgSsoSettings({
+        ssoMode,
+        allowPasswordFallbackForOwners: ownerFallback,
+        ...(hasConnectionInput ? {
+          connection: {
+            supabaseSsoProviderId: connection.supabaseSsoProviderId,
+            name: connection.name,
+            domains: connection.domains.split(',').map(value => value.trim()).filter(Boolean),
+            status: connection.status,
+          }
+        } : {})
+      });
+      setSso(updated);
+      toast('sso settings saved');
+    } catch (e) {
+      toast('sso save failed', 'error', e.response?.data?.message || e.message);
+    } finally {
+      setSsoSaving(false);
+    }
+  };
+
+  const ssoEligible = Boolean(sso?.eligible);
+  const ssoLocked = sso && !ssoEligible;
 
   return (
     <div>
@@ -1406,28 +1463,108 @@ function SettingsTab({ org, onUpdateOrg, T }) {
         </div>
       </Section>
 
-      <Section T={T} title="SSO Auto-provisioning" description="Let users with a verified domain auto-join this org on first login">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {ssoRows.map(row => (
-            <div key={row.label} style={{
+      <Section T={T} title="Company SSO" description="Manual-assisted SAML SSO for Business and Custom organizations">
+        {ssoLoading ? (
+          <Skeleton height={120} T={T} />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '12px 14px', background: T.overlay,
               border: `1px solid ${T.border}`, borderRadius: '4px',
             }}>
               <div>
-                <div style={{ fontFamily: FONTS.mono, fontSize: '12px', color: row.locked ? T.textMuted : T.textPrimary, marginBottom: '2px' }}>
-                  {row.label}
+                <div style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.textPrimary, marginBottom: '2px' }}>
+                  {connection.name || 'SAML connection'}
                 </div>
-                <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>{row.value}</div>
+                <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>
+                  {ssoLocked ? 'Requires Business or Custom plan' : (sso?.connection ? connection.domains || 'No domains set' : 'Setup is assisted by mull support')}
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {row.locked
-                  ? <Badge T={T}>upgrade</Badge>
-                  : <Btn T={T} variant="secondary" size="sm" disabled>configure</Btn>}
-              </div>
+              <Badge T={T} variant={ssoEligible ? (connection.status === 'ACTIVE' ? 'success' : 'warning') : 'default'}>
+                {ssoEligible ? connection.status.toLowerCase() : 'locked'}
+              </Badge>
             </div>
-          ))}
-        </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <Input
+                T={T}
+                label="Provider name"
+                value={connection.name}
+                onChange={e => setConnection(prev => ({ ...prev, name: e.target.value }))}
+                readOnly={!ssoEligible}
+                placeholder="Acme Microsoft Entra"
+              />
+              <Input
+                T={T}
+                label="Supabase SSO provider ID"
+                value={connection.supabaseSsoProviderId}
+                onChange={e => setConnection(prev => ({ ...prev, supabaseSsoProviderId: e.target.value }))}
+                readOnly={!ssoEligible}
+                placeholder="00000000-0000-0000-0000-000000000000"
+              />
+              <Input
+                T={T}
+                label="Domains"
+                value={connection.domains}
+                onChange={e => setConnection(prev => ({ ...prev, domains: e.target.value }))}
+                readOnly={!ssoEligible}
+                hint="Comma-separated, for example acme.com"
+              />
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted }}>Connection status</span>
+                <select
+                  value={connection.status}
+                  disabled={!ssoEligible}
+                  onChange={e => setConnection(prev => ({ ...prev, status: e.target.value }))}
+                  style={{
+                    background: T.surface, border: `1px solid ${T.border}`, borderRadius: '4px',
+                    color: T.textSecondary, fontFamily: FONTS.mono, fontSize: '12px', padding: '9px 10px',
+                  }}
+                >
+                  <option value="DRAFT">draft</option>
+                  <option value="ACTIVE">active</option>
+                  <option value="DISABLED">disabled</option>
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted }}>SSO mode</span>
+                <select
+                  value={ssoMode}
+                  disabled={!ssoEligible}
+                  onChange={e => setSsoMode(e.target.value)}
+                  style={{
+                    background: T.surface, border: `1px solid ${T.border}`, borderRadius: '4px',
+                    color: T.textSecondary, fontFamily: FONTS.mono, fontSize: '12px', padding: '9px 10px',
+                  }}
+                >
+                  <option value="OFF">off</option>
+                  <option value="OPTIONAL">optional</option>
+                  <option value="REQUIRED">required</option>
+                </select>
+              </label>
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                paddingTop: '20px',
+                fontFamily: FONTS.display, fontSize: '12px', color: T.textSecondary,
+              }}>
+                <input
+                  type="checkbox"
+                  checked={ownerFallback}
+                  disabled={!ssoEligible}
+                  onChange={e => setOwnerFallback(e.target.checked)}
+                />
+                allow owner password fallback
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Btn T={T} variant={ssoEligible ? 'primary' : 'warning'} size="sm" onClick={saveSso} disabled={!ssoEligible || ssoSaving}>
+                {ssoLocked ? 'upgrade business' : ssoSaving ? 'saving…' : 'save sso'}
+              </Btn>
+            </div>
+          </div>
+        )}
       </Section>
 
       <Section T={T} title="Danger Zone" description="Irreversible actions for this organization" danger>
