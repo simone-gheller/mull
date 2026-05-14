@@ -480,6 +480,7 @@ model AccessKey {
   expiresAt       DateTime? @map("expires_at")
   lastUsedAt      DateTime? @map("last_used_at")
   revokedAt       DateTime? @map("revoked_at")
+  source          String    @default("MANUAL") @db.VarChar(16)
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -499,4 +500,18 @@ model AccessKey {
 enum IdentityType {
   USER
   SERVICE
+}
+
+model CliDeviceCode {
+  id               String    @id @db.Uuid
+  deviceCodeHash   String    @unique @map("device_code_hash") @db.VarChar(64)
+  deviceName       String    @map("device_name") @db.VarChar(255)
+  expiresAt        DateTime  @map("expires_at")
+  approvedAt       DateTime? @map("approved_at")
+  approvedByUserId String?   @map("approved_by_user_id") @db.Uuid
+  orgId            String?   @map("org_id") @db.Uuid
+  consumedAt       DateTime? @map("consumed_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@map("cli_device_codes")
 }
