@@ -1,4 +1,3 @@
-import { uuidv7 } from 'uuidv7';
 import { uuidV7Param } from '../schemas/common.js';
 import {
   ACCESS_KEY_SCOPES,
@@ -7,6 +6,7 @@ import {
   validateScopes
 } from '../lib/accessKeys.js';
 import { hasEnterpriseSso, isSsoSessionForConnection } from '../lib/sso.js';
+import { findOrCreateUserIdentity } from '../lib/identities.js';
 
 const ttlPresetSchema = { type: 'string', enum: ['30d', '90d', '365d', 'never'], default: '90d' };
 const scopeSchema = {
@@ -89,21 +89,6 @@ async function enforcePersonalTokenSso(fastify, request, reply, orgId) {
   return false;
 }
 
-async function findOrCreateUserIdentity(tx, { orgId, user }) {
-  const existing = await tx.identity.findFirst({
-    where: { orgId, type: 'USER', ownerUserId: user.id }
-  });
-  if (existing) return existing;
-  return tx.identity.create({
-    data: {
-      id: uuidv7(),
-      orgId,
-      type: 'USER',
-      name: user.displayName || user.email || user.id,
-      ownerUserId: user.id
-    }
-  });
-}
 
 export default async function accessKeyRoutes(fastify) {
   fastify.get('/auth/access-keys', {

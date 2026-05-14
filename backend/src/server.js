@@ -23,6 +23,7 @@ import orgRoutes from './routes/orgs.js';
 import invitationRoutes from './routes/invitations.js';
 import accessKeyRoutes from './routes/accessKeys.js';
 import billingRoutes from './routes/billing.js';
+import cliAuthRoutes from './routes/cliAuth.js';
 import { envSchema } from './config.js';
 
 /**
@@ -116,6 +117,7 @@ export function buildApp(options = {}) {
   fastify.register(invitationRoutes);
   fastify.register(accessKeyRoutes);
   fastify.register(billingRoutes);
+  fastify.register(cliAuthRoutes);
 
   // Org-scoped routes - all use /orgs/:orgId prefix
   fastify.register(configRoutes, { prefix: '/orgs/:orgId' });
