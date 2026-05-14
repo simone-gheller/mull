@@ -1,0 +1,21 @@
+{
+  "name": "@mull/cli",
+  "version": "0.1.0",
+  "description": "mull CLI — secure config management",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "CLI_VERSION=0.1.0-dev API_URL=http://localhost:3000 APP_URL=http://localhost:5173 bun src/index.ts",
+    "build": "bun build.ts",
+    "build:darwin-arm64": "bun build.ts --target bun-darwin-arm64",
+    "build:linux-x64": "bun build.ts --target bun-linux-x64"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.1",
+    "open": "^10.1.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  }
+}
