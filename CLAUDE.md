@@ -26,6 +26,7 @@ safeconfig/
 ├── frontend/
 │   ├── app/          # Dashboard SPA (React 19 + Vite)
 │   └── marketing/    # Landing page
+├── cli/              # mull CLI — standalone binary built with Bun
 ├── packages/
 │   └── ui/           # @mull/ui — shared design system
 ├── docs/             # Architecture and design documents
@@ -35,6 +36,11 @@ safeconfig/
 ## Key Commands
 
 ```bash
+# CLI (from cli/)
+bun run dev <cmd>      # run without building — e.g. bun run dev auth whoami
+bun build.ts           # compile all 4 targets to cli/dist/
+bun build.ts --target=bun-darwin-arm64  # single target
+
 # Backend (from backend/)
 npm run dev            # http://localhost:3000
 npm run db:migrate     # npx prisma migrate deploy
@@ -160,6 +166,20 @@ model AccessKey {
   expiresAt       DateTime? @map("expires_at")
   lastUsedAt      DateTime? @map("last_used_at")
   revokedAt       DateTime? @map("revoked_at")
+  source          String   @default("MANUAL") @db.VarChar(16)  // 'CLI' | 'MANUAL'
+}
+
+model CliDeviceCode {
+  id               String    @id @db.Uuid
+  deviceCodeHash   String    @unique @map("device_code_hash") @db.VarChar(64)  // SHA256 of raw secret
+  deviceName       String    @map("device_name") @db.VarChar(255)
+  expiresAt        DateTime  @map("expires_at")
+  approvedAt       DateTime? @map("approved_at")
+  approvedByUserId String?   @map("approved_by_user_id") @db.Uuid
+  orgId            String?   @map("org_id") @db.Uuid
+  consumedAt       DateTime? @map("consumed_at")              // set when token is delivered; blocks re-use
+  createdAt        DateTime  @default(now()) @map("created_at")
+  @@map("cli_device_codes")
 }
 ```
 
@@ -173,6 +193,8 @@ model AccessKey {
 - Access keys are modeled as `Identity` (actor) + `AccessKey` (credential). Raw access keys are shown once and never stored; DB stores only `tokenHash` and `tokenPrefix`.
 - PAT format is `mull_pat_<keyId>_<secret>`; org service-token format is `mull_st_<keyId>_<secret>`.
 - Access key scopes are `config:read`, `parameters:read`, `parameters:write`, `apps:read`, and `environments:read`. Optional `appId`/`environmentId` bindings restrict where the key can be used.
+- `AccessKey.source` separates CLI sessions (`'CLI'`, 90-day TTL, created by device flow) from manual API tokens (`'MANUAL'`, user-chosen TTL). They are the same DB model but must be displayed separately in the UI.
+- `CliDeviceCode.consumedAt` enforces single-use token delivery: once set, the status endpoint returns 404. The raw token is **never stored** in the DB — it is created in the same transaction that sets `consumedAt` and returned once.
 
 ### User Creation Flow (Registration)
 
@@ -254,6 +276,12 @@ Usage pattern: `preHandler: [fastify.authenticate, fastify.validateOrgAccess, fa
 **Invite routes outside org prefix**:
 - `GET /invites/:token` — public invite preview
 - `POST /invites/accept` — authenticated invite acceptance
+
+**CLI device flow routes** (`backend/src/routes/cliAuth.js`, no org prefix, registered without prefix in `server.js`):
+- `POST /cli/device-code` — start device flow; rate-limited 5/min; returns `{ id, deviceCode (raw), verificationUrl, expiresAt }`
+- `GET /cli/device-code/:id` — public; returns `{ deviceName, expiresAt }` for the browser confirm page
+- `GET /cli/device-code/:id/status?secret=<deviceCode>` — CLI polls this; validates SHA256(secret) == deviceCodeHash; if approved and unconsumed: creates AccessKey in a transaction, sets consumedAt, returns token once; rate-limited 30/min
+- `POST /cli/device-code/:id/approve` — requires `requireJwtAuth()` (Supabase session only, no PAT); sets `approvedAt`, `approvedByUserId`, `orgId`; no token created here
 
 ### Cryptography (`backend/src/crypto/envelope.js`)
 
@@ -357,6 +385,62 @@ State: `{ user, orgs, orgId, isAuthenticated, loading, error }`.
 **Non coperto:** frontend route behavior and E2E golden paths; additional invite edge cases beyond current acceptance coverage.
 
 **Nota sul formato risposta**: `GET /orgs/:orgId/parameters/:appId/values` ritorna un oggetto `{ [envName]: { environmentId, values: [{id, parameterId, parameterKey, isSet, value}] } }`, non un array. `value` è `null` quando `isSet=false` o quando il valore è redatto.
+
+---
+
+## CLI (`cli/`)
+
+Built with Bun (`bun build --compile`), distributed as standalone binaries. See `docs/cli-walkthrough.md` for full detail.
+
+### Structure
+
+```
+cli/src/
+├── index.ts              # entry + command routing: [cmd, sub, ...rest] = process.argv.slice(2)
+├── constants.ts          # VERSION, DEFAULT_API_URL, DEFAULT_APP_URL — read from process.env, inlined at build time via --env=*
+├── commands/
+│   ├── auth/             # login (device flow), logout, whoami
+│   ├── apps/list.ts      # GET /orgs/:orgId/apps
+│   ├── envs/list.ts      # GET /orgs/:orgId/environments
+│   ├── params/
+│   │   ├── list.ts       # GET /orgs/:orgId/parameters/resolved
+│   │   └── set.ts        # PUT /orgs/:orgId/parameters/values/:id
+│   └── config/pull.ts    # GET /orgs/:orgId/config/:appId/:envId → .env stdout
+└── lib/
+    ├── api.ts            # apiGet/apiPost/apiPut/apiDelete — Bearer token from active org
+    ├── config.ts         # ~/.mull/config.json (chmod 600) — multi-org, activeOrgId
+    ├── flags.ts          # minimal --key value / --key=value parser
+    ├── resolve.ts        # resolveApp / resolveEnv — name → ID via API, fail() on miss
+    ├── ui.ts             # clack + picocolors helpers (GREEN, DIM, formatTable, fail)
+    └── update.ts         # daily update check via GitHub releases API, non-blocking
+```
+
+### Config file `~/.mull/config.json`
+
+```json
+{
+  "apiUrl": "https://api.safeconfig.io",
+  "email": "user@example.com",
+  "orgs": { "<orgId>": { "token": "mull_pat_...", "name": "Acme Corp" } },
+  "activeOrgId": "<orgId>"
+}
+```
+
+`activeOrgId` determines which org and token are used for all commands. `addOrg()` in `config.ts` merges a new org and sets it as active.
+
+### Build system
+
+- `build.ts` uses `Bun.spawnSync(['bun', 'build', '--compile', ...])` — **not** `Bun.build()` API (cross-compilation targets don't work there)
+- Constants are passed via `env: { CLI_VERSION, API_URL, APP_URL }` + `--env=*` flag — **not** `--define` (unsupported in Bun CLI)
+- `bun run dev` sets the same env vars inline: `CLI_VERSION=0.1.0-dev API_URL=http://localhost:3000 ...`
+
+### Frontend counterpart
+
+`/cli-auth` is a public route in `frontend/app/src/App.jsx` → `pages/CliAuth.jsx`. It reads `?code=<id>`, fetches the device name, and calls `POST /cli/device-code/:id/approve`. Requires Supabase session (not PAT).
+
+### Identity lib
+
+`backend/src/lib/identities.js` exports `findOrCreateUserIdentity(tx, { orgId, user })` — shared between `accessKeys.js` and `cliAuth.js`. Looks up or creates a USER Identity for a given user+org pair.
 
 ---
 

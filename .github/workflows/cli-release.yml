@@ -1,0 +1,72 @@
+name: CLI Release
+
+on:
+  push:
+    tags:
+      - 'cli/v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            os: macos-latest
+          - target: darwin-x64
+            os: macos-latest
+          - target: linux-x64
+            os: ubuntu-latest
+          - target: windows-x64
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: cli
+        run: bun install --frozen-lockfile
+
+      - name: Build binary
+        working-directory: cli
+        run: bun build.ts --target=bun-${{ matrix.target }}
+        env:
+          API_URL: https://api.safeconfig.io
+          APP_URL: https://app.safeconfig.io
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mull-${{ matrix.target }}
+          path: cli/dist/mull-${{ matrix.target }}${{ matrix.target == 'windows-x64' && '.exe' || '' }}
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            dist/* \
+            --title "mull CLI ${{ github.ref_name }}" \
+            --generate-notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
