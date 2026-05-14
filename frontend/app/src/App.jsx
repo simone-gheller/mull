@@ -18,6 +18,7 @@ const SecurityPage = lazy(() => import('./pages/SecurityPage'));
 const PersonalTokensPage = lazy(() => import('./pages/PersonalTokensPage'));
 const OrgSettingsPage = lazy(() => import('./pages/OrgSettingsPage'));
 const InviteAcceptPage = lazy(() => import('./pages/InviteAcceptPage'));
+const CliAuth = lazy(() => import('./pages/CliAuth'));
 
 function Spinner() {
   const { T } = useTheme();
@@ -77,6 +78,7 @@ function AppRoutes() {
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
         <Route path="/oauth/callback" element={<OAuthCallback />} />
         <Route path="/invite/accept" element={<InviteAcceptPage />} />
+        <Route path="/cli-auth" element={<CliAuth />} />
 
         <Route path="/dashboard" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
