@@ -110,7 +110,7 @@ Se questi numeri sono reali e verificabili, ottimo — tenerli. Se non lo sono, 
 
 Il copy "Free plan includes 3 apps, unlimited environments, and full CLI access" nel momento di conversione più importante della pagina parla di limitazioni del free tier. Fix: beneficio-centrico: "Start in 2 minutes. No credit card." oppure "Your first app is free, forever."
 
-Il footer (`© 2026 Mull. All rights reserved.`) è quasi invisibile e senza link. Aggiungere almeno: docs, pricing, privacy policy, status page.
+Il footer (`© 2026 vextis. All rights reserved.`) è quasi invisibile e senza link. Aggiungere almeno: docs, pricing, privacy policy, status page.
 
 ### Parameter Detail Page
 
@@ -172,7 +172,7 @@ Regola: verde solo dove il sistema parla. I nomi di ruolo non sono stati — non
 | 5 | ✅ | Sezione "Pending Invites — coming soon" visibile | `frontend/app/src/pages/OrgSettingsPage.jsx` | Invite system implementato con pending invites |
 | 6 | ⏭ | Sezione "Audit Log — coming soon" visibile | `frontend/app/src/pages/OrgSettingsPage.jsx` | Da implementare, poi nascondere il placeholder |
 | 7 | ⏭ | `/dashboard/users` non è esposta nel router | `frontend/app/src/App.jsx` | Da implementare o rimuovere file non usato |
-| 8 | ◐ | `/settings/security` implementata, `/settings/tokens` ancora coming soon | `frontend/app/src/App.jsx` | Implementare personal tokens |
+| 8 | ✅ | `/settings/security` e `/settings/tokens` implementate e spostate su `/account/*` | `frontend/app/src/App.jsx` | IA riorganizzata: account personale su `/account/`, org settings su `/settings/org` |
 | 9 | ✅ | `T.textMuted` (`#3d4555`) produce **2.1:1** — fail WCAG AA globale | `packages/ui/src/tokens.js` | `#3d4555` → `#636e84`; effetto globale |
 | 10 | ✅ | Nessun focus ring globale per navigazione da tastiera | `frontend/app/src/index.css` | Aggiunta regola `:focus-visible` globale |
 | 11 | ✅ | Badge `● OPEN BETA` sulla landing è verde solid — sembra un template Tailwind | `frontend/marketing/src/` | Aggiunta variante `outline` al Badge; background trasparente, bordo + testo verde |
@@ -329,7 +329,7 @@ Niente dash. Niente nulla. Ogni schermata con dati assenti mostra un testo centr
 Progressive disclosure che usa deliberatamente l'estetica terminal:
 
 ```
-❯ welcome to mull
+❯ welcome to vextis
   setting up your workspace...
   
   ✓ organization created

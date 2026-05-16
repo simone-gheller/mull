@@ -1,4 +1,4 @@
-# mull API Reference
+# vextis API Reference
 
 REST API implemented with Fastify + Prisma. Local base URL: `http://localhost:3000`.
 
@@ -6,7 +6,7 @@ Current contract status: pre-release, no backward-compatibility guarantees yet.
 
 ## Authentication
 
-Browser/user management endpoints use a Supabase Bearer JWT. Runtime and automation endpoints can also use mull access keys where a route declares the required scope.
+Browser/user management endpoints use a Supabase Bearer JWT. Runtime and automation endpoints can also use vextis access keys where a route declares the required scope.
 
 ```bash
 curl http://localhost:3000/auth/me \
@@ -16,8 +16,8 @@ curl http://localhost:3000/auth/me \
 Access key formats:
 
 ```txt
-mull_pat_<keyId>_<secret>  # personal access token
-mull_st_<keyId>_<secret>   # organization service token
+vextis_pat_<keyId>_<secret>  # personal access token
+vextis_st_<keyId>_<secret>   # organization service token
 ```
 
 Access key scopes:
@@ -34,7 +34,7 @@ Management endpoints for orgs, members, invites, audit, billing, and access-key 
 
 ```bash
 curl http://localhost:3000/orgs/$ORG_ID/config/$APP_ID/$ENV_ID \
-  -H "Authorization: Bearer $MULL_SERVICE_TOKEN"
+  -H "Authorization: Bearer $VEXTIS_SERVICE_TOKEN"
 ```
 
 Registration is not a backend REST endpoint. The frontend calls `supabase.auth.signUp()`; a PostgreSQL trigger on `auth.users` creates `public.users`, `public.organizations`, and `public.user_organizations` atomically.
@@ -121,7 +121,7 @@ Returns the authenticated API actor for Supabase JWTs, personal access tokens, a
 
 ```bash
 curl http://localhost:3000/auth/whoami \
-  -H "Authorization: Bearer $MULL_TOKEN"
+  -H "Authorization: Bearer $VEXTIS_TOKEN"
 ```
 
 ```json
@@ -129,7 +129,7 @@ curl http://localhost:3000/auth/whoami \
   "identityType": "USER",
   "identityName": "Ada Lovelace",
   "credentialType": "ACCESS_KEY",
-  "credentialPrefix": "mull_pat_019...",
+  "credentialPrefix": "vextis_pat_019...",
   "scopes": ["config:read"],
   "organizations": [
     {
@@ -431,6 +431,90 @@ Implementation:
 Access keys can call this endpoint when they have `config:read`. Optional access-key `appId` and `environmentId` bindings are enforced before rendering.
 
 Successful config fetches create `config.fetch` audit events with app/environment metadata and parameter count, never rendered plaintext values.
+
+## CLI Device Flow
+
+The device flow enables the `vextis` CLI to obtain an access token via a browser-based authorization step without embedding credentials in the terminal.
+
+### `POST /cli/device-code`
+
+Starts a device flow session. Rate-limited to 5 requests per minute.
+
+```json
+{
+  "deviceName": "hostname",
+  "platform": "darwin",
+  "previousToken": "vextis_pat_019..."
+}
+```
+
+`platform` is optional; the server maps it to a readable OS label (`darwin` → `macOS`) and appends it to `deviceName` as `"hostname · macOS"`. `previousToken` is optional; if present the server parses it to extract the key ID and stores it as `previousKeyId` to be revoked atomically when the new token is delivered.
+
+Response `201`:
+
+```json
+{
+  "id": "019...",
+  "deviceCode": "<random 32-byte base64url secret>",
+  "verificationUrl": "https://app.vextis.io/cli-auth?code=019...",
+  "expiresAt": "2026-05-16T10:10:00.000Z"
+}
+```
+
+The raw `deviceCode` is shown to the CLI and used as the polling secret. Only `SHA256(deviceCode)` is stored.
+
+### `GET /cli/device-code/:id`
+
+Public. Returns the device name and expiry for the browser confirmation page.
+
+```json
+{
+  "deviceName": "dev-machine · macOS",
+  "expiresAt": "2026-05-16T10:10:00.000Z"
+}
+```
+
+Returns `404` if the code does not exist, has expired, or has already been consumed.
+
+### `GET /cli/device-code/:id/status?secret=<deviceCode>`
+
+CLI polling endpoint. Rate-limited to 30 requests per minute.
+
+The server validates `SHA256(secret) == deviceCodeHash`. Responses:
+
+- `{ "status": "pending" }` — user has not approved yet
+- `{ "status": "expired" }` — code TTL elapsed
+- `404` — code not found or already consumed
+
+On approval (not yet consumed):
+
+1. Revokes `previousKeyId` if set (scoped to `identityId`, so cross-user revocation is impossible)
+2. Creates a new `AccessKey` with `source='CLI'` and 90-day TTL
+3. Sets `consumedAt` — future polls return `404`
+
+Approved response:
+
+```json
+{
+  "status": "approved",
+  "token": "vextis_pat_019..._<secret>",
+  "orgId": "019...",
+  "orgName": "acme-corp",
+  "email": "user@example.com"
+}
+```
+
+The token is never stored; this is the only response where it appears.
+
+### `POST /cli/device-code/:id/approve`
+
+Requires a Supabase JWT (not a PAT). Called by the browser after the user clicks "Authorize".
+
+```json
+{ "orgId": "019..." }
+```
+
+Validates that the authenticated user is a member of `orgId`. Sets `approvedAt`, `approvedByUserId`, `orgId`. No token is created here; creation happens on the next poll.
 
 ## Audit Events
 

@@ -4,19 +4,19 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Project Overview
 
-SafeConfig (product name: **mull**) is a secure configuration management system built with Node.js/Fastify and PostgreSQL. It implements envelope cryptography to securely store and manage sensitive configuration parameters across apps and environments. Target: B2B developer tool.
+SafeConfig (product name: **vextis**) is a secure configuration management system built with Node.js/Fastify and PostgreSQL. It implements envelope cryptography to securely store and manage sensitive configuration parameters across apps and environments. Target: B2B developer tool.
 
 ## Deployment Architecture
 
 ```
-safeconfig.io           → Marketing landing page (React + Vite — frontend/)
-app.safeconfig.io       → Dashboard SPA (React + Vite — frontend/)
-api.safeconfig.io       → REST API (Fastify — backend/)
+vextis.io               → Marketing landing page (React + Vite — frontend/)
+app.vextis.io           → Dashboard SPA (React + Vite — frontend/)
+api.vextis.io           → REST API (Fastify — backend/)
 ```
 
 **Current frontend state:**
 - One React + Vite app (`frontend/app/`) contains both landing page and dashboard
-- Short term: deploy as single app on `safeconfig.io`
+- Short term: deploy as single app on `vextis.io`
 - Long term: split into two Vite apps sharing `packages/ui` component library
 
 **Monorepo structure:**
@@ -26,9 +26,9 @@ safeconfig/
 ├── frontend/
 │   ├── app/          # Dashboard SPA (React 19 + Vite)
 │   └── marketing/    # Landing page
-├── cli/              # mull CLI — standalone binary built with Bun
+├── cli/              # vextis CLI — standalone binary built with Bun
 ├── packages/
-│   └── ui/           # @mull/ui — shared design system
+│   └── ui/           # @vextis/ui — shared design system
 ├── docs/             # Architecture and design documents
 └── supabase/         # Local Supabase config + email templates
 ```
@@ -172,12 +172,13 @@ model AccessKey {
 model CliDeviceCode {
   id               String    @id @db.Uuid
   deviceCodeHash   String    @unique @map("device_code_hash") @db.VarChar(64)  // SHA256 of raw secret
-  deviceName       String    @map("device_name") @db.VarChar(255)
+  deviceName       String    @map("device_name") @db.VarChar(255)              // "hostname · macOS"
   expiresAt        DateTime  @map("expires_at")
   approvedAt       DateTime? @map("approved_at")
   approvedByUserId String?   @map("approved_by_user_id") @db.Uuid
   orgId            String?   @map("org_id") @db.Uuid
   consumedAt       DateTime? @map("consumed_at")              // set when token is delivered; blocks re-use
+  previousKeyId    String?   @map("previous_key_id") @db.Uuid // exact key to revoke on re-login
   createdAt        DateTime  @default(now()) @map("created_at")
   @@map("cli_device_codes")
 }
@@ -191,10 +192,11 @@ model CliDeviceCode {
 - `ParameterValue.value` does NOT exist. Values are encrypted at rest.
 - `ParameterValue.isSet` is the non-secret state flag for inheritance. `false` means "unset locally / inherit"; `true` means "this local value shadows ancestors".
 - Access keys are modeled as `Identity` (actor) + `AccessKey` (credential). Raw access keys are shown once and never stored; DB stores only `tokenHash` and `tokenPrefix`.
-- PAT format is `mull_pat_<keyId>_<secret>`; org service-token format is `mull_st_<keyId>_<secret>`.
+- PAT format is `vextis_pat_<keyId>_<secret>`; org service-token format is `vextis_st_<keyId>_<secret>`.
 - Access key scopes are `config:read`, `parameters:read`, `parameters:write`, `apps:read`, and `environments:read`. Optional `appId`/`environmentId` bindings restrict where the key can be used.
 - `AccessKey.source` separates CLI sessions (`'CLI'`, 90-day TTL, created by device flow) from manual API tokens (`'MANUAL'`, user-chosen TTL). They are the same DB model but must be displayed separately in the UI.
 - `CliDeviceCode.consumedAt` enforces single-use token delivery: once set, the status endpoint returns 404. The raw token is **never stored** in the DB — it is created in the same transaction that sets `consumedAt` and returned once.
+- `CliDeviceCode.previousKeyId` stores the key ID of the previous CLI session for the same device. On re-login the CLI reads its current token from `~/.vextis/config.json` and sends it as `previousToken` in the POST body; the server parses it with `parseAccessKeyToken` to extract the key ID. During the approve transaction the old key is revoked by exact ID (checking `identityId` to prevent cross-user revocation). This replaces the previous hostname-string-matching approach.
 
 ### User Creation Flow (Registration)
 
@@ -219,7 +221,7 @@ The `authenticate` backend decorator is a **pure lookup** — it never creates u
 ### Authentication (`backend/src/plugins/auth.js`)
 
 Decorators registered on Fastify:
-- **`authenticate`** — accepts Supabase JWTs plus `mull_pat_*`/`mull_st_*` access keys. It normalizes every authenticated request into `request.auth`.
+- **`authenticate`** — accepts Supabase JWTs plus `vextis_pat_*`/`vextis_st_*` access keys. It normalizes every authenticated request into `request.auth`.
 - **`validateOrgAccess`** — for JWT/PAT checks user membership in `:orgId`; for service tokens checks the service identity belongs to `:orgId`.
 - **`requireScope(scope, options?)`** — checks role permissions for JWT/PAT, direct scopes for service tokens, and optional environment conditions.
 - **`requireJwtAuth()`** — keeps account/org/admin management endpoints user-session only.
@@ -278,9 +280,9 @@ Usage pattern: `preHandler: [fastify.authenticate, fastify.validateOrgAccess, fa
 - `POST /invites/accept` — authenticated invite acceptance
 
 **CLI device flow routes** (`backend/src/routes/cliAuth.js`, no org prefix, registered without prefix in `server.js`):
-- `POST /cli/device-code` — start device flow; rate-limited 5/min; returns `{ id, deviceCode (raw), verificationUrl, expiresAt }`
+- `POST /cli/device-code` — start device flow; rate-limited 5/min; body: `{ deviceName, platform?, previousToken? }`; encodes OS in deviceName as `"hostname · macOS"`; stores `previousKeyId` parsed from `previousToken`; returns `{ id, deviceCode (raw), verificationUrl, expiresAt }`
 - `GET /cli/device-code/:id` — public; returns `{ deviceName, expiresAt }` for the browser confirm page
-- `GET /cli/device-code/:id/status?secret=<deviceCode>` — CLI polls this; validates SHA256(secret) == deviceCodeHash; if approved and unconsumed: creates AccessKey in a transaction, sets consumedAt, returns token once; rate-limited 30/min
+- `GET /cli/device-code/:id/status?secret=<deviceCode>` — CLI polls this; validates SHA256(secret) == deviceCodeHash; if approved and unconsumed: revokes `previousKeyId` (if set) then creates AccessKey in one transaction, sets consumedAt, returns token once; rate-limited 30/min
 - `POST /cli/device-code/:id/approve` — requires `requireJwtAuth()` (Supabase session only, no PAT); sets `approvedAt`, `approvedByUserId`, `orgId`; no token created here
 
 ### Cryptography (`backend/src/crypto/envelope.js`)
@@ -310,6 +312,7 @@ State: `{ user, orgs, orgId, isAuthenticated, loading, error }`.
 /               → redirect to /login
 /login          → Login (PublicRoute)
 /signup         → Signup — two-step inline: form → OTP on same URL (PublicRoute)
+/cli-auth       → CliAuth — device flow confirmation page (PublicRoute)
 /oauth/callback → OAuthCallback
 /invite/accept  → InviteAcceptPage
 /dashboard      → Layout (ProtectedRoute)
@@ -317,12 +320,21 @@ State: `{ user, orgs, orgId, isAuthenticated, loading, error }`.
   /dashboard/parameters
   /dashboard/:orgSlug/:appSlug/parameters/:paramKey
   /dashboard/environments
-/settings       → Layout (ProtectedRoute)
-  /settings/profile
-  /settings/security
-  /settings/tokens        (personal access token management)
-  /settings/org
+/account        → Layout (ProtectedRoute)  ← personal account pages
+  /account/profile    → ProfilePage (display name, email, organizations, danger zone)
+  /account/security   → SecurityPage (password reset, OAuth toggles, browser + CLI sessions)
+  /account/tokens     → PersonalTokensPage (manual API tokens, not CLI sessions)
+/settings       → Layout (ProtectedRoute)  ← organization settings only
+  index → redirect to /settings/org
+  /settings/org → OrgSettingsPage (members, roles, tokens, billing, audit, settings tabs)
+  /settings/profile  → redirect to /account/profile   (backward compat)
+  /settings/security → redirect to /account/security  (backward compat)
+  /settings/tokens   → redirect to /account/tokens    (backward compat)
 ```
+
+User menu links (Header.jsx): profile settings → `/account/profile`, security → `/account/security`, personal tokens → `/account/tokens`.
+
+The sidebar always shows the org settings sub-items (members, roles, tokens, billing, audit, settings) as nested nav items under "org settings". Active tab state is read from `?tab=` search param via `useSearchParams`.
 
 **Signup flow detail (`frontend/app/src/pages/Signup.jsx`):**
 - Two internal components: `FormStep` (registration form) and `OtpStep` (OTP input)
@@ -333,7 +345,7 @@ State: `{ user, orgs, orgId, isAuthenticated, loading, error }`.
 ### Email Templates (`supabase/templates/`)
 
 - `confirmation.html` — branded OTP email (dark theme, `termGreen` code box, mono font)
-- Subject: `{{ .Token }} — verify your mull account` (OTP code visible in push notification)
+- Subject: `{{ .Token }} — verify your vextis account` (OTP code visible in push notification)
 - Tracked in git; pushed to production via `supabase push` once project is linked
 
 ## Security Model
@@ -408,20 +420,20 @@ cli/src/
 │   └── config/pull.ts    # GET /orgs/:orgId/config/:appId/:envId → .env stdout
 └── lib/
     ├── api.ts            # apiGet/apiPost/apiPut/apiDelete — Bearer token from active org
-    ├── config.ts         # ~/.mull/config.json (chmod 600) — multi-org, activeOrgId
+    ├── config.ts         # ~/.vextis/config.json (chmod 600) — multi-org, activeOrgId
     ├── flags.ts          # minimal --key value / --key=value parser
     ├── resolve.ts        # resolveApp / resolveEnv — name → ID via API, fail() on miss
     ├── ui.ts             # clack + picocolors helpers (GREEN, DIM, formatTable, fail)
     └── update.ts         # daily update check via GitHub releases API, non-blocking
 ```
 
-### Config file `~/.mull/config.json`
+### Config file `~/.vextis/config.json`
 
 ```json
 {
-  "apiUrl": "https://api.safeconfig.io",
+  "apiUrl": "https://api.vextis.io",
   "email": "user@example.com",
-  "orgs": { "<orgId>": { "token": "mull_pat_...", "name": "Acme Corp" } },
+  "orgs": { "<orgId>": { "token": "vextis_pat_...", "name": "Acme Corp" } },
   "activeOrgId": "<orgId>"
 }
 ```

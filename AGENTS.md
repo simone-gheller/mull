@@ -28,7 +28,7 @@ safeconfig/
 │   └── marketing/    # Landing page
 ├── cli/              # mull CLI — standalone binary built with Bun
 ├── packages/
-│   └── ui/           # @mull/ui — shared design system
+│   └── ui/           # @vextis/ui — shared design system
 ├── docs/             # Architecture and design documents
 └── supabase/         # Local Supabase config + email templates
 ```

@@ -1,13 +1,15 @@
 # Documentation Map
 
-Last updated: 2026-05-11.
+Last updated: 2026-05-16.
 
 This folder is organized by the kind of question each document answers.
 
 ## Current System References
 
-- [API reference](API.md) — implemented REST endpoints, auth, access keys, config rendering, and operational notes.
+- [API reference](API.md) — implemented REST endpoints, auth, access keys, CLI device flow, config rendering, and operational notes.
 - [Current ER model](er-model.md) — implemented Prisma/Postgres model and invariants.
+- [CLI walkthrough](cli-walkthrough.md) — device flow, session replacement, config file, commands, build system.
+- [Settings IA](settings-ia.md) — route structure for `/account/*` (personal) and `/settings/org` (organization), sidebar behavior, security page layout.
 - [Access key identity walkthrough](access-key-identity-walkthrough.md) — how PATs, service tokens, `Identity`, `AccessKey`, `request.auth`, scopes, and `/auth/whoami` fit together.
 - [Invitation system](invitation-system.md) — invite token hashing, preview, accept, and email flow.
 

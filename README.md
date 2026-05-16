@@ -1,15 +1,15 @@
-# mull
+# vextis
 
 Secure configuration management system. Store and manage sensitive parameters across hierarchical apps and environments using server-side envelope encryption.
 
-The repository name is still `safeconfig`; the product name is **mull**.
+The repository name is still `safeconfig`; the product name is **vextis**. npm packages (`@vextis/ui`, `@vextis/cli`) retain their current names — package renaming is a separate task.
 
 ## Architecture
 
 ```
-safeconfig.io        → short-term single React/Vite app
-app.safeconfig.io    → dashboard SPA target
-api.safeconfig.io    → Fastify REST API + PostgreSQL
+vextis.io            → short-term single React/Vite app
+app.vextis.io        → dashboard SPA target
+api.vextis.io        → Fastify REST API + PostgreSQL
 ```
 
 ## Monorepo structure
@@ -20,7 +20,7 @@ safeconfig/
 ├── frontend/
 │   ├── app/          # dashboard SPA, currently also auth entrypoint
 │   └── marketing/    # landing page workspace
-├── packages/ui/      # @mull/ui shared design system
+├── packages/ui/      # @vextis/ui shared design system
 ├── docs/             # architecture, API, review, design docs
 └── supabase/         # local Supabase config and email templates
 ```
@@ -59,6 +59,7 @@ npm run dev:app        # http://localhost:5173
 
 - [Documentation map](docs/README.md)
 - [API reference](docs/API.md)
+- [CLI walkthrough](docs/cli-walkthrough.md)
 - [ER model](docs/er-model.md)
 - [Access key identity walkthrough](docs/access-key-identity-walkthrough.md)
 - [Envelope encryption](docs/envelope-encryption-implementation-plan.md)
@@ -74,7 +75,12 @@ npm run dev:app        # http://localhost:5173
 - **Supabase auth** — JWT verified via JWKS, local OTP flow, Google OAuth support
 - **Role-based access** — org roles are presets of scopes (`OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`) with paid custom roles
 - **Access keys** — personal access tokens and org service tokens with scopes, hashed storage, one-time display, revoke, expiry, and audit attribution
+- **CLI** — standalone binary (`vextis`) with browser-based device flow, `config pull`, `params set`, and automatic session replacement on re-login
 - **Audit + history** — tenant-visible audit events and encrypted parameter value version history
+
+## License
+
+[Elastic License 2.0](LICENSE) — source available, free to self-host and modify, cannot be used to offer a competing managed service.
 
 ## Current caveats
 

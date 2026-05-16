@@ -1,4 +1,4 @@
-# @mull/ui — Design System
+# @vextis/ui — Design System
 
 ## Regole assolute
 - Mai colori hex hardcoded nei componenti. Sempre `T.nomeProprieta`

@@ -1,7 +1,7 @@
-# @mull/app
+# @vextis/app
 
 Stack: React 19 + Vite + react-router-dom  
-Design system: sempre `@mull/ui` — mai duplicare componenti UI.  
+Design system: sempre `@vextis/ui` — mai duplicare componenti UI.  
 Tema: `useTheme()` → `{ T, mode, toggle }`. Tutti i colori da `T.*`, mai hex hardcoded.
 
 ## Struttura pagine (route reali)
@@ -9,6 +9,7 @@ Tema: `useTheme()` → `{ T, mode, toggle }`. Tutti i colori da `T.*`, mai hex h
 ```
 /login          → pages/Login.jsx
 /signup         → pages/Signup.jsx          ← due step inline (form + OTP)
+/cli-auth       → pages/CliAuth.jsx         ← conferma device flow CLI (public)
 /oauth/callback → pages/OAuthCallback.jsx
 /invite/accept  → pages/InviteAcceptPage.jsx
 /verify-email   → RIMOSSA (ora inline in /signup)
@@ -20,13 +21,23 @@ Tema: `useTheme()` → `{ T, mode, toggle }`. Tutti i colori da `T.*`, mai hex h
   /:orgSlug/:appSlug/parameters/:paramKey → pages/ParameterDetail.jsx
   /environments → pages/Environments.jsx
 
-/settings       → components/layout/Layout.jsx (ProtectedRoute)
-  index         → redirect a /settings/profile
-  /profile      → pages/ProfilePage.jsx
-  /security     → pages/SecurityPage.jsx
-  /tokens       → coming soon
-  /org          → pages/OrgSettingsPage.jsx
+/account        → components/layout/Layout.jsx (ProtectedRoute)  ← account personale
+  index         → redirect a /account/profile
+  /profile      → pages/ProfilePage.jsx      (nome, email, org list, danger zone)
+  /security     → pages/SecurityPage.jsx     (password reset, OAuth, sessioni browser + CLI)
+  /tokens       → pages/PersonalTokensPage.jsx (PAT manuali — NON sessioni CLI)
+
+/settings       → components/layout/Layout.jsx (ProtectedRoute)  ← solo org settings
+  index         → redirect a /settings/org
+  /org          → pages/OrgSettingsPage.jsx  (tab: members, roles, tokens, billing, audit, settings)
+  /profile      → redirect a /account/profile   (backward compat)
+  /security     → redirect a /account/security  (backward compat)
+  /tokens       → redirect a /account/tokens    (backward compat)
 ```
+
+**Sidebar:** "org settings" è il punto di ingresso org; le sottovoci (members · roles · tokens · billing · audit · settings) sono sempre visibili come nav annidata. Lo stato tab attivo viene letto da `?tab=` via `useSearchParams` sia nella sidebar che in `OrgSettingsPage`.
+
+**Header user menu:** punta a `/account/profile`, `/account/security`, `/account/tokens`.
 
 ## Auth e contesto globale
 

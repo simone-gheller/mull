@@ -8,8 +8,8 @@ The product now has a first version of API access keys for REST API, CLI, and SD
 
 There are two key types:
 
-- Personal access tokens: `mull_pat_<keyId>_<secret>`
-- Organization service tokens: `mull_st_<keyId>_<secret>`
+- Personal access tokens: `vextis_pat_<keyId>_<secret>`
+- Organization service tokens: `vextis_st_<keyId>_<secret>`
 
 The important design decision is that a token is not the actor by itself. The actor is an `Identity`; the token is a credential used by that identity.
 
@@ -123,8 +123,8 @@ Service token:
 The auth plugin now chooses the strategy by token prefix:
 
 ```txt
-Authorization: Bearer mull_pat_...  -> access key auth
-Authorization: Bearer mull_st_...   -> access key auth
+Authorization: Bearer vextis_pat_...  -> access key auth
+Authorization: Bearer vextis_st_...   -> access key auth
 anything else                       -> Supabase JWT auth
 ```
 
@@ -210,17 +210,19 @@ Example:
 
 ```bash
 curl -sS "$API_URL/auth/whoami" \
-  -H "Authorization: Bearer $MULL_PAT" | jq
+  -H "Authorization: Bearer $VEXTIS_PAT" | jq
 ```
 
 This returns organizations, scopes, credential type, key prefix, and optional app/environment bindings.
 
 ## UI Changes
 
-The frontend now has real access key management in two places:
+The frontend has real access key management in two places:
 
-- Personal tokens page: `/settings/tokens`
-- Org tokens tab: `/settings/org`, then `tokens`
+- Personal tokens page: `/account/tokens` (manual PATs only — CLI sessions are excluded)
+- Org tokens tab: `/settings/org?tab=tokens`
+
+CLI sessions (`source='CLI'`) are shown separately on `/account/security` as "Active Sessions" with revoke controls. The Security page also shows the current browser session (decoded from the Supabase JWT) alongside CLI sessions in a unified table.
 
 Shared component:
 
@@ -291,14 +293,14 @@ Set variables:
 
 ```bash
 export API_URL="http://localhost:3000"
-export MULL_PAT="mull_pat_..."
+export VEXTIS_PAT="vextis_pat_..."
 ```
 
 Discover org id:
 
 ```bash
 curl -sS "$API_URL/auth/whoami" \
-  -H "Authorization: Bearer $MULL_PAT" | jq
+  -H "Authorization: Bearer $VEXTIS_PAT" | jq
 ```
 
 Then:
@@ -313,14 +315,14 @@ Read rendered config with `config:read`:
 
 ```bash
 curl -sS "$API_URL/orgs/$ORG_ID/config/$APP_ID/$ENV_ID" \
-  -H "Authorization: Bearer $MULL_PAT" | jq
+  -H "Authorization: Bearer $VEXTIS_PAT" | jq
 ```
 
 List parameters with `parameters:read`:
 
 ```bash
 curl -sS "$API_URL/orgs/$ORG_ID/parameters?appId=$APP_ID" \
-  -H "Authorization: Bearer $MULL_PAT" | jq
+  -H "Authorization: Bearer $VEXTIS_PAT" | jq
 ```
 
 Update a value with `parameters:write`; for PAT this also requires the owning user to be `ADMIN` or `OWNER`:
@@ -329,7 +331,7 @@ Update a value with `parameters:write`; for PAT this also requires the owning us
 export VALUE_ID="019..."
 
 curl -sS -X PUT "$API_URL/orgs/$ORG_ID/parameters/values/$VALUE_ID" \
-  -H "Authorization: Bearer $MULL_PAT" \
+  -H "Authorization: Bearer $VEXTIS_PAT" \
   -H "Content-Type: application/json" \
   -d '{"value":"hello-from-pat"}' | jq
 ```
@@ -338,7 +340,7 @@ Expected denial if scope is missing:
 
 ```bash
 curl -i "$API_URL/orgs/$ORG_ID/config/$APP_ID/$ENV_ID" \
-  -H "Authorization: Bearer $MULL_PAT"
+  -H "Authorization: Bearer $VEXTIS_PAT"
 ```
 
 Without `config:read`, this should return `403`.

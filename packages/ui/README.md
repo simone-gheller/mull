@@ -1,11 +1,11 @@
-# @mull/ui
+# @vextis/ui
 
 Internal design system for SafeConfig. All components use inline styles driven by a theme token object (`T`) — no CSS files, no class names.
 
 ## Usage
 
 ```jsx
-import { useTheme, Btn, Badge, Input, FONTS } from '@mull/ui';
+import { useTheme, Btn, Badge, Input, FONTS } from '@vextis/ui';
 
 function MyComponent() {
   const { T } = useTheme();
@@ -36,7 +36,7 @@ Every component requires a `T` prop. Get it from `useTheme()` — never hardcode
 ## Theming
 
 ```jsx
-import { ThemeProvider, useTheme } from '@mull/ui';
+import { ThemeProvider, useTheme } from '@vextis/ui';
 
 // Wrap your app once
 <ThemeProvider>
@@ -65,7 +65,7 @@ Key token conventions:
 ## Typography
 
 ```js
-import { FONTS } from '@mull/ui';
+import { FONTS } from '@vextis/ui';
 
 FONTS.display  // DM Sans — headings, prose, readable text
 FONTS.mono     // JetBrains Mono — keys, values, badges, labels, data
