@@ -1,5 +1,5 @@
 {
-  "name": "@mull/cli",
+  "name": "@vextis/cli",
   "version": "0.1.0",
   "description": "mull CLI — secure config management",
   "private": true,
