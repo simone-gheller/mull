@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { useTheme, Btn, FONTS } from '@mull/ui';
+import { createPortal } from 'react-dom';
+import { useTheme, FONTS } from '@vextis/ui';
 
 export default function Modal({ isOpen, onClose, title, children, size = 'md' }) {
   const { T } = useTheme();
@@ -14,11 +15,11 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
 
   const maxW = { sm: '380px', md: '480px', lg: '560px', xl: '640px' }[size] ?? '480px';
 
-  return (
+  return createPortal(
     <div
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 200,
+        position: 'fixed', inset: 0, zIndex: 1000,
         background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
       }}
@@ -46,6 +47,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
         </div>
         <div style={{ padding: '20px 18px' }}>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

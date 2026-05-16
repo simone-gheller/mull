@@ -1,8 +1,20 @@
 import { useState } from 'react';
 import { FONTS } from '../tokens.js';
 
-export function Input({ label, placeholder, type = "text", prefix, suffix, hint, readOnly, T, ...rest }) {
+export function Input({ label, placeholder, type = "text", prefix, suffix, hint, readOnly, maxLength, onChange, T, ...rest }) {
   const [f, setF] = useState(false);
+  const [uncontrolledLen, setUncontrolledLen] = useState(0);
+
+  const handleChange = (e) => {
+    if (rest.value == null) setUncontrolledLen(e.target.value.length);
+    onChange?.(e);
+  };
+
+  const charCount = rest.value != null ? (rest.value?.length ?? 0) : uncontrolledLen;
+  const showCounter = maxLength != null && charCount > 0;
+  const atLimit = maxLength != null && charCount >= maxLength;
+  const nearLimit = maxLength != null && charCount >= Math.ceil(maxLength * 0.8);
+
   return (
     <div>
       {label && (
@@ -33,8 +45,10 @@ export function Input({ label, placeholder, type = "text", prefix, suffix, hint,
           type={type}
           placeholder={placeholder}
           readOnly={readOnly}
+          maxLength={maxLength}
           onFocus={() => setF(true)}
           onBlur={() => setF(false)}
+          onChange={handleChange}
           {...rest}
           style={{
             flex: 1, background: "transparent", border: "none", outline: "none",
@@ -55,6 +69,14 @@ export function Input({ label, placeholder, type = "text", prefix, suffix, hint,
       {hint && (
         <div style={{ fontFamily: FONTS.display, fontSize: "11px", color: T.textMuted, marginTop: "4px" }}>
           {hint}
+        </div>
+      )}
+      {!hint && showCounter && (
+        <div style={{
+          fontFamily: FONTS.mono, fontSize: "10px", marginTop: "4px", textAlign: "right",
+          color: atLimit ? T.red : nearLimit ? T.amber : T.textMuted,
+        }}>
+          {charCount}/{maxLength}
         </div>
       )}
     </div>

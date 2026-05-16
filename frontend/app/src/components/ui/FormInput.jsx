@@ -1,12 +1,23 @@
 import { forwardRef, useState } from 'react';
-import { useTheme, FONTS } from '@mull/ui';
+import { useTheme, FONTS } from '@vextis/ui';
 
 const FormInput = forwardRef(function FormInput(
-  { label, type = 'text', placeholder, error, prefix, suffix, readOnly, ...rest },
+  { label, type = 'text', placeholder, error, prefix, suffix, readOnly, maxLength, onChange, ...rest },
   ref
 ) {
   const { T } = useTheme();
   const [focused, setFocused] = useState(false);
+  const [uncontrolledLen, setUncontrolledLen] = useState(0);
+
+  const handleChange = (e) => {
+    if (rest.value == null) setUncontrolledLen(e.target.value.length);
+    onChange?.(e);
+  };
+
+  const charCount = rest.value != null ? (rest.value?.length ?? 0) : uncontrolledLen;
+  const showCounter = maxLength != null && charCount > 0;
+  const atLimit = maxLength != null && charCount >= maxLength;
+  const nearLimit = maxLength != null && charCount >= Math.ceil(maxLength * 0.8);
 
   return (
     <div>
@@ -39,8 +50,10 @@ const FormInput = forwardRef(function FormInput(
           type={type}
           placeholder={placeholder}
           readOnly={readOnly}
+          maxLength={maxLength}
           onFocus={() => !readOnly && setFocused(true)}
           onBlur={() => setFocused(false)}
+          onChange={handleChange}
           style={{
             flex: 1, background: 'transparent', border: 'none', outline: 'none',
             padding: '8px 12px', fontFamily: FONTS.mono, fontSize: '12px',
@@ -58,11 +71,18 @@ const FormInput = forwardRef(function FormInput(
           </span>
         )}
       </div>
-      {error && (
+      {error ? (
         <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.red, marginTop: '5px' }}>
           {error}
         </div>
-      )}
+      ) : showCounter ? (
+        <div style={{
+          fontFamily: FONTS.mono, fontSize: '10px', marginTop: '4px', textAlign: 'right',
+          color: atLimit ? T.red : nearLimit ? T.amber : T.textMuted,
+        }}>
+          {charCount}/{maxLength}
+        </div>
+      ) : null}
     </div>
   );
 });

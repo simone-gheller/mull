@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { FONTS } from '@mull/ui';
+import { FONTS } from '@vextis/ui';
 
 export default function TrashButton({ onClick, label = 'delete', T }) {
   const [hovered, setHovered] = useState(false);

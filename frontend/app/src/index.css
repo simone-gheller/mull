@@ -1,12 +1,29 @@
 @import "tailwindcss";
 
+:root {
+  --color-bg-app: #08090c;
+  --color-bg-shell: #0d1117;
+  --color-bg-panel: #11161d;
+  --color-bg-elevated: #151b24;
+  --color-border-subtle: #202938;
+  --color-border-default: #2b3545;
+  --color-text-primary: #f4f7fb;
+  --color-text-secondary: #a7b0c0;
+  --color-text-muted: #7c8798;
+  --color-text-disabled: #4f5868;
+  --color-brand: #2dd881;
+  --color-brand-hover: #3eea91;
+  --color-brand-muted: rgba(45, 216, 129, 0.12);
+  --color-brand-border: rgba(45, 216, 129, 0.35);
+}
+
 body {
   font-family: 'DM Sans', 'Outfit', system-ui, sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
 *:focus-visible {
-  outline: 2px solid #22c55e;
+  outline: 2px solid #2dd881;
   outline-offset: 2px;
   border-radius: 3px;
 }
@@ -24,3 +41,17 @@ body {
 }
 @keyframes termBlink { 0%,100%{opacity:1} 50%{opacity:0} }
 @media (prefers-reduced-motion: reduce) { .term-cursor { animation: none; opacity: 1; } }
+
+@keyframes brandCursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }
+.brand-cursor {
+  animation: brandCursorBlink 1s step-end infinite;
+}
+@media (prefers-reduced-motion: reduce) { .brand-cursor { animation: none; opacity: 1; } }
+
+.scroll-x-hidden {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.scroll-x-hidden::-webkit-scrollbar {
+  display: none;
+}

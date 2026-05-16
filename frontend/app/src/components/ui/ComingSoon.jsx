@@ -1,4 +1,4 @@
-import { useTheme, FONTS } from '@mull/ui';
+import { useTheme, FONTS } from '@vextis/ui';
 
 export default function ComingSoon({ section, feature, icon = '◈', title, description }) {
   const { T } = useTheme();

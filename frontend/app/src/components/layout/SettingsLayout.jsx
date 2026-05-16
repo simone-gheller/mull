@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { useTheme, FONTS, Badge } from '@mull/ui';
+import { useTheme, FONTS, Badge } from '@vextis/ui';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../settings/Avatar';
 import Header from './Header';

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useTheme, Btn, FONTS } from '@mull/ui';
+import { useTheme, Btn, FONTS } from '@vextis/ui';
 import Modal from './Modal';
 import FormInput from './FormInput';
 

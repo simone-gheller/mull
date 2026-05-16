@@ -11,8 +11,9 @@ export function NavItem({ icon, label, active, badge, T }) {
         display: "flex", alignItems: "center", gap: "10px", padding: "7px 10px",
         borderRadius: "5px", cursor: "pointer",
         background: active ? T.elevated : h ? T.overlay : "transparent",
-        border: `1px solid ${active ? T.border : "transparent"}`,
-        fontFamily: FONTS.mono, fontSize: "12px",
+        borderLeft: `2px solid ${active ? T.termGreen : "transparent"}`,
+        borderRadius: "0 6px 6px 0",
+        fontFamily: FONTS.mono, fontSize: "13px",
         color: active ? T.textPrimary : h ? T.textPrimary : T.textSecondary,
         transition: "all 0.1s", userSelect: "none",
       }}

@@ -47,9 +47,9 @@ function TreeNode({ node, T, onEdit, onDelete, onSelect, selectedId, defaultFocu
         }}
         style={{
           display: "flex", alignItems: "center", gap: "10px",
-          padding: "8px 12px", borderRadius: "5px",
-          background: isSelected ? T.elevated : hover ? T.overlay : "transparent",
-          borderLeft: isSelected ? `2px solid ${T.termGreen}` : "2px solid transparent",
+          padding: "8px 12px", borderRadius: "0 5px 5px 0",
+          background: isSelected ? "rgba(45, 216, 129, 0.08)" : hover ? T.overlay : "transparent",
+          borderLeft: `2px solid ${isSelected ? T.termGreen : "transparent"}`,
           cursor: onSelect ? "pointer" : "default", transition: "background 0.12s",
         }}
       >

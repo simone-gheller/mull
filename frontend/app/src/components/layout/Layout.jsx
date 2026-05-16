@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
-import { useTheme, FONTS } from '@mull/ui';
+import { useTheme, FONTS } from '@vextis/ui';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { supabase } from '../../lib/supabase';
@@ -50,11 +50,17 @@ export default function Layout() {
         e.preventDefault();
         document.querySelector('[data-search]')?.focus();
       } else if (e.key === 'n' || e.key === 'N') {
-        window.dispatchEvent(new CustomEvent('mull:new'));
+        window.dispatchEvent(new CustomEvent('vextis:new'));
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setCmdOpen(true);
+    window.addEventListener('app:cmd', handler);
+    return () => window.removeEventListener('app:cmd', handler);
   }, []);
 
   useEffect(() => {
@@ -66,8 +72,8 @@ export default function Layout() {
         setSsoRequired({ available: false });
       }
     };
-    window.addEventListener('mull:sso-required', handler);
-    return () => window.removeEventListener('mull:sso-required', handler);
+    window.addEventListener('vextis:sso-required', handler);
+    return () => window.removeEventListener('vextis:sso-required', handler);
   }, [user?.email]);
 
   const continueWithSso = async () => {
@@ -94,7 +100,7 @@ export default function Layout() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <Header />
         <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
-          {ssoRequired && (
+        {ssoRequired && (
             <div style={{
               marginBottom: '16px',
               padding: '14px 16px',
@@ -133,7 +139,7 @@ export default function Layout() {
                 continue with SSO
               </button>
             </div>
-          )}
+        )}
           <Outlet key={orgId} />
         </main>
       </div>
