@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme, FONTS, Btn } from '@mull/ui';
+import { useTheme, FONTS, Btn } from '@vextis/ui';
 import { supabase } from '../lib/supabase';
 import FormInput from '../components/ui/FormInput';
 

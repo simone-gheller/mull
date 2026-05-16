@@ -1,4 +1,4 @@
-import { useTheme, Btn, Badge, Card, FONTS } from '@mull/ui';
+import { useTheme, Btn, Badge, Card, FONTS } from '@vextis/ui';
 
 const TIERS = [
   {

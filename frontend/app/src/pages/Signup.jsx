@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useTheme, Btn, FONTS } from '@mull/ui';
+import { useTheme, Btn, FONTS } from '@vextis/ui';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import apiService from '../services/api';
@@ -16,7 +16,7 @@ const SESSION_INVITE = 'invite_token';
 const schema = z.object({
   displayName: z.string().min(2, 'At least 2 characters'),
   email: z.string().email('Invalid email'),
-  organizationName: z.string().min(2, 'At least 2 characters'),
+  organizationName: z.string().min(2, 'At least 2 characters').max(50, 'Max 50 characters'),
   password: z.string().min(6, 'At least 6 characters'),
   confirmPassword: z.string(),
 }).refine(d => d.password === d.confirmPassword, {
@@ -134,7 +134,7 @@ function FormStep({ T, onSubmit, isSubmitting, error, onOAuth, onInviteSso, invi
               readOnly={!!inviteEmail}
               {...register('email')}
             />
-            <FormInput label="Organization name" placeholder="acme-corp" error={errors.organizationName?.message} {...register('organizationName')} />
+            <FormInput label="Organization name" placeholder="acme-corp" error={errors.organizationName?.message} maxLength={50} {...register('organizationName')} />
             <FormInput label="Password" type="password" placeholder="••••••••" error={errors.password?.message} {...register('password')} />
             <FormInput label="Confirm password" type="password" placeholder="••••••••" error={errors.confirmPassword?.message} {...register('confirmPassword')} />
             <Btn T={T} variant="primary" size="md" disabled={isSubmitting}>

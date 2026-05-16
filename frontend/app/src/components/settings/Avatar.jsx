@@ -1,4 +1,4 @@
-import { useTheme, FONTS } from '@mull/ui';
+import { useTheme, FONTS } from '@vextis/ui';
 
 export function Avatar({ name = '?', size = 36, sub }) {
   const { T, mode } = useTheme();

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useTheme, FONTS } from '@mull/ui';
+import { useTheme, FONTS } from '@vextis/ui';
 import { HomePage } from './pages/HomePage.jsx';
 import { PricingPage } from './pages/PricingPage.jsx';
 import { DocsPage } from './pages/DocsPage.jsx';

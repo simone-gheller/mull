@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@mull/ui';
+import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@vextis/ui';
 import { Download } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import apiService from '../services/api';
@@ -53,8 +53,8 @@ export default function Apps() {
 
   useEffect(() => {
     const handler = () => { resetForm(); setShowModal(true); };
-    window.addEventListener('mull:new', handler);
-    return () => window.removeEventListener('mull:new', handler);
+    window.addEventListener('vextis:new', handler);
+    return () => window.removeEventListener('vextis:new', handler);
   }, []);
 
   const resetForm = () => {
@@ -382,6 +382,7 @@ export default function Apps() {
             placeholder="acme-api"
             value={formName}
             onChange={e => setFormName(e.target.value)}
+            maxLength={50}
             autoFocus
           />
 

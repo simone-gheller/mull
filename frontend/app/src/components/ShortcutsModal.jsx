@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { FONTS } from '@mull/ui';
+import { FONTS } from '@vextis/ui';
 
 const SHORTCUTS = [
   { key: '⌘K',     desc: 'open command palette' },

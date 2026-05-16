@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useTheme, FONTS, Btn, Badge, Input } from '@mull/ui';
+import { useTheme, FONTS, Btn, Badge, Input } from '@vextis/ui';
 import { useProfile } from '../hooks/useProfile';
+import { useAuth } from '../context/AuthContext';
 import { Avatar } from '../components/settings/Avatar';
-import AccessKeysPanel from '../components/settings/AccessKeysPanel';
 
 function Section({ title, description, children, T, danger }) {
   return (
@@ -28,34 +28,16 @@ function Section({ title, description, children, T, danger }) {
   );
 }
 
-function SecurityRow({ label, value, action, statusVariant, T }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '12px 14px', background: T.overlay,
-      border: `1px solid ${T.border}`, borderRadius: '4px',
-    }}>
-      <div>
-        <div style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.textPrimary, marginBottom: '2px' }}>{label}</div>
-        <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>{value}</div>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        {statusVariant && <Badge T={T} variant={statusVariant}>enabled</Badge>}
-        <Btn T={T} variant="secondary" size="sm" disabled>{action}</Btn>
-      </div>
-    </div>
-  );
-}
-
 const ROLE_VARIANT = { OWNER: 'warning', ADMIN: 'info', DEVELOPER: 'success', VIEWER: 'default' };
 
 export default function ProfilePage() {
   const { T } = useTheme();
   const { profile, loading, error, update } = useProfile();
+  const { orgs, orgId } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState(null); // 'saved' | 'error'
+  const [saveStatus, setSaveStatus] = useState(null);
 
   useEffect(() => {
     if (profile?.displayName != null) setDisplayName(profile.displayName);
@@ -76,7 +58,8 @@ export default function ProfilePage() {
   };
 
   const name = profile?.displayName || profile?.email?.split('@')[0] || '—';
-  const role = profile?.role ?? 'DEVELOPER';
+  const activeOrg = orgs.find(o => o.id === orgId);
+  const role = activeOrg?.role ?? profile?.role ?? 'DEVELOPER';
   const roleLabel = role.toLowerCase();
   const roleVariant = ROLE_VARIANT[role] ?? 'default';
 
@@ -102,7 +85,7 @@ export default function ProfilePage() {
     <div>
       {/* Breadcrumb */}
       <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.termGreen, letterSpacing: '0.15em', marginBottom: '8px' }}>
-        // settings · profile
+        // account · profile
       </div>
       <h1 style={{ fontFamily: FONTS.display, fontWeight: 700, fontSize: '26px', color: T.textPrimary, letterSpacing: '-0.02em', marginBottom: '24px' }}>
         Your Profile
@@ -157,21 +140,42 @@ export default function ProfilePage() {
         </div>
       </Section>
 
-      {/* Security */}
-      <Section T={T} title="Security" description="Password and two-factor authentication">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <SecurityRow T={T} label="Password" value="Never changed" action="change" />
-          <SecurityRow T={T} label="Two-factor authentication" value="Not configured" action="enable" />
-          <SecurityRow T={T} label="Active sessions" value="Current and recent logins" action="view all" />
-        </div>
+      {/* Organizations */}
+      <Section T={T} title="Organizations" description="All organizations you are a member of">
+        {orgs.length === 0 ? (
+          <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>// no organizations</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {orgs.map(org => {
+              const orgRoleVariant = ROLE_VARIANT[org.role] ?? 'default';
+              return (
+                <div
+                  key={org.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '12px 14px',
+                    background: org.id === orgId ? T.elevated : T.overlay,
+                    border: `1px solid ${org.id === orgId ? T.borderHover : T.border}`,
+                    borderRadius: '4px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: '13px', color: T.textPrimary }}>
+                      {org.name}
+                    </span>
+                    {org.id === orgId && (
+                      <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted }}>active</span>
+                    )}
+                  </div>
+                  <Badge T={T} variant={orgRoleVariant}>{org.role.toLowerCase()}</Badge>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Section>
 
-      {/* Personal tokens */}
-      <Section T={T} title="Personal API Tokens" description="Tokens scoped to your user — not shared with the org">
-        <AccessKeysPanel T={T} mode="personal" />
-      </Section>
-
-      {/* Danger zone */}
+      {/* Danger Zone */}
       <Section T={T} title="Danger Zone" description="Irreversible actions on your account" danger>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>

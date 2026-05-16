@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useTheme, FONTS, Btn } from '@mull/ui';
+import { useTheme, FONTS, Btn } from '@vextis/ui';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import apiService from '../services/api';

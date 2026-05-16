@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useTheme, Btn, Badge, Card, Stat, FONTS } from '@mull/ui';
+import { useTheme, Btn, Badge, Card, Stat, FONTS } from '@vextis/ui';
 import TerminalHero from '../components/TerminalHero';
 
 function useTypewriter(phrases, { typeSpeed = 36, eraseSpeed = 22, pause = 4000 } = {}) {

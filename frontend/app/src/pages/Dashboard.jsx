@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useTheme, Stat, Card, Btn, Badge, FONTS } from '@mull/ui';
+import { useTheme, Stat, Card, Btn, Badge, FONTS } from '@vextis/ui';
 import { useAuth } from '../context/AuthContext';
 import apiService from '../services/api';
 

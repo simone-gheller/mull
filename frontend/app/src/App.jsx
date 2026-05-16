@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useTheme, FONTS } from '@mull/ui';
+import { useTheme, FONTS } from '@vextis/ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import Layout from './components/layout/Layout';
@@ -88,11 +88,18 @@ function AppRoutes() {
           <Route path="environments" element={<Environments />} />
         </Route>
 
-        <Route path="/settings" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route index element={<Navigate to="/settings/profile" replace />} />
+        <Route path="/account" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route index element={<Navigate to="/account/profile" replace />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="security" element={<SecurityPage />} />
           <Route path="tokens" element={<PersonalTokensPage />} />
+        </Route>
+
+        <Route path="/settings" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route index element={<Navigate to="/settings/org" replace />} />
+          <Route path="profile" element={<Navigate to="/account/profile" replace />} />
+          <Route path="security" element={<Navigate to="/account/security" replace />} />
+          <Route path="tokens" element={<Navigate to="/account/tokens" replace />} />
           <Route path="org" element={<OrgSettingsPage />} />
         </Route>
 

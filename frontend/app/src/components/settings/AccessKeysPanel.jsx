@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Btn, FONTS, Input } from '@mull/ui';
+import { Badge, Btn, FONTS, Input } from '@vextis/ui';
 import apiService from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 
@@ -273,7 +273,7 @@ export default function AccessKeysPanel({ T, mode }) {
         <div style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted }}>// no access keys</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {keys.map(key => (
+          {keys.filter(k => isOrg || k.source !== 'CLI').map(key => (
             <div key={key.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'center', padding: '12px', background: T.overlay, border: `1px solid ${T.border}`, borderRadius: '4px' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>

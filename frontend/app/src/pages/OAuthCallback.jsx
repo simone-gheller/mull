@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme, FONTS } from '@mull/ui';
+import { useTheme, FONTS } from '@vextis/ui';
 import { useAuth } from '../context/AuthContext';
 
 /**

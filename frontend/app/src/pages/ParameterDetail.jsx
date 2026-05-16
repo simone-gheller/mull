@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useTheme, Btn, Badge, FONTS } from '@mull/ui';
+import { useTheme, Btn, Badge, FONTS } from '@vextis/ui';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import apiService from '../services/api';
 
 const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+const tryPrettyJson = (str) => {
+  try { return JSON.stringify(JSON.parse(str), null, 2); } catch { return str; }
+};
 
 // ─── Env value card ───────────────────────────────────────────────────────────
 
@@ -33,14 +38,13 @@ function DisabledActionTooltip({ children, T, message }) {
   );
 }
 
-function EnvRow({ row, editLabel, canWrite, selected, T, onEdit, onSelect }) {
+function EnvRow({ row, editLabel, canWrite, selected, T, onEdit, onSelect, toast }) {
   const [visible, setVisible]           = useState(false);
-  const [copied, setCopied]             = useState(false);
   const [revealHovered, setRevealHovered] = useState(false);
 
-  const handleCopy = async () => {
+  const handleCopy = () => {
     if (row.isRedacted || !row.value) return;
-    try { await navigator.clipboard.writeText(row.value); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
+    navigator.clipboard.writeText(row.value).then(() => toast('value copied')).catch(console.error);
   };
   const canReveal = row.isSet && !row.isRedacted;
 
@@ -49,8 +53,8 @@ function EnvRow({ row, editLabel, canWrite, selected, T, onEdit, onSelect }) {
       role="row"
       onClick={() => onSelect(row.valueId)}
       style={{
-      display: 'grid', gridTemplateColumns: '160px 1fr 120px',
-      alignItems: 'center', padding: '9px 14px',
+      display: 'grid', gridTemplateColumns: '160px 1fr auto', columnGap: '20px',
+      alignItems: 'flex-start', padding: '9px 14px',
       borderBottom: `1px solid ${T.border}`,
       background: selected ? T.overlay : 'transparent',
       borderLeft: `2px solid ${selected ? T.termGreen : 'transparent'}`,
@@ -70,20 +74,23 @@ function EnvRow({ row, editLabel, canWrite, selected, T, onEdit, onSelect }) {
       </div>
 
       {/* VALUE */}
-      <div style={{ minWidth: 0 }}>
+      <div style={{ minWidth: 0, paddingTop: '1px' }}>
         <span style={{
           fontFamily: FONTS.mono, fontSize: '12px',
-          color: row.isRedacted ? T.amber : !visible ? T.textMuted : !row.isSet ? T.textMuted : row.isInherited ? T.textSecondary : T.amber,
+          color: row.isRedacted ? T.amber : !visible ? T.textMuted : !row.isSet ? T.textMuted : row.isInherited ? T.textSecondary : T.textPrimary,
           letterSpacing: visible ? 'normal' : '0.1em',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
+          display: 'block',
           fontStyle: row.isRedacted || !row.isSet ? 'italic' : 'normal',
+          ...(visible
+            ? { whiteSpace: 'pre-wrap', wordBreak: 'break-all', overflowWrap: 'anywhere' }
+            : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }),
         }}>
           {row.isRedacted
             ? 'restricted'
             : !row.isSet
               ? 'unset'
               : visible
-                ? row.value
+                ? tryPrettyJson(row.value)
                 : '•'.repeat(Math.min(row.value?.length || 16, 20))}
         </span>
       </div>
@@ -111,7 +118,7 @@ function EnvRow({ row, editLabel, canWrite, selected, T, onEdit, onSelect }) {
           )}
         </div>
         <Btn T={T} variant="secondary" size="sm" onClick={(event) => { event.stopPropagation(); handleCopy(); }} disabled={!visible || !row.value || row.isRedacted}>
-          {copied ? 'copied!' : 'copy'}
+          copy
         </Btn>
         {canWrite ? (
           <Btn T={T} variant="secondary" size="sm" onClick={(event) => { event.stopPropagation(); onEdit(row); }}>
@@ -236,7 +243,7 @@ function HistoryTable({ rows, loading, available, canWrite, reveals, T, onReveal
   return (
     <div role="table" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '6px', overflow: 'hidden' }}>
       <div role="row" style={{
-        display: 'grid', gridTemplateColumns: HISTORY_GRID,
+        display: 'grid', gridTemplateColumns: HISTORY_GRID, columnGap: '20px',
         padding: '6px 14px', borderBottom: `1px solid ${T.border}`,
         fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted,
         letterSpacing: '0.1em', textTransform: 'uppercase',
@@ -248,8 +255,8 @@ function HistoryTable({ rows, loading, available, canWrite, reveals, T, onReveal
         const changedAt = new Date(row.createdAt).toLocaleString();
         return (
           <div key={row.id} role="row" style={{
-            display: 'grid', gridTemplateColumns: HISTORY_GRID,
-            alignItems: 'center', padding: '9px 14px',
+            display: 'grid', gridTemplateColumns: HISTORY_GRID, columnGap: '20px',
+            alignItems: 'flex-start', padding: '9px 14px',
             borderBottom: `1px solid ${T.border}`,
           }}>
             <span style={{ fontFamily: FONTS.mono, fontSize: '12px', color: T.textPrimary }}>v{row.versionNumber}</span>
@@ -264,9 +271,12 @@ function HistoryTable({ rows, loading, available, canWrite, reveals, T, onReveal
             </span>
             <span style={{
               fontFamily: FONTS.mono, fontSize: '12px',
-              color: !row.isSet ? T.textMuted : reveal.error ? T.amber : reveal.visible ? T.amber : T.textMuted,
+              color: !row.isSet ? T.textMuted : reveal.error ? T.amber : reveal.visible ? T.textPrimary : T.textMuted,
               fontStyle: !row.isSet || reveal.error ? 'italic' : 'normal',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              display: 'block',
+              ...(reveal.visible
+                ? { whiteSpace: 'pre-wrap', wordBreak: 'break-all', overflowWrap: 'anywhere' }
+                : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }),
             }}>
               {!row.isSet
                 ? 'unset'
@@ -391,6 +401,7 @@ export default function ParameterDetail() {
   const { orgSlug, appSlug, paramKey } = useParams();
   const navigate = useNavigate();
   const { T } = useTheme();
+  const { toast } = useToast();
   const { orgs, orgId } = useAuth();
 
   const [resolved, setResolved] = useState(null);
@@ -603,7 +614,7 @@ export default function ParameterDetail() {
           <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.termGreen, letterSpacing: '0.15em', marginBottom: '8px' }}>
             // parameters · detail
           </div>
-          <h1 style={{ fontFamily: FONTS.mono, fontWeight: 500, fontSize: '20px', color: T.textPrimary, letterSpacing: '0.02em' }}>
+          <h1 style={{ fontFamily: FONTS.mono, fontWeight: 500, fontSize: '20px', color: T.textPrimary, letterSpacing: '0.02em', wordBreak: 'break-all' }}>
             {paramKey}
           </h1>
         </div>
@@ -648,7 +659,7 @@ export default function ParameterDetail() {
         ) : (
           <div role="table" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '6px', overflow: 'hidden' }}>
             <div role="row" style={{
-              display: 'grid', gridTemplateColumns: '160px 1fr 120px',
+              display: 'grid', gridTemplateColumns: '160px 1fr auto', columnGap: '20px',
               padding: '6px 14px', borderBottom: `1px solid ${T.border}`,
               fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted,
               letterSpacing: '0.1em', textTransform: 'uppercase',
@@ -665,6 +676,7 @@ export default function ParameterDetail() {
                 T={T}
                 onEdit={setEditingRow}
                 onSelect={setSelectedValueId}
+                toast={toast}
               />
             ))}
           </div>

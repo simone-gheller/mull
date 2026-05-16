@@ -1,4 +1,4 @@
-import { useTheme, Card, Btn, Badge, FONTS } from '@mull/ui';
+import { useTheme, Card, Btn, Badge, FONTS } from '@vextis/ui';
 
 const SECTIONS = [
   { icon: "▷", title: "Quick start", desc: "Install the CLI, authenticate, and push your first secret in under 5 minutes." },

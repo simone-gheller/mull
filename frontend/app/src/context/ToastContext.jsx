@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { Toast } from '@mull/ui';
-import { useTheme } from '@mull/ui';
+import { Toast } from '@vextis/ui';
+import { useTheme } from '@vextis/ui';
 
 const ToastContext = createContext(null);
 

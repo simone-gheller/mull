@@ -1,4 +1,4 @@
-import { useTheme, FONTS } from '@mull/ui';
+import { useTheme, FONTS } from '@vextis/ui';
 import AccessKeysPanel from '../components/settings/AccessKeysPanel';
 
 function Section({ title, description, children, T }) {
@@ -24,7 +24,7 @@ export default function PersonalTokensPage() {
   return (
     <div>
       <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.termGreen, letterSpacing: '0.15em', marginBottom: '8px' }}>
-        // settings · tokens
+        // account · tokens
       </div>
       <h1 style={{ fontFamily: FONTS.display, fontWeight: 700, fontSize: '26px', color: T.textPrimary, marginBottom: '24px' }}>
         Personal Tokens

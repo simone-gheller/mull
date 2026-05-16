@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
-import { useTheme, FONTS, Btn, Badge, Input } from '@mull/ui';
+import { useTheme, FONTS, Btn, Badge, Input } from '@vextis/ui';
 import { useOrg } from '../hooks/useOrg';
 import { useMembers } from '../hooks/useMembers';
 import { useInvites } from '../hooks/useInvites';
@@ -1044,12 +1045,12 @@ function BillingTab({ T }) {
       const checkout = await apiService.createBillingCheckout({ plan, interval });
       const Paddle = await loadPaddleScript();
       if (checkout.environment === 'sandbox') Paddle.Environment.set('sandbox');
-      if (!window.__mullPaddleInitialized) {
+      if (!window.__vextisPaddleInitialized) {
         Paddle.Initialize({
           token: checkout.clientToken,
           checkout: { settings: { displayMode: 'overlay', variant: 'one-page', theme: 'dark', locale: 'en' } }
         });
-        window.__mullPaddleInitialized = true;
+        window.__vextisPaddleInitialized = true;
       }
       Paddle.Checkout.open({
         items: checkout.items,
@@ -1441,6 +1442,7 @@ function SettingsTab({ org, onUpdateOrg, T }) {
             label="Org Name"
             value={name}
             onChange={e => setName(e.target.value)}
+            maxLength={50}
           />
           <Input
             T={T}
@@ -1478,7 +1480,7 @@ function SettingsTab({ org, onUpdateOrg, T }) {
                   {connection.name || 'SAML connection'}
                 </div>
                 <div style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>
-                  {ssoLocked ? 'Requires Business or Custom plan' : (sso?.connection ? connection.domains || 'No domains set' : 'Setup is assisted by mull support')}
+                  {ssoLocked ? 'Requires Business or Custom plan' : (sso?.connection ? connection.domains || 'No domains set' : 'Setup is assisted by vextis support')}
                 </div>
               </div>
               <Badge T={T} variant={ssoEligible ? (connection.status === 'ACTIVE' ? 'success' : 'warning') : 'default'}>
@@ -1672,10 +1674,9 @@ export default function OrgSettingsPage() {
     }
   };
 
-  const [tab, setTab] = useState(() => {
-    const requested = new URLSearchParams(window.location.search).get('tab');
-    return TABS.includes(requested) ? requested : 'members';
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'settings';
+  const setTab = (t) => setSearchParams({ tab: t });
 
   const orgName = org?.name ?? user?.organization?.name ?? 'organization';
 
@@ -1701,7 +1702,7 @@ export default function OrgSettingsPage() {
     <div>
       {/* Breadcrumb */}
       <div style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.termGreen, letterSpacing: '0.15em', marginBottom: '8px' }}>
-        // settings · organization
+        // organization · {tab}
       </div>
 
       {/* Org header */}
@@ -1726,36 +1727,10 @@ export default function OrgSettingsPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{
-        display: 'flex', paddingLeft: '8px',
-        background: T.surface, border: `1px solid ${T.border}`,
-        borderBottom: 'none', borderRadius: '6px 6px 0 0',
-        marginBottom: 0,
-      }}>
-        {TABS.map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              fontFamily: FONTS.mono, fontSize: '11px', letterSpacing: '0.04em',
-              color: tab === t ? T.textPrimary : T.textMuted,
-              padding: '12px 16px',
-              borderBottom: `2px solid ${tab === t ? T.textPrimary : 'transparent'}`,
-              transition: 'all 0.12s',
-            }}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
       {/* Tab content */}
       <div style={{
         background: T.surface, border: `1px solid ${T.border}`,
-        borderTop: 'none', borderRadius: '0 0 6px 6px',
-        padding: '24px',
+        borderRadius: '6px', padding: '24px',
       }}>
         {tab === 'members' && (
           <MembersTab
@@ -1774,10 +1749,10 @@ export default function OrgSettingsPage() {
             onRemoveMember={removeMember}
           />
         )}
-        {tab === 'roles' && <RolesTab T={T} org={org} roles={roles} onRefresh={loadRoles} />}
-        {tab === 'tokens'  && <TokensTab T={T} />}
-        {tab === 'billing' && <BillingTab T={T} />}
-        {tab === 'audit'   && <AuditTab T={T} />}
+        {tab === 'roles'    && <RolesTab T={T} org={org} roles={roles} onRefresh={loadRoles} />}
+        {tab === 'tokens'   && <TokensTab T={T} />}
+        {tab === 'billing'  && <BillingTab T={T} />}
+        {tab === 'audit'    && <AuditTab T={T} />}
         {tab === 'settings' && <SettingsTab T={T} org={org} onUpdateOrg={updateOrgWithToast} />}
       </div>
     </div>

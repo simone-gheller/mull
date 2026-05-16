@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-do
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useTheme, Btn, FONTS } from '@mull/ui';
+import { useTheme, Btn, FONTS } from '@vextis/ui';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import apiService from '../services/api';
@@ -175,7 +175,7 @@ export default function Login() {
             fontSize: '18px', color: T.textPrimary, margin: '0 auto 12px',
           }}>▣</div>
           <h1 style={{ fontFamily: FONTS.display, fontWeight: 700, fontSize: '22px', color: T.textPrimary, letterSpacing: '-0.02em' }}>
-            Sign in to mull
+            Sign in to vextis
           </h1>
           <p style={{ fontFamily: FONTS.display, fontSize: '13px', color: T.textSecondary, marginTop: '6px' }}>
             Secure secrets management

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FONTS } from '@mull/ui';
+import { FONTS } from '@vextis/ui';
 import { useAuth } from '../context/AuthContext';
 import apiService from '../services/api';
 

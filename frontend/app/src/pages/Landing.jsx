@@ -69,7 +69,7 @@ const Landing = () => {
 
   const navItems = [
     { name: 'Solutions', href: '#solutions' },
-    { name: 'Docs', href: 'https://docs.safeconfig.com', external: true },
+    { name: 'Docs', href: 'https://docs.vextis.io', external: true },
     { name: 'Get Started', href: '#get-started' },
     { name: 'Pricing', href: '#pricing' },
     { name: 'Company', href: '#company' }
@@ -503,7 +503,7 @@ const Landing = () => {
                 <Button 
                   variant="outline" 
                   className="w-full"
-                  onClick={() => window.open('mailto:sales@safeconfig.com?subject=Enterprise Inquiry')}
+                  onClick={() => window.open('mailto:sales@vextis.io?subject=Enterprise Inquiry')}
                 >
                   Contact Sales
                 </Button>
@@ -637,9 +637,9 @@ const Landing = () => {
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-gray-400">
                 <li><button onClick={() => scrollToSection('#solutions')} className="hover:text-white">Features</button></li>
-                <li><a href="https://docs.safeconfig.com/security" target="_blank" rel="noopener noreferrer" className="hover:text-white">Security</a></li>
-                <li><a href="https://docs.safeconfig.com/integrations" target="_blank" rel="noopener noreferrer" className="hover:text-white">Integrations</a></li>
-                <li><a href="https://docs.safeconfig.com/api" target="_blank" rel="noopener noreferrer" className="hover:text-white">API</a></li>
+                <li><a href="https://docs.vextis.io/security" target="_blank" rel="noopener noreferrer" className="hover:text-white">Security</a></li>
+                <li><a href="https://docs.vextis.io/integrations" target="_blank" rel="noopener noreferrer" className="hover:text-white">Integrations</a></li>
+                <li><a href="https://docs.vextis.io/api" target="_blank" rel="noopener noreferrer" className="hover:text-white">API</a></li>
               </ul>
             </div>
             
@@ -647,19 +647,19 @@ const Landing = () => {
               <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-gray-400">
                 <li><button onClick={() => scrollToSection('#company')} className="hover:text-white">About</button></li>
-                <li><a href="https://blog.safeconfig.com" target="_blank" rel="noopener noreferrer" className="hover:text-white">Blog</a></li>
-                <li><a href="https://careers.safeconfig.com" target="_blank" rel="noopener noreferrer" className="hover:text-white">Careers</a></li>
-                <li><a href="mailto:contact@safeconfig.com" className="hover:text-white">Contact</a></li>
+                <li><a href="https://blog.vextis.io" target="_blank" rel="noopener noreferrer" className="hover:text-white">Blog</a></li>
+                <li><a href="https://careers.vextis.io" target="_blank" rel="noopener noreferrer" className="hover:text-white">Careers</a></li>
+                <li><a href="mailto:contact@vextis.io" className="hover:text-white">Contact</a></li>
               </ul>
             </div>
             
             <div>
               <h4 className="font-semibold mb-4">Support</h4>
               <ul className="space-y-2 text-gray-400">
-                <li><a href="https://docs.safeconfig.com" target="_blank" rel="noopener noreferrer" className="hover:text-white">Documentation</a></li>
-                <li><a href="https://help.safeconfig.com" target="_blank" rel="noopener noreferrer" className="hover:text-white">Help Center</a></li>
-                <li><a href="https://status.safeconfig.com" target="_blank" rel="noopener noreferrer" className="hover:text-white">Status</a></li>
-                <li><a href="https://safeconfig.com/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-white">Privacy</a></li>
+                <li><a href="https://docs.vextis.io" target="_blank" rel="noopener noreferrer" className="hover:text-white">Documentation</a></li>
+                <li><a href="https://help.vextis.io" target="_blank" rel="noopener noreferrer" className="hover:text-white">Help Center</a></li>
+                <li><a href="https://status.vextis.io" target="_blank" rel="noopener noreferrer" className="hover:text-white">Status</a></li>
+                <li><a href="https://vextis.io/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-white">Privacy</a></li>
               </ul>
             </div>
           </div>

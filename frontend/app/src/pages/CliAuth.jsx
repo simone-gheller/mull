@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useTheme, Btn, FONTS } from '@mull/ui';
+import { useTheme, Btn, FONTS } from '@vextis/ui';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import FormInput from '../components/ui/FormInput';
+import BrandLogo from '../components/BrandLogo';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -113,17 +114,14 @@ export default function CliAuth() {
       <div style={{ width: '100%', maxWidth: '380px' }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{
-            width: '36px', height: '36px', borderRadius: '7px',
-            background: T.elevated, border: `1px solid ${T.border}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '18px', color: T.textPrimary, margin: '0 auto 12px',
-          }}>▣</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+            <BrandLogo size="lg" showCursor animatedCursor />
+          </div>
           <h1 style={{ fontFamily: FONTS.display, fontWeight: 700, fontSize: '22px', color: T.textPrimary, letterSpacing: '-0.02em' }}>
-            {done ? 'Authorized' : 'Authorize mull CLI'}
+            {done ? 'Authorized' : 'Authorize vextis CLI'}
           </h1>
           <p style={{ fontFamily: FONTS.display, fontSize: '13px', color: T.textSecondary, marginTop: '6px' }}>
-            {done ? 'You can close this window.' : 'Grant CLI access to your mull account'}
+            {done ? 'You can close this window.' : 'Grant CLI access to your vextis account'}
           </p>
         </div>
 
@@ -131,7 +129,7 @@ export default function CliAuth() {
         {!codeId && (
           <div style={card}>
             <p style={{ ...monoSm, color: T.textSecondary }}>
-              No authorization code found. Run <span style={{ color: T.termGreen }}>mull auth login</span> to start.
+              No authorization code found. Run <span style={{ color: T.termGreen }}>vextis auth login</span> to start.
             </p>
           </div>
         )}
@@ -146,7 +144,7 @@ export default function CliAuth() {
               ...monoSm, color: T.red,
             }}>{fetchError}</div>
             <p style={{ ...monoSm, color: T.textSecondary, marginTop: '14px' }}>
-              Run <span style={{ color: T.termGreen }}>mull auth login</span> again to get a fresh link.
+              Run <span style={{ color: T.termGreen }}>vextis auth login</span> again to get a fresh link.
             </p>
           </div>
         )}

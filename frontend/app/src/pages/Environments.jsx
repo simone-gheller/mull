@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Shield } from 'lucide-react';
-import { useTheme, Btn, FONTS } from '@mull/ui';
+import { useTheme, Btn, FONTS } from '@vextis/ui';
 import apiService from '../services/api';
 import { useToast } from '../context/ToastContext';
 import Modal from '../components/ui/Modal';
@@ -32,8 +32,8 @@ export default function Environments() {
 
   useEffect(() => {
     const handler = () => setShowModal(true);
-    window.addEventListener('mull:new', handler);
-    return () => window.removeEventListener('mull:new', handler);
+    window.addEventListener('vextis:new', handler);
+    return () => window.removeEventListener('vextis:new', handler);
   }, []);
 
   const handleDelete = async () => {
@@ -169,6 +169,7 @@ export default function Environments() {
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleCreate()}
+            maxLength={32}
             autoFocus
           />
 

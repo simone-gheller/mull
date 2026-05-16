@@ -39,7 +39,7 @@ apiClient.interceptors.response.use(
   (error) => {
     notifyBackendStatus(!error.response);
     if (error.response?.data?.code === 'ORG_SSO_REQUIRED' && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('mull:sso-required', { detail: error.response.data }));
+      window.dispatchEvent(new CustomEvent('vextis:sso-required', { detail: error.response.data }));
     }
     return Promise.reject(error);
   }

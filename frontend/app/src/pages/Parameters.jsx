@@ -2,8 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@mull/ui';
-import { Layers, ChevronsUpDown, Eye, EyeOff, Shield } from 'lucide-react';
+import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@vextis/ui';
+import { Layers, ChevronsUpDown, Eye, EyeOff, Shield, CornerDownRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import apiService from '../services/api';
@@ -133,6 +133,8 @@ export default function Parameters() {
   const [showModal, setShowModal] = useState(false);
   const [hoveredEyeId, setHoveredEyeId] = useState(null);
   const [hoveredLockId, setHoveredLockId] = useState(null);
+  const [hoveredOverrideId, setHoveredOverrideId] = useState(null);
+  const [hoveredRowId, setHoveredRowId] = useState(null);
   const [newKey, setNewKey] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newDefault, setNewDefault] = useState('');
@@ -191,8 +193,8 @@ export default function Parameters() {
 
   useEffect(() => {
     const handler = () => { if (currentApp) setShowModal(true); };
-    window.addEventListener('mull:new', handler);
-    return () => window.removeEventListener('mull:new', handler);
+    window.addEventListener('vextis:new', handler);
+    return () => window.removeEventListener('vextis:new', handler);
   }, [currentApp]);
 
   const selectApp = async (node) => {
@@ -351,7 +353,7 @@ export default function Parameters() {
               {/* Table header + rows — aria-live announces env changes to screen readers */}
               <div aria-live="polite" aria-label="parameter values">
               <div style={{
-                display: 'grid', gridTemplateColumns: '1fr 160px 160px 120px',
+                display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 100px 144px', columnGap: '24px',
                 padding: '6px 14px', borderBottom: `1px solid ${T.border}`,
                 fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted,
                 letterSpacing: '0.1em', textTransform: 'uppercase',
@@ -365,7 +367,7 @@ export default function Parameters() {
               {loading || paramsLoading || envSwitching ? (
                 [...Array(6)].map((_, i) => (
                   <div key={i} style={{
-                    display: 'grid', gridTemplateColumns: '1fr 160px 160px 120px',
+                    display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 100px 144px', columnGap: '24px',
                     alignItems: 'center', padding: '9px 14px', minHeight: '40px',  
                     borderBottom: `1px solid ${T.border}`, gap: '8px',
                   }}>
@@ -401,17 +403,24 @@ export default function Parameters() {
                   : param.relationship === 'inherited'
                     ? param.parameter.appName
                     : null;
+                const parentName = sourceName ?? (param.relationship === 'override' ? param.overridden?.appName : null);
+                const hasParent = !!parentName;
 
                 return (
-                  <div key={rowId} style={{
-                    display: 'grid', gridTemplateColumns: '1fr 160px 160px 120px',
+                  <div key={rowId}
+                    onMouseEnter={() => setHoveredRowId(rowId)}
+                    onMouseLeave={() => setHoveredRowId(null)}
+                    style={{
+                    display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 100px 144px', columnGap: '24px',
                     alignItems: 'center', padding: '9px 14px',
                     borderBottom: `1px solid ${T.border}`,
+                    background: hoveredRowId === rowId ? T.overlay : 'transparent',
+                    transition: 'background 0.1s',
                     fontFamily: FONTS.mono, fontSize: '12px',
                     opacity: param.relationship === 'inherited' ? 0.85 : 1,
                   }}>
                     {/* Key */}
-                    <span style={{ color: T.textPrimary }}>{param.key}</span>
+                    <span className="scroll-x-hidden" style={{ color: T.textPrimary, display: 'block', whiteSpace: 'nowrap', minWidth: 0 }}>{param.key}</span>
 
                     {/* Value */}
                     <span style={{ fontFamily: FONTS.mono, fontSize: '11px' }}>
@@ -421,43 +430,21 @@ export default function Parameters() {
                         <span style={{ color: T.textMuted, fontStyle: 'italic' }}>unset</span>
                       ) : isRevealed ? (
                         <span style={{
-                          color: T.textPrimary,
-                          maxWidth: '140px', display: 'inline-block',
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          color: T.textSecondary, display: 'block',
+                          wordBreak: 'break-all', overflowWrap: 'anywhere',
                         }}>
                           {value}
                         </span>
                       ) : (
-                        <span style={{ color: T.textMuted, letterSpacing: '0.15em' }}>••••••</span>
+                        <span style={{ color: T.textMuted, letterSpacing: '0.15em' }}>••••••••••••</span>
                       )}
                     </span>
 
                     {/* Inherited from */}
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      {sourceName ? (
-                        <span style={{
-                          fontFamily: FONTS.mono, fontSize: '10px', color: T.amber,
-                          background: `${T.amber}18`, border: `1px solid ${T.amber}40`,
-                          padding: '1px 7px', borderRadius: '2px',
-                        }}>
-                          {sourceName}
-                        </span>
-                      ) : param.relationship === 'override' ? (
-                        <>
-                          <span style={{
-                            fontFamily: FONTS.mono, fontSize: '9px', color: T.blue,
-                            background: `${T.blue}18`, border: `1px solid ${T.blue}40`,
-                            padding: '1px 6px', borderRadius: '2px', letterSpacing: '0.05em',
-                          }}>
-                            OVERRIDE
-                          </span>
-                          <span style={{ fontFamily: FONTS.mono, fontSize: '10px', color: T.textMuted }}>
-                            {param.overridden?.appName}
-                          </span>
-                        </>
-                      ) : (
-                        <span style={{ color: T.textMuted, fontSize: '11px' }}>—</span>
-                      )}
+                    <span style={{ fontFamily: FONTS.mono, fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
+                      color: hasParent ? T.textSecondary : T.textMuted,
+                    }}>
+                      {parentName ?? '—'}
                     </span>
 
                             {/* Actions: eye + view */}
@@ -530,41 +517,74 @@ export default function Parameters() {
 
                               <div
                                 style={{ position: 'relative', display: 'inline-flex' }}
-                                onMouseEnter={() => isProtectedEnv && setHoveredLockId(rowId)}
+                                onMouseEnter={() => setHoveredLockId(rowId)}
                                 onMouseLeave={() => setHoveredLockId(null)}
-                                aria-label={isProtectedEnv ? 'Protected environment' : undefined}
-                                aria-hidden={!isProtectedEnv}
-                                role={isProtectedEnv ? 'img' : undefined}
                               >
                                 {hoveredLockId === rowId && (
                                   <div style={{
                                     position: 'absolute',
                                     bottom: 'calc(100% + 7px)',
-                            left: '50%', transform: 'translateX(-50%)',
-                            background: T.elevated,
-                            border: `1px solid ${T.border}`,
-                            borderRadius: '4px',
-                            padding: '3px 8px',
-                            fontFamily: FONTS.mono, fontSize: '10px', color: T.textSecondary,
-                            whiteSpace: 'nowrap', zIndex: 50, pointerEvents: 'none',
-                          }}>
-                            Protected environment
-                            <div style={{
-                              position: 'absolute',
-                              top: '100%', left: '50%', transform: 'translateX(-50%)',
-                              width: 0, height: 0,
-                              borderLeft: '5px solid transparent',
-                              borderRight: '5px solid transparent',
-                              borderTop: `5px solid ${T.border}`,
-                            }} />
-                          </div>
-                        )}
-                        <Shield
-                          size={13}
-                          strokeWidth={1.5}
-                          color={isProtectedEnv ? T.amber : T.textMuted}
-                          style={{ opacity: isProtectedEnv ? 1 : 0.35 }}
-                                />
+                                    left: '50%', transform: 'translateX(-50%)',
+                                    background: T.elevated, border: `1px solid ${T.border}`,
+                                    borderRadius: '4px', padding: '3px 8px',
+                                    fontFamily: FONTS.mono, fontSize: '10px', color: T.textSecondary,
+                                    whiteSpace: 'nowrap', zIndex: 50, pointerEvents: 'none',
+                                  }}>
+                                    {isProtectedEnv ? 'Protected environment' : 'Not protected'}
+                                    <div style={{
+                                      position: 'absolute',
+                                      top: '100%', left: '50%', transform: 'translateX(-50%)',
+                                      width: 0, height: 0,
+                                      borderLeft: '5px solid transparent',
+                                      borderRight: '5px solid transparent',
+                                      borderTop: `5px solid ${T.border}`,
+                                    }} />
+                                  </div>
+                                )}
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                  padding: '3px',
+                                  borderRadius: '4px',
+                                  border: `1px solid ${isProtectedEnv ? T.amberBorder : T.border}`,
+                                  background: isProtectedEnv ? T.amberBg : 'transparent',
+                                }}>
+                                  <Shield size={11} strokeWidth={1.5} color={isProtectedEnv ? T.amber : T.textMuted} />
+                                </span>
+                              </div>
+
+                              <div
+                                style={{ position: 'relative', display: 'inline-flex' }}
+                                onMouseEnter={() => setHoveredOverrideId(rowId)}
+                                onMouseLeave={() => setHoveredOverrideId(null)}
+                              >
+                                {hoveredOverrideId === rowId && (
+                                  <div style={{
+                                    position: 'absolute',
+                                    bottom: 'calc(100% + 7px)',
+                                    left: '50%', transform: 'translateX(-50%)',
+                                    background: T.elevated, border: `1px solid ${T.border}`,
+                                    borderRadius: '4px', padding: '3px 8px',
+                                    fontFamily: FONTS.mono, fontSize: '10px', color: T.textSecondary,
+                                    whiteSpace: 'nowrap', zIndex: 50, pointerEvents: 'none',
+                                  }}>
+                                    {param.relationship === 'override' ? 'Override' : hasParent ? 'Inherited' : 'Own value'}
+                                    <div style={{
+                                      position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+                                      width: 0, height: 0,
+                                      borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
+                                      borderTop: `5px solid ${T.border}`,
+                                    }} />
+                                  </div>
+                                )}
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                  padding: '3px',
+                                  borderRadius: '4px',
+                                  border: `1px solid ${param.relationship === 'override' ? T.blueBorder : T.border}`,
+                                  background: param.relationship === 'override' ? T.blueBg : 'transparent',
+                                }}>
+                                  <CornerDownRight size={11} strokeWidth={1.5} color={param.relationship === 'override' ? T.blue : T.textMuted} />
+                                </span>
                               </div>
 
                               <Link
@@ -595,6 +615,7 @@ export default function Parameters() {
             value={newKey}
             onChange={e => setNewKey(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleCreate()}
+            maxLength={100}
             autoFocus
           />
           <FormInput
