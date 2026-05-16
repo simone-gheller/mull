@@ -5,60 +5,83 @@ import { whoamiCommand } from './commands/auth/whoami.ts';
 import { versionCommand } from './commands/version.ts';
 import { updateCommand } from './commands/update.ts';
 import { appsListCommand } from './commands/apps/list.ts';
+import { appListCommand } from './commands/app/list.ts';
+import { appUseCommand } from './commands/app/use.ts';
 import { envsListCommand } from './commands/envs/list.ts';
 import { paramsListCommand } from './commands/params/list.ts';
 import { paramsSetCommand } from './commands/params/set.ts';
+import { paramsGetCommand } from './commands/params/get.ts';
 import { configPullCommand } from './commands/config/pull.ts';
 import { configGetCommand } from './commands/config/get.ts';
 import { configSetCommand } from './commands/config/set.ts';
 import { envUseCommand } from './commands/env.ts';
 import { runCommand } from './commands/run.ts';
+import { orgListCommand } from './commands/org/list.ts';
+import { orgUseCommand } from './commands/org/use.ts';
+import { contextCommand } from './commands/context.ts';
+import { doctorCommand } from './commands/doctor.ts';
+import { linkCommand } from './commands/link.ts';
 
 const args = process.argv.slice(2);
 const [cmd, sub, ...rest] = args;
 
 function help(): void {
-  console.log(`
+  process.stdout.write(`
   vextis — secure by default
 
-  Usage:
-    vextis auth login       Sign in via browser
-    vextis auth logout      Sign out (--all to clear all orgs)
-    vextis auth whoami      Show current session info
+  Auth
+    vextis auth login          Sign in via browser
+    vextis auth logout         Sign out (--all to clear all orgs)
+    vextis auth whoami         Show current session  [--json]
 
-    vextis apps             List apps in the active org
-    vextis envs             List environments in the active org
+  Organizations
+    vextis org list            List orgs in config  [--json]
+    vextis org use <name>      Switch active org
 
-    vextis env use <name>   Switch active environment in .vextis/config.json
+  Context
+    vextis context             Show active org / app / env  [--json]
 
-    vextis run [--app x] [--env y] -- <cmd>  Inject config into child process env
+  Resources
+    vextis app list            List apps  [--json]
+    vextis app use <name>      Set active app in .vextis/config.json
+    vextis env list            List environments  [--json]
+    vextis env use <name>      Set active environment in .vextis/config.json
+    vextis link                Link project interactively (app + env picker)
 
-    vextis params list --app <name>               List parameters
-    vextis params list --app <name> --env <name>  List parameters with values
-    vextis params set <key> --app <name> --env <name>  Set a parameter value
+  Parameters
+    vextis params list --app <name>               List parameters  [--json]
+    vextis params list --app <name> --env <name>  List with values (masked on protected envs)
+    vextis params get <key>   --app <name> --env <name>  Get one value  [--plain] [--json] [--copy]
+    vextis params set <key>   --app <name> --env <name>  Set a value
 
-    vextis config pull --app <name> --env <name>  Pull config as .env to stdout
-    vextis config pull --app <name> --env <name> --output .env  Write to file
-    vextis config get <key> --app <name> --env <name>  Print one value
-    vextis config set <key> <value> --app <name> --env <name>  Update a value
+  Config
+    vextis config pull [--app <name>] [--env <name>]         Pull as .env to stdout
+    vextis config pull --output json                         JSON to stdout
 
-    vextis version          Print CLI version
-    vextis update           Update to the latest version
-    vextis help             Show this help
+  Run
+    vextis run [--app <name>] [--env <name>] -- <cmd>     Inject config into child process
 
-  Examples:
-    vextis auth login
-    vextis apps
-    vextis env use production
-    vextis run --app myapp --env staging -- npm run dev
-    vextis config get LOG_LEVEL --app myapp --env production
-    vextis config set LOG_LEVEL debug --app myapp --env production
-    vextis config pull --app myapp --env production > .env
+  Utilities
+    vextis doctor              Check auth, connectivity, project config  [--json]
+    vextis version             Print CLI version
+    vextis update              Update to latest release
+    vextis help                Show this help
+
+  Environment variables
+    VEXTIS_TOKEN               Token override (enables CI without ~/.vextis/config.json)
+    VEXTIS_NO_UPDATE_CHECK=1   Skip update check
+
 `);
 }
 
 async function main(): Promise<void> {
-  const skipUpdateCheck = cmd === 'update' || cmd === 'version' || cmd === '--version' || cmd === '-v';
+  const skipUpdateCheck =
+    cmd === 'update' ||
+    cmd === 'version' ||
+    cmd === '--version' ||
+    cmd === '-v' ||
+    process.env.VEXTIS_NO_UPDATE_CHECK === '1';
+
   if (!skipUpdateCheck) {
     checkForUpdates().catch(() => {});
   }
@@ -81,39 +104,66 @@ async function main(): Promise<void> {
   if (cmd === 'auth') {
     if (sub === 'login') { await loginCommand(); return; }
     if (sub === 'logout') { await logoutCommand(rest); return; }
-    if (sub === 'whoami') { await whoamiCommand(); return; }
-    console.error(`Unknown auth subcommand: ${sub ?? '(none)'}`);
-    console.error('Available: login, logout, whoami');
-    process.exit(1);
+    if (sub === 'whoami') { await whoamiCommand(rest); return; }
+    process.stderr.write(`Unknown auth subcommand: ${sub ?? '(none)'}\nAvailable: login, logout, whoami\n`);
+    process.exit(2);
   }
 
+  if (cmd === 'org') {
+    if (sub === 'list') { orgListCommand(rest); return; }
+    if (sub === 'use') { orgUseCommand(rest); return; }
+    process.stderr.write(`Unknown org subcommand: ${sub ?? '(none)'}\nAvailable: list, use\n`);
+    process.exit(2);
+  }
+
+  // app list | app use — apps kept as alias
+  if (cmd === 'app') {
+    if (sub === 'list') { await appListCommand(rest); return; }
+    if (sub === 'use') { await appUseCommand(rest); return; }
+    process.stderr.write(`Unknown app subcommand: ${sub ?? '(none)'}\nAvailable: list, use\n`);
+    process.exit(2);
+  }
   if (cmd === 'apps') {
-    await appsListCommand();
+    await appsListCommand([sub, ...rest].filter(Boolean) as string[]);
     return;
   }
 
+  // env list | env use — envs kept as alias
+  if (cmd === 'env') {
+    if (sub === 'list') { await envsListCommand(rest); return; }
+    if (sub === 'use') { await envUseCommand(rest); return; }
+    process.stderr.write(`Unknown env subcommand: ${sub ?? '(none)'}\nAvailable: list, use\n`);
+    process.exit(2);
+  }
   if (cmd === 'envs') {
-    await envsListCommand();
+    await envsListCommand([sub, ...rest].filter(Boolean) as string[]);
     return;
   }
 
   if (cmd === 'params') {
     if (sub === 'list') { await paramsListCommand(rest); return; }
     if (sub === 'set') { await paramsSetCommand(rest); return; }
-    console.error(`Unknown params subcommand: ${sub ?? '(none)'}`);
-    console.error('Available: list, set');
-    process.exit(1);
+    if (sub === 'get') { await paramsGetCommand(rest); return; }
+    process.stderr.write(`Unknown params subcommand: ${sub ?? '(none)'}\nAvailable: list, get, set\n`);
+    process.exit(2);
   }
 
-  if (cmd === 'env') {
-    if (sub === 'use') { await envUseCommand(rest); return; }
-    console.error(`Unknown env subcommand: ${sub ?? '(none)'}`);
-    console.error('Available: use');
-    process.exit(1);
+  if (cmd === 'link') {
+    await linkCommand([sub, ...rest].filter(Boolean) as string[]);
+    return;
+  }
+
+  if (cmd === 'context' || cmd === 'ctx') {
+    contextCommand([sub, ...rest].filter(Boolean) as string[]);
+    return;
+  }
+
+  if (cmd === 'doctor') {
+    await doctorCommand([sub, ...rest].filter(Boolean) as string[]);
+    return;
   }
 
   if (cmd === 'run') {
-    // rest includes sub and everything after: reassemble [sub, ...rest] then prepend back
     await runCommand([sub, ...rest].filter(Boolean) as string[]);
     return;
   }
@@ -122,17 +172,15 @@ async function main(): Promise<void> {
     if (sub === 'pull') { await configPullCommand(rest); return; }
     if (sub === 'get') { await configGetCommand(rest); return; }
     if (sub === 'set') { await configSetCommand(rest); return; }
-    console.error(`Unknown config subcommand: ${sub ?? '(none)'}`);
-    console.error('Available: pull, get, set');
-    process.exit(1);
+    process.stderr.write(`Unknown config subcommand: ${sub ?? '(none)'}\nAvailable: pull, get, set\n`);
+    process.exit(2);
   }
 
-  console.error(`Unknown command: ${cmd}`);
-  console.error('Run "vextis help" for usage.');
-  process.exit(1);
+  process.stderr.write(`Unknown command: ${cmd}\nRun "vextis help" for usage.\n`);
+  process.exit(2);
 }
 
 main().catch(err => {
-  console.error(err instanceof Error ? err.message : String(err));
+  process.stderr.write((err instanceof Error ? err.message : String(err)) + '\n');
   process.exit(1);
 });

@@ -5,6 +5,7 @@ import { resolveApp, resolveEnv } from '../../lib/resolve.ts';
 import { loadLocalConfig } from '../../lib/localConfig.ts';
 
 export async function configSetCommand(args: string[]): Promise<void> {
+  process.stderr.write(`  ↳ deprecated: use 'vextis params set <key>'\n\n`);
   // vextis config set <key> <value> [--app x] [--env y] [--live] [--secret]
   const [key, value, ...rest] = args;
   if (!key) fail('Usage: vextis config set <key> <value> [--app <name>] [--env <name>]');

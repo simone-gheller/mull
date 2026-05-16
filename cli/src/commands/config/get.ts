@@ -9,6 +9,7 @@ interface ConfigSnapshot {
 }
 
 export async function configGetCommand(args: string[]): Promise<void> {
+  process.stderr.write(`  ↳ deprecated: use 'vextis params get <key>'\n\n`);
   const [key, ...rest] = args;
   if (!key) fail('Usage: vextis config get <key> [--app <name>] [--env <name>]');
 

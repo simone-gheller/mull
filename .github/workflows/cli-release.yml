@@ -38,15 +38,12 @@ jobs:
       - name: Build binary
         working-directory: cli
         run: bun build.ts --target=bun-${{ matrix.target }}
-        env:
-          API_URL: https://api.safeconfig.io
-          APP_URL: https://app.safeconfig.io
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mull-${{ matrix.target }}
-          path: cli/dist/mull-${{ matrix.target }}${{ matrix.target == 'windows-x64' && '.exe' || '' }}
+          name: vextis-${{ matrix.target }}
+          path: cli/dist/vextis-${{ matrix.target }}${{ matrix.target == 'windows-x64' && '.exe' || '' }}
           if-no-files-found: error
 
   release:
@@ -66,7 +63,7 @@ jobs:
         run: |
           gh release create "${{ github.ref_name }}" \
             dist/* \
-            --title "mull CLI ${{ github.ref_name }}" \
+            --title "vextis CLI ${{ github.ref_name }}" \
             --generate-notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

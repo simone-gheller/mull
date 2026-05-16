@@ -1,4 +1,4 @@
-import { clack, GREEN, DIM, fail } from '../lib/ui.ts';
+import { clack, GREEN, DIM, AMBER, fail } from '../lib/ui.ts';
 import { loadLocalConfig, saveLocalConfig, localConfigPath } from '../lib/localConfig.ts';
 
 export async function envUseCommand(args: string[]): Promise<void> {
@@ -14,7 +14,7 @@ export async function envUseCommand(args: string[]): Promise<void> {
 
   if (envName.toLowerCase() === 'production') {
     process.stderr.write(
-      `  ⚠  Switching to production. Changes will affect live traffic.\n`
+      `  ${AMBER('⚠')}  ${AMBER('Switching to production.')} Changes will affect live traffic.\n`
     );
   }
 
