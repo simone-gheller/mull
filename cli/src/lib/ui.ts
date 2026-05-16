@@ -8,6 +8,16 @@ export const DIM = pc.dim;
 export const BOLD = pc.bold;
 export const RED = pc.red;
 export const CYAN = pc.cyan;
+export const AMBER = pc.yellow;
+
+export function mask(_value: string): string {
+  return '••••••••';
+}
+
+export function printContext(parts: string[]): void {
+  const line = parts.filter(Boolean).join(' · ');
+  process.stderr.write(`\n  ${pc.dim(line)}\n\n`);
+}
 
 export function intro(title: string) {
   clack.intro(GREEN(BOLD(title)));

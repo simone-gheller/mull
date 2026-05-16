@@ -29,7 +29,8 @@ export function loadConfig(): VextisConfig | null {
 export function requireConfig(): VextisConfig {
   const cfg = loadConfig();
   if (!cfg) {
-    console.error('Not logged in. Run: vextis auth login');
+    // Import inline to avoid circular dependency at module load time
+    process.stderr.write(`\n  \x1b[31m✗\x1b[0m  Not logged in.\n  \x1b[2m›\x1b[0m  run: vextis auth login\n\n`);
     process.exit(1);
   }
   return cfg;
