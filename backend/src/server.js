@@ -157,7 +157,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const start = async () => {
     const app = buildApp();
     try {
-      await app.listen({ port: 3000, host: '0.0.0.0' });
+      await app.listen({ port: process.env.PORT || 3000, host: '0.0.0.0' });
       app.log.info('SafeConfig API server running on http://localhost:3000');
 
       // Start Supabase Realtime subscriber after server is up
