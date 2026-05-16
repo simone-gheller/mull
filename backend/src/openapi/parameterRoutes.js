@@ -50,6 +50,7 @@ export const createParameterOverrideSchema = {
       key: {
         type: 'string',
         minLength: 1,
+        maxLength: 100,
         description: 'Parameter key/name',
       },
       appId: uuidV7Param('Application UUID v7'),
@@ -124,6 +125,7 @@ export const createParameterSchema = {
       key: {
         type: 'string',
         minLength: 1,
+        maxLength: 100,
         description: 'Parameter key/name (unique within app)'
       },
       description: {

@@ -232,7 +232,7 @@ async function main() {
     data: {
       id: uuidv7(),
       supabaseId: 'test-supabase-id-001',
-      email: 'test@safeconfig.dev',
+      email: 'test@vextis.io',
       displayName: 'Test User'
     }
   });
@@ -245,7 +245,7 @@ async function main() {
     data: {
       id: uuidv7(),
       supabaseId: 'admin-supabase-id-001',
-      email: 'admin@safeconfig.dev',
+      email: 'admin@vextis.io',
       displayName: 'Admin User'
     }
   });
@@ -258,7 +258,7 @@ async function main() {
     data: {
       id: uuidv7(),
       supabaseId: 'owner-supabase-id-001',
-      email: 'owner@safeconfig.dev',
+      email: 'owner@vextis.io',
       displayName: 'Owner User'
     }
   });

@@ -63,6 +63,7 @@ export const createAppSchema = {
       name: {
         type: 'string',
         minLength: 1,
+        maxLength: 50,
         description: 'App name (unique within organization)'
       },
       parentId: uuidV7Param('Optional parent app UUID v7 for hierarchical structure'),

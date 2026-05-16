@@ -237,7 +237,7 @@ export default async function authRoutes(fastify, _options) {
         type: 'object',
         required: ['name'],
         properties: {
-          name: { type: 'string', minLength: 2, maxLength: 255 },
+          name: { type: 'string', minLength: 2, maxLength: 50 },
         },
       },
       response: {

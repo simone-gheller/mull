@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { uuidv7 } from 'uuidv7';
 import { SCOPES } from '../lib/rbac.js';
-import { createAccessKeyToken, expiresAtFromPreset } from '../lib/accessKeys.js';
+import { createAccessKeyToken, expiresAtFromPreset, parseAccessKeyToken } from '../lib/accessKeys.js';
 import { findOrCreateUserIdentity } from '../lib/identities.js';
 
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
@@ -48,7 +48,9 @@ export default async function cliAuthRoutes(fastify) {
         type: 'object',
         required: ['deviceName'],
         properties: {
-          deviceName: { type: 'string', minLength: 1, maxLength: 255 }
+          deviceName:    { type: 'string', minLength: 1, maxLength: 255 },
+          platform:      { type: 'string', maxLength: 32 },
+          previousToken: { type: 'string', maxLength: 512 }
         }
       },
       response: {
@@ -64,14 +66,19 @@ export default async function cliAuthRoutes(fastify) {
       }
     }
   }, async (request, reply) => {
-    const { deviceName } = request.body;
+    const OS_LABELS = { darwin: 'macOS', win32: 'Windows', linux: 'Linux', freebsd: 'FreeBSD', android: 'Android' };
+    const { deviceName, platform, previousToken } = request.body;
+    const osLabel = platform ? (OS_LABELS[platform] ?? platform) : null;
     const id = uuidv7();
     const deviceCode = crypto.randomBytes(32).toString('base64url');
     const deviceCodeHash = hashDeviceCode(deviceCode);
     const expiresAt = new Date(Date.now() + DEVICE_CODE_TTL_MS);
 
+    const parsedPrev = previousToken ? parseAccessKeyToken(previousToken) : null;
+    const previousKeyId = parsedPrev?.keyId ?? null;
+
     await fastify.prisma.cliDeviceCode.create({
-      data: { id, deviceCodeHash, deviceName, expiresAt }
+      data: { id, deviceCodeHash, deviceName: osLabel ? `${deviceName} · ${osLabel}` : deviceName, expiresAt, previousKeyId }
     });
 
     return reply.code(201).send({
@@ -130,6 +137,15 @@ export default async function cliAuthRoutes(fastify) {
     let token;
     await fastify.prisma.$transaction(async tx => {
       const identity = await findOrCreateUserIdentity(tx, { orgId: record.orgId, user: approvedByUser });
+
+      // Revoke the exact previous CLI session by key ID (sent by CLI from its config.json)
+      if (record.previousKeyId) {
+        await tx.accessKey.updateMany({
+          where: { id: record.previousKeyId, identityId: identity.id, revokedAt: null },
+          data: { revokedAt: new Date() }
+        });
+      }
+
       const tokenParts = createAccessKeyToken('PERSONAL');
       token = tokenParts.token;
 

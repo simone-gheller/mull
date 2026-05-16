@@ -24,7 +24,7 @@ export const ACCESS_KEY_TTL_PRESETS = {
 
 export function parseAccessKeyToken(token) {
   if (typeof token !== 'string') return null;
-  const match = token.match(/^(mull_(pat|st))_([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12})_([A-Za-z0-9_-]{32,})$/);
+  const match = token.match(/^(vextis_(pat|st))_([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12})_([A-Za-z0-9_-]{32,})$/);
   if (!match) return null;
   return {
     kind: match[2] === 'pat' ? 'PERSONAL' : 'SERVICE',
@@ -36,7 +36,7 @@ export function parseAccessKeyToken(token) {
 }
 
 export function isAccessKeyToken(token) {
-  return typeof token === 'string' && (token.startsWith('mull_pat_') || token.startsWith('mull_st_'));
+  return typeof token === 'string' && (token.startsWith('vextis_pat_') || token.startsWith('vextis_st_'));
 }
 
 export function hashAccessKeyToken(token) {
@@ -52,7 +52,7 @@ export function verifyAccessKeyToken(token, expectedHash) {
 
 export function createAccessKeyToken(kind) {
   const keyId = uuidv7();
-  const prefixKind = kind === 'PERSONAL' ? 'mull_pat' : 'mull_st';
+  const prefixKind = kind === 'PERSONAL' ? 'vextis_pat' : 'vextis_st';
   const secret = crypto.randomBytes(32).toString('base64url');
   const tokenPrefix = `${prefixKind}_${keyId}`;
   const token = `${tokenPrefix}_${secret}`;

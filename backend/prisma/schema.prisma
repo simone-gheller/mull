@@ -511,6 +511,7 @@ model CliDeviceCode {
   approvedByUserId String?   @map("approved_by_user_id") @db.Uuid
   orgId            String?   @map("org_id") @db.Uuid
   consumedAt       DateTime? @map("consumed_at")
+  previousKeyId    String?   @map("previous_key_id") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at")
 
   @@map("cli_device_codes")

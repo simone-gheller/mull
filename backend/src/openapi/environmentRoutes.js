@@ -52,6 +52,7 @@ export const createEnvironmentSchema = {
       name: {
         type: 'string',
         minLength: 1,
+        maxLength: 32,
         description: 'Environment name (unique within organization)'
       },
       tier: { type: 'string', enum: ['DEVELOPMENT', 'STAGING', 'PRODUCTION', 'CUSTOM'], default: 'CUSTOM' },

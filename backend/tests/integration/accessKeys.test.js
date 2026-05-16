@@ -50,7 +50,7 @@ describe('Access Key Routes', () => {
 
     assert.equal(createResponse.statusCode, 201);
     const created = JSON.parse(createResponse.body);
-    assert.match(created.token, /^mull_st_/);
+    assert.match(created.token, /^vextis_st_/);
     assert.equal(created.tokenPrefix, created.token.split('_').slice(0, 3).join('_'));
 
     const listResponse = await ctx.injectAuth({

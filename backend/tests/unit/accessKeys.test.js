@@ -16,7 +16,7 @@ describe('access key utilities', () => {
     assert.equal(parsed.kind, 'PERSONAL');
     assert.equal(parsed.keyId, created.keyId);
     assert.equal(parsed.tokenPrefix, created.tokenPrefix);
-    assert.match(created.token, /^mull_pat_/);
+    assert.match(created.token, /^vextis_pat_/);
   });
 
   test('creates and parses service tokens', () => {
@@ -26,12 +26,12 @@ describe('access key utilities', () => {
     assert.equal(parsed.kind, 'SERVICE');
     assert.equal(parsed.keyId, created.keyId);
     assert.equal(parsed.tokenPrefix, created.tokenPrefix);
-    assert.match(created.token, /^mull_st_/);
+    assert.match(created.token, /^vextis_st_/);
   });
 
   test('rejects invalid access key strings', () => {
     assert.equal(parseAccessKeyToken('not-a-token'), null);
-    assert.equal(parseAccessKeyToken('mull_st_not-a-uuid_secret'), null);
+    assert.equal(parseAccessKeyToken('vextis_st_not-a-uuid_secret'), null);
   });
 
   test('hashes tokens deterministically without returning the token', () => {

@@ -24,6 +24,8 @@ import invitationRoutes from './routes/invitations.js';
 import accessKeyRoutes from './routes/accessKeys.js';
 import billingRoutes from './routes/billing.js';
 import cliAuthRoutes from './routes/cliAuth.js';
+import v1ConfigRoutes from './routes/v1Config.js';
+import { startSubscriber, stopSubscriber } from './realtime/supabaseSubscriber.js';
 import { envSchema } from './config.js';
 
 /**
@@ -119,6 +121,9 @@ export function buildApp(options = {}) {
   fastify.register(billingRoutes);
   fastify.register(cliAuthRoutes);
 
+  // SDK-facing v1 routes — org resolved from token, no /orgs/:orgId prefix
+  fastify.register(v1ConfigRoutes, { prefix: '/v1' });
+
   // Org-scoped routes - all use /orgs/:orgId prefix
   fastify.register(configRoutes, { prefix: '/orgs/:orgId' });
   fastify.register(environmentRoutes, { prefix: '/orgs/:orgId' });
@@ -141,6 +146,7 @@ export function buildApp(options = {}) {
   fastify.addHook('onClose', async () => {
     fastify.log.info('Disconnecting Prisma...');
     await disconnectPrisma();
+    await stopSubscriber();
   });
 
   return fastify;
@@ -153,6 +159,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     try {
       await app.listen({ port: 3000, host: '0.0.0.0' });
       app.log.info('SafeConfig API server running on http://localhost:3000');
+
+      // Start Supabase Realtime subscriber after server is up
+      startSubscriber(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
+      app.log.info('Supabase Realtime subscriber started');
     } catch (err) {
       app.log.error(err);
       process.exit(1);

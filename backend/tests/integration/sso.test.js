@@ -160,6 +160,6 @@ describe('SSO v1', () => {
       body
     }, user);
     assert.equal(allowed.statusCode, 201);
-    assert.match(JSON.parse(allowed.body).token, /^mull_pat_/);
+    assert.match(JSON.parse(allowed.body).token, /^vextis_pat_/);
   });
 });

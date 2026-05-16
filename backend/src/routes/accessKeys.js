@@ -30,7 +30,8 @@ const accessKeyResponse = {
     expiresAt: { type: 'string', nullable: true },
     lastUsedAt: { type: 'string', nullable: true },
     revokedAt: { type: 'string', nullable: true },
-    createdAt: { type: 'string' }
+    createdAt: { type: 'string' },
+    source: { type: 'string' }
   }
 };
 
@@ -48,7 +49,8 @@ function serializeAccessKey(accessKey) {
     expiresAt: accessKey.expiresAt?.toISOString?.() ?? accessKey.expiresAt ?? null,
     lastUsedAt: accessKey.lastUsedAt?.toISOString?.() ?? accessKey.lastUsedAt ?? null,
     revokedAt: accessKey.revokedAt?.toISOString?.() ?? accessKey.revokedAt ?? null,
-    createdAt: accessKey.createdAt?.toISOString?.() ?? accessKey.createdAt
+    createdAt: accessKey.createdAt?.toISOString?.() ?? accessKey.createdAt,
+    source: accessKey.source ?? 'MANUAL'
   };
 }
 
