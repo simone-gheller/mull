@@ -24,7 +24,7 @@ interface ResolvedResponse {
 export async function paramsListCommand(args: string[]): Promise<void> {
   const { flags } = parseFlags(args);
 
-  if (!flags.app) fail('--app <name> is required. Example: mull params list --app myapp');
+  if (!flags.app) fail('--app <name> is required. Example: vextis params list --app myapp');
 
   const cfg = requireConfig();
   const app = await resolveApp(cfg.activeOrgId, flags.app);

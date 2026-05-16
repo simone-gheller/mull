@@ -28,7 +28,7 @@ export function note(msg: string, title?: string) {
 
 export function printUpdateHint(current: string, latest: string) {
   process.stderr.write(
-    `\n  ${DIM('update available')} ${RED(current)} → ${GREEN(latest)}  ${DIM('run: mull update')}\n\n`
+    `\n  ${DIM('update available')} ${RED(current)} → ${GREEN(latest)}  ${DIM('run: vextis update')}\n\n`
   );
 }
 

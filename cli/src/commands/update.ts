@@ -1,9 +1,10 @@
 import { clack, GREEN, fail } from '../lib/ui.ts';
 
+// TODO: update URL after GitHub repo is renamed to vextis
 const INSTALL_URL = 'https://raw.githubusercontent.com/simone-gheller/mull/main/cli/scripts/install.sh';
 
 export async function updateCommand(): Promise<void> {
-  clack.intro(GREEN('mull update'));
+  clack.intro(GREEN('vextis update'));
   const spinner = clack.spinner();
   spinner.start('Downloading latest version…');
  
@@ -24,7 +25,7 @@ export async function updateCommand(): Promise<void> {
 
     spinner.stop('Updated.');
     console.log(text.trim());
-    clack.outro(GREEN('mull updated successfully.'));
+    clack.outro(GREEN('vextis updated successfully.'));
   } catch {
     spinner.stop('Failed.');
     fail(`Could not run install script. Install manually:\n  curl -fsSL ${INSTALL_URL} | bash`);

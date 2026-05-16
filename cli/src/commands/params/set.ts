@@ -18,7 +18,7 @@ export async function paramsSetCommand(args: string[]): Promise<void> {
   const { flags, positional } = parseFlags(args);
 
   const key = positional[0];
-  if (!key) fail('Key is required. Example: mull params set MY_KEY --app myapp --env prod');
+  if (!key) fail('Key is required. Example: vextis params set MY_KEY --app myapp --env prod');
   if (!flags.app) fail('--app <name> is required');
   if (!flags.env) fail('--env <name> is required');
 
@@ -39,7 +39,7 @@ export async function paramsSetCommand(args: string[]): Promise<void> {
   if (!envEntry) fail(`No parameter values found for environment '${flags.env}'`);
 
   const valueEntry = envEntry.values.find(v => v.parameterKey === key);
-  if (!valueEntry) fail(`Parameter '${key}' not found in app '${flags.app}'. Run: mull params list --app ${flags.app}`);
+  if (!valueEntry) fail(`Parameter '${key}' not found in app '${flags.app}'. Run: vextis params list --app ${flags.app}`);
 
   const value = await clack.password({
     message: `Value for ${GREEN(key)} in ${DIM(flags.env)}:`,

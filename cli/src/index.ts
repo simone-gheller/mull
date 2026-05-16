@@ -9,40 +9,51 @@ import { envsListCommand } from './commands/envs/list.ts';
 import { paramsListCommand } from './commands/params/list.ts';
 import { paramsSetCommand } from './commands/params/set.ts';
 import { configPullCommand } from './commands/config/pull.ts';
+import { configGetCommand } from './commands/config/get.ts';
+import { configSetCommand } from './commands/config/set.ts';
+import { envUseCommand } from './commands/env.ts';
+import { runCommand } from './commands/run.ts';
 
 const args = process.argv.slice(2);
 const [cmd, sub, ...rest] = args;
 
 function help(): void {
   console.log(`
-  mull — secure config management
+  vextis — secure by default
 
   Usage:
-    mull auth login       Sign in via browser
-    mull auth logout      Sign out (--all to clear all orgs)
-    mull auth whoami      Show current session info
+    vextis auth login       Sign in via browser
+    vextis auth logout      Sign out (--all to clear all orgs)
+    vextis auth whoami      Show current session info
 
-    mull apps             List apps in the active org
-    mull envs             List environments in the active org
+    vextis apps             List apps in the active org
+    vextis envs             List environments in the active org
 
-    mull params list --app <name>               List parameters
-    mull params list --app <name> --env <name>  List parameters with values
-    mull params set <key> --app <name> --env <name>  Set a parameter value
+    vextis env use <name>   Switch active environment in .vextis/config.json
 
-    mull config pull --app <name> --env <name>  Pull config as .env to stdout
-    mull config pull --app <name> --env <name> --output .env  Write to file
+    vextis run [--app x] [--env y] -- <cmd>  Inject config into child process env
 
-    mull version          Print CLI version
-    mull update           Update to the latest version
-    mull help             Show this help
+    vextis params list --app <name>               List parameters
+    vextis params list --app <name> --env <name>  List parameters with values
+    vextis params set <key> --app <name> --env <name>  Set a parameter value
+
+    vextis config pull --app <name> --env <name>  Pull config as .env to stdout
+    vextis config pull --app <name> --env <name> --output .env  Write to file
+    vextis config get <key> --app <name> --env <name>  Print one value
+    vextis config set <key> <value> --app <name> --env <name>  Update a value
+
+    vextis version          Print CLI version
+    vextis update           Update to the latest version
+    vextis help             Show this help
 
   Examples:
-    mull auth login
-    mull apps
-    mull envs
-    mull params list --app myapp --env production
-    mull params set DATABASE_URL --app myapp --env production
-    mull config pull --app myapp --env production > .env
+    vextis auth login
+    vextis apps
+    vextis env use production
+    vextis run --app myapp --env staging -- npm run dev
+    vextis config get LOG_LEVEL --app myapp --env production
+    vextis config set LOG_LEVEL debug --app myapp --env production
+    vextis config pull --app myapp --env production > .env
 `);
 }
 
@@ -94,15 +105,30 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  if (cmd === 'env') {
+    if (sub === 'use') { await envUseCommand(rest); return; }
+    console.error(`Unknown env subcommand: ${sub ?? '(none)'}`);
+    console.error('Available: use');
+    process.exit(1);
+  }
+
+  if (cmd === 'run') {
+    // rest includes sub and everything after: reassemble [sub, ...rest] then prepend back
+    await runCommand([sub, ...rest].filter(Boolean) as string[]);
+    return;
+  }
+
   if (cmd === 'config') {
     if (sub === 'pull') { await configPullCommand(rest); return; }
+    if (sub === 'get') { await configGetCommand(rest); return; }
+    if (sub === 'set') { await configSetCommand(rest); return; }
     console.error(`Unknown config subcommand: ${sub ?? '(none)'}`);
-    console.error('Available: pull');
+    console.error('Available: pull, get, set');
     process.exit(1);
   }
 
   console.error(`Unknown command: ${cmd}`);
-  console.error('Run "mull help" for usage.');
+  console.error('Run "vextis help" for usage.');
   process.exit(1);
 }
 

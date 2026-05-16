@@ -7,17 +7,17 @@ export interface OrgEntry {
   name: string;
 }
 
-export interface MullConfig {
+export interface VextisConfig {
   apiUrl: string;
   email: string;
   orgs: Record<string, OrgEntry>;
   activeOrgId: string;
 }
 
-const CONFIG_DIR = join(homedir(), '.mull');
+const CONFIG_DIR = join(homedir(), '.vextis');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 
-export function loadConfig(): MullConfig | null {
+export function loadConfig(): VextisConfig | null {
   if (!existsSync(CONFIG_PATH)) return null;
   try {
     return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
@@ -26,22 +26,22 @@ export function loadConfig(): MullConfig | null {
   }
 }
 
-export function requireConfig(): MullConfig {
+export function requireConfig(): VextisConfig {
   const cfg = loadConfig();
   if (!cfg) {
-    console.error('Not logged in. Run: mull auth login');
+    console.error('Not logged in. Run: vextis auth login');
     process.exit(1);
   }
   return cfg;
 }
 
-export function saveConfig(cfg: MullConfig): void {
+export function saveConfig(cfg: VextisConfig): void {
   if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true });
   writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf-8');
   chmodSync(CONFIG_PATH, 0o600);
 }
 
-export function addOrg(cfg: MullConfig | null, orgId: string, entry: OrgEntry, email: string, apiUrl: string): MullConfig {
+export function addOrg(cfg: VextisConfig | null, orgId: string, entry: OrgEntry, email: string, apiUrl: string): VextisConfig {
   return {
     apiUrl,
     email,
@@ -50,6 +50,6 @@ export function addOrg(cfg: MullConfig | null, orgId: string, entry: OrgEntry, e
   };
 }
 
-export function activeToken(cfg: MullConfig): string | null {
+export function activeToken(cfg: VextisConfig): string | null {
   return cfg.orgs[cfg.activeOrgId]?.token ?? null;
 }

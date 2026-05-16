@@ -16,7 +16,7 @@ export async function whoamiCommand(): Promise<void> {
   const cfg = requireConfig();
   const token = activeToken(cfg);
   if (!token) {
-    clack.log.error('No active org token. Run: mull auth login');
+    clack.log.error('No active org token. Run: vextis auth login');
     process.exit(1);
   }
 

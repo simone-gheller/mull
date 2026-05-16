@@ -1,4 +1,4 @@
-import { hostname } from 'node:os';
+import { hostname, platform } from 'node:os';
 import { clack, GREEN, DIM, RED, fail } from '../../lib/ui.ts';
 import { loadConfig, saveConfig, addOrg } from '../../lib/config.ts';
 import { DEFAULT_API_URL, DEFAULT_APP_URL } from '../../constants.ts';
@@ -7,12 +7,15 @@ const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
 export async function loginCommand(): Promise<void> {
-  clack.intro(GREEN('mull auth login'));
+  clack.intro(GREEN('vextis auth login'));
 
-  const apiUrl = loadConfig()?.apiUrl ?? DEFAULT_API_URL;
+  const existingConfig = loadConfig();
+  const apiUrl = existingConfig?.apiUrl ?? DEFAULT_API_URL;
   const appUrl = DEFAULT_APP_URL;
 
   const deviceName = hostname();
+  const activeOrgId = existingConfig?.activeOrgId;
+  const previousToken = activeOrgId ? (existingConfig?.orgs?.[activeOrgId]?.token ?? null) : null;
 
   const spinner = clack.spinner();
   spinner.start('Starting authentication…');
@@ -26,7 +29,7 @@ export async function loginCommand(): Promise<void> {
     const res = await fetch(`${apiUrl}/cli/device-code`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceName }),
+      body: JSON.stringify({ deviceName, platform: platform(), ...(previousToken ? { previousToken } : {}) }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { message?: string };
@@ -70,7 +73,7 @@ export async function loginCommand(): Promise<void> {
 
       if (res.status === 404) {
         pollSpinner.stop('Session expired or already used.');
-        fail('Session expired. Run mull auth login again.');
+        fail('Session expired. Run vextis auth login again.');
       }
 
       if (!res.ok) continue;
@@ -85,7 +88,7 @@ export async function loginCommand(): Promise<void> {
 
       if (data.status === 'expired') {
         pollSpinner.stop('Expired.');
-        fail('Authorization link expired. Run mull auth login again.');
+        fail('Authorization link expired. Run vextis auth login again.');
       }
 
       if (data.status === 'approved' && data.token && data.orgId && data.email) {
@@ -95,7 +98,7 @@ export async function loginCommand(): Promise<void> {
         saveConfig(cfg);
         clack.log.success(`Logged in as ${GREEN(data.email)}`);
         clack.log.success(`Active org: ${GREEN(data.orgName ?? data.orgId)}`);
-        clack.outro('You\'re all set. Try: mull auth whoami');
+        clack.outro('You\'re all set. Try: vextis auth whoami');
         approved = true;
         break;
       }

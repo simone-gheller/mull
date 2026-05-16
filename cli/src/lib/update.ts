@@ -4,8 +4,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { printUpdateHint } from './ui.ts';
 import { VERSION } from '../constants.ts';
 
-const STATE_PATH = join(homedir(), '.mull', 'state.json');
-const REPO = 'sgheller/safeconfig';
+const STATE_PATH = join(homedir(), '.vextis', 'state.json');
+const REPO = 'simone-gheller/mull'; // TODO: update after repo rename to vextis
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 interface State {
@@ -34,12 +34,12 @@ export async function checkForUpdates(): Promise<void> {
 
   try {
     const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
-      headers: { 'User-Agent': `mull-cli/${VERSION}` },
+      headers: { 'User-Agent': `vextis-cli/${VERSION}` },
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return;
     const data = await res.json() as { tag_name?: string };
-    const latest = data.tag_name?.replace('cli/v', '');
+    const latest = data.tag_name?.replace(/^v/, '');
     if (latest && latest !== VERSION) {
       printUpdateHint(VERSION, latest);
     }

@@ -20,7 +20,7 @@ async function apiCall(method: string, path: string, body?: unknown): Promise<Re
   const cfg = requireConfig();
   const token = activeToken(cfg);
   if (!token) {
-    console.error('No token for active org. Run: mull auth login');
+    console.error('No token for active org. Run: vextis auth login');
     process.exit(1);
   }
 
@@ -34,7 +34,7 @@ async function apiCall(method: string, path: string, body?: unknown): Promise<Re
   });
 
   if (res.status === 401) {
-    console.error('Session expired or revoked. Run: mull auth login');
+    console.error('Session expired or revoked. Run: vextis auth login');
     process.exit(1);
   }
 
