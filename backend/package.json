@@ -9,6 +9,7 @@
     "test:all": "npm run test:unit && npm run test:integration",
     "dev": "node --watch --env-file=.env src/server.js",
     "start": "node --env-file=.env src/server.js",
+    "start:prod": "node src/server.js",
     "supabase:start": "cd .. && npx supabase start",
     "supabase:stop": "cd .. && npx supabase stop",
     "supabase:status": "cd .. && npx supabase status",
