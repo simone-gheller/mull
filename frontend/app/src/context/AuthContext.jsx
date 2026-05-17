@@ -167,7 +167,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const verifyOtp = async ({ email, token }) => {
-    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'otp' });
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
     if (error) return { success: false, error: error.message };
     return { success: true };
   };
