@@ -38,6 +38,8 @@ export function buildApp(options = {}) {
   const { logger = true, testMode = false } = options;
 
   const isProd = process.env.NODE_ENV === 'production';
+  const enableRequestLogging = process.env.REQUEST_LOGGING !== 'false';
+
   const fastify = Fastify({
     logger: logger ? {
       level: process.env.LOG_LEVEL || 'info',
@@ -48,7 +50,7 @@ export function buildApp(options = {}) {
         }
       })
     } : false,
-    disableRequestLogging: isProd,
+    disableRequestLogging: enableRequestLogging,
     routerOptions: {
       ignoreTrailingSlash: true
     }
