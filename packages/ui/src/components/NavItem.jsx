@@ -9,7 +9,7 @@ export function NavItem({ icon, label, active, badge, T }) {
       onMouseLeave={() => setH(false)}
       style={{
         display: "flex", alignItems: "center", gap: "10px", padding: "7px 10px",
-        borderRadius: "5px", cursor: "pointer",
+        cursor: "pointer",
         background: active ? T.elevated : h ? T.overlay : "transparent",
         borderLeft: `2px solid ${active ? T.termGreen : "transparent"}`,
         borderRadius: "0 6px 6px 0",
