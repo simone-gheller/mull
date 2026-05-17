@@ -1,4 +1,4 @@
-// SafeConfig - Minimal Schema
+// Vextis - Minimal Schema
 // Only the 5 core entities for configuration management
 
 generator client {

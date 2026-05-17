@@ -37,18 +37,18 @@ import { envSchema } from './config.js';
 export function buildApp(options = {}) {
   const { logger = true, testMode = false } = options;
 
+  const isProd = process.env.NODE_ENV === 'production';
   const fastify = Fastify({
     logger: logger ? {
-      level: process.env.LOG_LEVEL || 'info', // verrà sovrascritto da fastify.config dopo la validazione
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'HH:MM:ss',
-          ignore: 'pid,hostname'
+      level: process.env.LOG_LEVEL || 'info',
+      ...(!isProd && {
+        transport: {
+          target: 'pino-pretty',
+          options: { colorize: true, translateTime: 'HH:MM:ss', ignore: 'pid,hostname' }
         }
-      }
+      })
     } : false,
+    disableRequestLogging: isProd,
     routerOptions: {
       ignoreTrailingSlash: true
     }
