@@ -158,7 +158,7 @@ export function HomePage({ onNavigate }) {
             fontSize: "13px", color: T.textPrimary,
           }}>▣</div>
           <span style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: "16px", color: T.textPrimary, letterSpacing: "-0.01em" }}>
-            mull
+            vextis
           </span>
         </div>
         <div style={{ display: "flex", gap: "4px" }}>
@@ -210,7 +210,7 @@ export function HomePage({ onNavigate }) {
           fontFamily: FONTS.display, fontSize: "17px", color: T.textSecondary,
           maxWidth: "500px", lineHeight: 1.65, fontWeight: 400, marginBottom: "36px",
         }}>
-          Mull keeps your credentials encrypted, versioned, and scoped by environment — with a CLI that fits into any pipeline.
+          vextis keeps your credentials encrypted, versioned, and scoped by environment — with a CLI that fits into any pipeline.
         </p>
         <div style={{ display: "flex", gap: "12px", marginBottom: "64px" }}>
           <a href={`${APP_URL}/signup`} style={{ textDecoration: "none" }}>
@@ -268,7 +268,7 @@ export function HomePage({ onNavigate }) {
           <Stat T={T} label="Secrets managed" value="1.2M" sub="across all orgs" />
           <Stat T={T} label="Uptime" value="99.9%" sub="last 90 days" />
           <Stat T={T} label="Avg push latency" value="210ms" />
-          <Stat T={T} label="Teams using Mull" value="480+" />
+          <Stat T={T} label="Teams using vextis" value="480+" />
         </div>
       </section>
 
@@ -363,10 +363,10 @@ export function HomePage({ onNavigate }) {
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: "10px", color: T.textPrimary,
             }}>▣</div>
-            <span style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: "13px", color: T.textPrimary }}>mull</span>
+            <span style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: "13px", color: T.textPrimary }}>vextis</span>
           </div>
           <span style={{ fontFamily: FONTS.mono, fontSize: "10px", color: T.textMuted }}>
-            © 2026 Mull. All rights reserved.
+            © 2026 vextis. All rights reserved.
           </span>
         </div>
         <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>

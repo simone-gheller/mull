@@ -11,7 +11,7 @@ const PRI   = "#f5f7fa";
 
 const STEPS = [
   {
-    cmd: "mull secrets get JWT_SECRET --reveal",
+    cmd: "vextis params get JWT_SECRET --reveal",
     outputDelay: 400,
     output: [
       { text: "eyJhbGciOiJIUzI1NiJ9.Zm9v...", color: AMBER, delay: 0   },
@@ -19,7 +19,7 @@ const STEPS = [
     ],
   },
   {
-    cmd: "mull secrets list --env staging",
+    cmd: "vextis params list --env staging",
     outputDelay: 500,
     output: [
       { text: "┌ acme-api · staging · 3 secrets",         color: MUTED,  delay: 0   },
@@ -126,7 +126,7 @@ export default function TerminalHero() {
         background: BG, border: `1px solid ${BORDER}`, borderRadius: "10px",
         overflow: "hidden", fontFamily: MONO, fontSize: "13px", lineHeight: 1.7,
       }}>
-        <span className="th-sr">Terminal demo showing mull CLI commands: get and list</span>
+        <span className="th-sr">Terminal demo showing vextis CLI commands: get and list</span>
 
         <div style={{
           background: SURF, borderBottom: `1px solid ${BORDER}`,
@@ -135,7 +135,7 @@ export default function TerminalHero() {
           {["#f87171","#fbbf24","#4ade80"].map(c => (
             <span key={c} style={{ width: "10px", height: "10px", borderRadius: "50%", background: c, opacity: 0.7 }} />
           ))}
-          <span style={{ fontSize: "11px", color: MUTED, marginLeft: "6px" }}>bash — mull</span>
+          <span style={{ fontSize: "11px", color: MUTED, marginLeft: "6px" }}>bash — vextis</span>
         </div>
 
         {/* Fixed height = final-state content so terminal never grows */}

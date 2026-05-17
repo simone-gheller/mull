@@ -7,10 +7,10 @@
   ],
   "scripts": {
     "dev:app": "npm run dev --workspace=frontend/app",
-    "dev:marketing": "npm run dev --workspace=frontend/marketing",
-    "dev": "npm run dev --workspace=frontend/app & npm run dev --workspace=frontend/marketing",
+    "dev:landing": "npm run dev --workspace=frontend/landing",
+    "dev": "npm run dev --workspace=frontend/app & npm run dev --workspace=frontend/landing",
     "build:app": "npm run build --workspace=frontend/app",
-    "build:marketing": "npm run build --workspace=frontend/marketing",
+    "build:landing": "npm run build --workspace=frontend/landing",
     "build": "npm run build --workspaces"
   }
 }

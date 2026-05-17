@@ -1,5 +1,7 @@
 import { useTheme, Btn, Badge, Card, FONTS } from '@vextis/ui';
 
+const APP_URL = import.meta.env.VITE_APP_URL || 'https://app.vextis.io';
+
 const TIERS = [
   {
     name: "Free",
@@ -64,7 +66,7 @@ export function PricingPage({ onNavigate }) {
               fontSize: "13px", color: T.textPrimary,
             }}>▣</div>
             <span style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: "16px", color: T.textPrimary, letterSpacing: "-0.01em" }}>
-              mull
+              vextis
             </span>
           </a>
         </div>
@@ -89,8 +91,8 @@ export function PricingPage({ onNavigate }) {
           ))}
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <Btn T={T} variant="secondary" size="sm">sign in</Btn>
-          <Btn T={T} variant="primary" size="sm">get started →</Btn>
+          <a href={`${APP_URL}/login`} style={{ textDecoration: "none" }}><Btn T={T} variant="secondary" size="sm">sign in</Btn></a>
+          <a href={`${APP_URL}/signup`} style={{ textDecoration: "none" }}><Btn T={T} variant="primary" size="sm">get started →</Btn></a>
         </div>
       </nav>
 

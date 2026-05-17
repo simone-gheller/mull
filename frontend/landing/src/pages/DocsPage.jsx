@@ -1,9 +1,11 @@
 import { useTheme, Card, Btn, Badge, FONTS } from '@vextis/ui';
 
+const APP_URL = import.meta.env.VITE_APP_URL || 'https://app.vextis.io';
+
 const SECTIONS = [
   { icon: "▷", title: "Quick start", desc: "Install the CLI, authenticate, and push your first secret in under 5 minutes." },
   { icon: "◈", title: "Concepts", desc: "Learn about apps, environments, parameters, and how envelope encryption works." },
-  { icon: "≡", title: "CLI reference", desc: "Full reference for every mull command, flag, and environment variable." },
+  { icon: "≡", title: "CLI reference", desc: "Full reference for every vextis command, flag, and environment variable." },
   { icon: "◇", title: "API reference", desc: "REST API documentation with request/response examples and authentication." },
   { icon: "▣", title: "Integrations", desc: "GitHub Actions, Docker, Kubernetes, Vercel, and more." },
   { icon: "⊙", title: "Security model", desc: "Deep dive into the cryptographic model, key rotation, and audit logging." },
@@ -37,7 +39,7 @@ export function DocsPage({ onNavigate }) {
               fontSize: "13px", color: T.textPrimary,
             }}>▣</div>
             <span style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: "16px", color: T.textPrimary, letterSpacing: "-0.01em" }}>
-              mull
+              vextis
             </span>
           </a>
         </div>
@@ -62,8 +64,8 @@ export function DocsPage({ onNavigate }) {
           ))}
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <Btn T={T} variant="secondary" size="sm">sign in</Btn>
-          <Btn T={T} variant="primary" size="sm">get started →</Btn>
+          <a href={`${APP_URL}/login`} style={{ textDecoration: "none" }}><Btn T={T} variant="secondary" size="sm">sign in</Btn></a>
+          <a href={`${APP_URL}/signup`} style={{ textDecoration: "none" }}><Btn T={T} variant="primary" size="sm">get started →</Btn></a>
         </div>
       </nav>
 
@@ -76,7 +78,7 @@ export function DocsPage({ onNavigate }) {
           Docs
         </h1>
         <p style={{ fontFamily: FONTS.display, fontSize: "15px", color: T.textSecondary, marginBottom: "48px", lineHeight: 1.6 }}>
-          Everything you need to integrate Mull into your workflow.
+          Everything you need to integrate vextis into your workflow.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "48px" }}>
