@@ -1,40 +1,37 @@
 import { useTheme, Btn, Badge, Card, FONTS } from '@vextis/ui';
 
 const APP_URL = import.meta.env.VITE_APP_URL || 'https://app.vextis.io';
+const DOCS_URL = import.meta.env.VITE_DOCS_URL || 'https://docs.vextis.io';
 
 const TIERS = [
   {
     name: "Free",
     price: "free",
     sub: "forever",
-    features: ["3 members", "3 apps", "5 environments", "100 values", "7-day audit log"],
+    blurb: "For solo developers and small beta projects.",
+    features: ["3 members", "3 apps", "5 environments", "CLI and dashboard access", "7-day audit log"],
     cta: "get started",
     variant: "secondary",
   },
   {
     name: "Team",
-    price: "$49",
+    price: "$46",
     sub: "/ month",
-    features: ["5 members included", "25 apps", "Unlimited environments", "90-day audit log", "Custom roles"],
-    cta: "start trial",
+    blurb: "One flat price for the team shipping real systems.",
+    features: ["15 members included", "Unlimited environments", "App inheritance", "Scoped service tokens", "90-day audit log"],
+    cta: "start team",
     variant: "primary",
     highlight: true,
   },
   {
-    name: "Business",
-    price: "$149",
-    sub: "/ month",
-    features: ["15 members included", "100 apps", "1-year audit log", "Advanced RBAC", "Priority support"],
-    cta: "start trial",
-    variant: "primary",
-  },
-  {
     name: "Enterprise",
-    price: "custom",
-    sub: "contact us",
-    features: ["Everything in Business", "SAML and SCIM", "Audit export", "Custom retention", "Dedicated support"],
-    cta: "talk to us",
+    price: "soon",
+    sub: "design partners",
+    blurb: "For regulated teams that need procurement-ready controls.",
+    features: ["SAML SSO", "SOC 2", "SCIM provisioning", "Audit export", "Custom retention"],
+    cta: "join waitlist",
     variant: "terminal",
+    soon: true,
   },
 ];
 
@@ -43,7 +40,11 @@ export function PricingPage({ onNavigate }) {
 
   return (
     <div style={{ background: T.bg, minHeight: "100vh", color: T.textPrimary }}>
-      <style>{`* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        .pricing-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+        @media (max-width: 860px) { .pricing-grid { grid-template-columns: 1fr; } }
+      `}</style>
 
       {/* Nav */}
       <nav style={{
@@ -72,13 +73,13 @@ export function PricingPage({ onNavigate }) {
         </div>
         <div style={{ display: "flex", gap: "4px" }}>
           {[
-            { label: "docs",    page: "docs" },
-            { label: "pricing", page: "pricing" },
-          ].map(({ label, page }) => (
+            { label: "docs",    href: DOCS_URL },
+            { label: "pricing", href: "#", page: "pricing" },
+          ].map(({ label, href, page }) => (
             <a
               key={label}
-              href="#"
-              onClick={e => { e.preventDefault(); onNavigate?.(page); }}
+              href={href}
+              onClick={page ? e => { e.preventDefault(); onNavigate?.(page); } : undefined}
               style={{
                 fontFamily: FONTS.mono, fontSize: "11px",
                 color: page === "pricing" ? T.textPrimary : T.textMuted,
@@ -102,13 +103,13 @@ export function PricingPage({ onNavigate }) {
           // pricing
         </div>
         <h1 style={{ fontFamily: FONTS.display, fontWeight: 700, fontSize: "40px", color: T.textPrimary, letterSpacing: "-0.03em", marginBottom: "12px" }}>
-          Simple, predictable pricing.
+          Flat pricing for teams that hate seat math.
         </h1>
         <p style={{ fontFamily: FONTS.display, fontSize: "15px", color: T.textSecondary, marginBottom: "56px", lineHeight: 1.6 }}>
-          Start free. Upgrade when your team grows.
+          Start free. Upgrade to one team plan when secrets become shared infrastructure.
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+        <div className="pricing-grid">
           {TIERS.map(tier => (
             <Card
               key={tier.name}
@@ -122,6 +123,11 @@ export function PricingPage({ onNavigate }) {
                   <Badge T={T} variant="success">popular</Badge>
                 </div>
               )}
+              {tier.soon && (
+                <div style={{ position: "absolute", top: "-1px", right: "16px" }}>
+                  <Badge T={T} variant="warning">soon</Badge>
+                </div>
+              )}
               <div style={{ marginBottom: "20px" }}>
                 <span style={{ fontFamily: FONTS.display, fontWeight: 700, fontSize: "28px", color: T.textPrimary, letterSpacing: "-0.02em" }}>
                   {tier.price}
@@ -130,6 +136,9 @@ export function PricingPage({ onNavigate }) {
                   {tier.sub}
                 </span>
               </div>
+              <p style={{ fontFamily: FONTS.display, fontSize: "13px", color: T.textSecondary, lineHeight: 1.55, marginBottom: "18px", minHeight: "40px" }}>
+                {tier.blurb}
+              </p>
               <ul style={{ listStyle: "none", marginBottom: "24px", display: "flex", flexDirection: "column", gap: "8px" }}>
                 {tier.features.map(f => (
                   <li key={f} style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
@@ -145,9 +154,9 @@ export function PricingPage({ onNavigate }) {
 
         <div style={{ marginTop: "48px", padding: "24px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: "6px" }}>
           <div style={{ fontFamily: FONTS.mono, fontSize: "11px", color: T.textSecondary, textAlign: "center" }}>
-            All plans include <span style={{ color: T.textPrimary }}>AES-256-GCM encryption</span>,{" "}
-            <span style={{ color: T.textPrimary }}>99.9% uptime SLA</span>, and{" "}
-            <span style={{ color: T.textPrimary }}>SOC 2 Type I</span> compliance.
+            All active plans include <span style={{ color: T.textPrimary }}>AES-256-GCM encryption</span>,{" "}
+            <span style={{ color: T.textPrimary }}>CLI access</span>, and{" "}
+            <span style={{ color: T.textPrimary }}>scoped access keys</span>. SSO, SAML, and SOC 2 are coming with Enterprise.
           </div>
         </div>
       </div>

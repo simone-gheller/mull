@@ -40,8 +40,8 @@ const HERO_PHRASES = [
 ];
 
 const FEAT_PHRASES = [
-  "trusted by everyone.",
-  "zero plaintext, by design.",
+  "less sprawl, fewer surprises.",
+  "built around the real mess.",
 ];
 
 const PRICING_PHRASES = [
@@ -50,75 +50,218 @@ const PRICING_PHRASES = [
 ];
 
 const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+const DOCS_URL = import.meta.env.VITE_DOCS_URL || 'https://docs.vextis.io';
 
 const TIERS = [
   {
     name: "Free",
     price: "free",
     sub: "forever",
-    features: ["3 members", "3 apps", "5 environments", "100 values", "7-day audit log"],
+    blurb: "For solo developers and small beta projects.",
+    features: ["3 members", "3 apps", "5 environments", "CLI and dashboard access", "7-day audit log"],
     cta: "get started",
     variant: "secondary",
   },
   {
     name: "Team",
-    price: "$49",
+    price: "$46",
     sub: "/ month",
-    features: ["5 members included", "25 apps", "Unlimited environments", "90-day audit log", "Custom roles"],
-    cta: "start trial",
+    blurb: "One flat price for the team shipping real systems.",
+    features: ["15 members included", "Unlimited environments", "App inheritance", "Scoped service tokens", "90-day audit log"],
+    cta: "start team",
     variant: "primary",
     highlight: true,
   },
   {
-    name: "Business",
-    price: "$149",
-    sub: "/ month",
-    features: ["15 members included", "100 apps", "1-year audit log", "Advanced RBAC", "Priority support"],
-    cta: "start trial",
-    variant: "primary",
-  },
-  {
     name: "Enterprise",
-    price: "custom",
-    sub: "contact us",
-    features: ["Everything in Business", "SAML and SCIM", "Audit export", "Custom retention", "Dedicated support"],
-    cta: "talk to us",
+    price: "soon",
+    sub: "design partners",
+    blurb: "For regulated teams that need procurement-ready controls.",
+    features: ["SAML SSO", "SOC 2", "SCIM provisioning", "Audit export", "Custom retention"],
+    cta: "join waitlist",
     variant: "terminal",
+    soon: true,
   },
 ];
 
 const FEATURES = [
   {
-    glyph: "◈",
-    title: "Envelope encryption",
-    desc: "Every secret encrypted with a unique DEK, wrapped by your KEK. Zero plaintext at rest.",
+    eyebrow: "app inheritance",
+    title: "Stop copying secrets between apps.",
+    desc: "Define shared config once. Child apps inherit the baseline and override only what actually changes.",
+    mockup: "inheritance",
   },
   {
-    glyph: "▷",
-    title: "Config inheritance",
-    desc: "Child apps inherit secrets from their parent automatically. Override only what diverges — prod, staging, and dev stay in sync without duplication.",
+    eyebrow: "flat pricing",
+    title: "One team price. No seat-count theater.",
+    desc: "Start free, then move the whole team onto a predictable monthly plan when secrets become shared infrastructure.",
+    mockup: "pricing",
   },
   {
-    glyph: "≡",
-    title: "Audit log",
-    desc: "Every read and write is logged with actor, timestamp, and diff. Know exactly who touched what.",
-  },
-  {
-    glyph: "◈",
-    title: "Environment isolation",
-    desc: "Production, staging, dev — each with its own values. Inheritance lets child apps override without duplication.",
-  },
-  {
-    glyph: "▷",
-    title: "Role-based access",
-    desc: "OWNER → ADMIN → USER hierarchy. Scope tokens to specific apps and environments.",
-  },
-  {
-    glyph: "≡",
-    title: "Version history",
-    desc: "Every change is versioned. Roll back a secret to any previous value in one command.",
+    eyebrow: "audit",
+    title: "Know who touched production.",
+    desc: "Every reveal, write, token, and rollback leaves a trail with actor, scope, and environment.",
+    mockup: "audit",
   },
 ];
+
+function FeatureMockup({ type, T }) {
+  const mono = { fontFamily: FONTS.mono, fontSize: "11px", lineHeight: 1.7 };
+
+  if (type === "inheritance") {
+    const apps = [
+      { name: "common", level: 0, open: true, active: false, branch: true },
+      { name: "identity-service", level: 1, open: false, active: true, branch: false },
+      { name: "commerce", level: 0, open: true, active: false, branch: true },
+      { name: "billing-api", level: 1, open: true, active: false, branch: true },
+      { name: "invoice-worker", level: 2, open: false, active: false, branch: false },
+    ];
+
+    return (
+      <div style={{
+        border: `1px solid ${T.border}`, borderRadius: "8px", overflow: "hidden",
+        background: T.bg, boxShadow: "0 18px 60px rgba(0,0,0,0.22)",
+        maxWidth: "470px", margin: "0 auto",
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "10px 14px", borderBottom: `1px solid ${T.border}`, background: T.surface,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontFamily: FONTS.mono, fontSize: "16px", color: T.termGreen, lineHeight: 1 }}>//</span>
+            <span style={{
+              fontFamily: FONTS.mono, fontSize: "10px", color: T.textMuted,
+              letterSpacing: "0.22em", textTransform: "uppercase",
+            }}>
+              apps
+            </span>
+          </div>
+          <span style={{
+            fontFamily: FONTS.mono, fontSize: "10px", color: T.termGreen,
+            border: `1px solid ${T.termGreen}`, borderRadius: "4px",
+            padding: "3px 8px", background: "rgba(34,197,94,0.07)",
+          }}>
+            5
+          </span>
+        </div>
+
+        <div style={{ padding: "16px 18px 6px", minHeight: "196px" }}>
+          {apps.map(app => (
+            <div key={app.name} style={{
+              position: "relative",
+              display: "grid", gridTemplateColumns: "24px 12px minmax(0, 1fr)", alignItems: "center", columnGap: "11px",
+              marginLeft: `${app.level * 38}px`, marginBottom: "10px",
+              padding: app.active ? "8px 12px" : "0 12px",
+              borderRadius: "7px", background: app.active ? "rgba(34,197,94,0.09)" : "transparent",
+              boxShadow: app.active ? `inset 3px 0 0 ${T.termGreen}` : "none",
+            }}>
+              {app.level > 0 && (
+                <span style={{
+                  position: "absolute", left: "-20px", top: "-18px", width: "1px",
+                  height: app.level === 2 ? "42px" : "34px", background: T.border,
+                }} />
+              )}
+              {app.open ? (
+                <span style={{
+                  width: "24px", height: "24px", borderRadius: "5px",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  background: T.elevated, border: `1px solid ${T.border}`,
+                  color: T.textMuted, fontSize: "11px", flexShrink: 0,
+                }}>
+                  ▾
+                </span>
+              ) : (
+                <span style={{
+                  width: "24px", height: "24px", borderRadius: "5px",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  background: T.elevated, border: `1px solid ${T.border}`,
+                  color: T.textMuted, fontSize: "12px", flexShrink: 0,
+                }}>
+                  ≡
+                </span>
+              )}
+              <span style={{
+                width: app.branch ? "10px" : "9px", height: app.branch ? "10px" : "9px",
+                border: `1px solid ${T.termGreen}`, transform: app.branch ? "none" : "rotate(45deg)",
+                background: app.active ? "rgba(34,197,94,0.35)" : "rgba(34,197,94,0.12)",
+                flexShrink: 0,
+              }} />
+              <span style={{
+                fontFamily: FONTS.mono, fontSize: "15px", fontWeight: 700,
+                color: T.textPrimary, letterSpacing: "-0.035em",
+                minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {app.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "pricing") {
+    return (
+      <div style={{ ...mono, display: "grid", gap: "10px" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+          <span style={{ fontFamily: FONTS.display, fontSize: "34px", fontWeight: 700, color: T.textPrimary, letterSpacing: "-0.03em" }}>$46</span>
+          <span style={{ color: T.textMuted }}>/ month</span>
+        </div>
+        {["15 members included", "unlimited environments", "no per-seat math"].map(item => (
+          <div key={item} style={{ display: "flex", gap: "8px", color: T.textSecondary }}>
+            <span style={{ color: T.termGreen }}>✓</span>
+            <span>{item}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const rows = [
+    ["May 17, 13:04", "Sofia Chen", "parameter_value.reveal_current", "JWT_SECRET / prod", "SUCCESS"],
+    ["May 17, 13:02", "deploy-bot", "config.fetch", "api / production", "SUCCESS"],
+    ["May 17, 12:58", "Marco R.", "parameter_value.rollback", "STRIPE_SECRET_KEY", "SUCCESS"],
+    ["May 17, 12:44", "unknown token", "parameter_value.update", "DATABASE_URL", "DENIED"],
+  ];
+  const outcomeVariant = {
+    SUCCESS: T.termGreen,
+    DENIED: "#f59e0b",
+    FAILURE: "#ef4444",
+  };
+
+  return (
+    <div style={{ border: `1px solid ${T.border}`, borderRadius: "4px", overflow: "hidden", minWidth: 0 }}>
+      <div style={{
+        ...mono,
+        display: "grid", gridTemplateColumns: "112px 1fr 1.35fr 1fr 82px", gap: "12px",
+        padding: "9px 12px", background: T.bg, borderBottom: `1px solid ${T.border}`,
+        color: T.textMuted, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase",
+      }}>
+        <span>time</span><span>actor</span><span>action</span><span>target</span><span>outcome</span>
+      </div>
+      {rows.map(([time, actor, action, target, outcome]) => (
+        <div key={`${time}-${action}`} style={{
+          ...mono,
+          display: "grid", gridTemplateColumns: "112px 1fr 1.35fr 1fr 82px", gap: "12px",
+          alignItems: "center", padding: "10px 12px", borderBottom: `1px solid ${T.border}`,
+          background: T.bg,
+        }}>
+          <span style={{ color: T.textMuted, whiteSpace: "nowrap" }}>{time}</span>
+          <span style={{ color: T.textSecondary, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{actor}</span>
+          <span style={{ color: T.textPrimary, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{action}</span>
+          <span style={{ color: T.textSecondary, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{target}</span>
+          <span style={{
+            color: outcomeVariant[outcome], border: `1px solid ${outcomeVariant[outcome]}`,
+            borderRadius: "999px", padding: "2px 7px", fontSize: "10px", textAlign: "center",
+            background: outcome === "SUCCESS" ? "rgba(34,197,94,0.07)" : "rgba(245,158,11,0.07)",
+          }}>
+            {outcome.toLowerCase()}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 
 export function HomePage({ onNavigate }) {
@@ -140,6 +283,15 @@ export function HomePage({ onNavigate }) {
         }
         @keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }
         @media (prefers-reduced-motion: reduce) { .hero-cursor { animation: none; opacity: 1; } }
+        .feature-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+        .feature-block { transition: border-color 0.16s ease, transform 0.16s ease; }
+        .feature-block:hover { transform: translateY(-2px); }
+        .feature-inner { display: grid; grid-template-columns: minmax(260px, 0.82fr) minmax(420px, 1.18fr); gap: 28px; align-items: center; }
+        .pricing-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+        @media (max-width: 860px) {
+          .feature-inner { grid-template-columns: 1fr; }
+          .pricing-grid { grid-template-columns: 1fr; }
+        }
       `}</style>
 
       {/* Nav */}
@@ -163,7 +315,7 @@ export function HomePage({ onNavigate }) {
         </div>
         <div style={{ display: "flex", gap: "4px" }}>
           {[
-            { label: "docs",      href: "#docs",      page: "docs" },
+            { label: "docs",      href: DOCS_URL,     page: null },
             { label: "pricing",   href: "#pricing",   page: null },
             { label: "changelog", href: "#",           page: null },
           ].map(({ label, href, page }) => (
@@ -216,7 +368,7 @@ export function HomePage({ onNavigate }) {
           <a href={`${APP_URL}/signup`} style={{ textDecoration: "none" }}>
             <Btn T={T} variant="primary" size="lg">start for free →</Btn>
           </a>
-          <a href="#docs" style={{ textDecoration: "none" }}>
+          <a href={DOCS_URL} style={{ textDecoration: "none" }}>
             <Btn T={T} variant="terminal" size="lg" icon="❯">view docs</Btn>
           </a>
         </div>
@@ -248,15 +400,41 @@ export function HomePage({ onNavigate }) {
           </h2>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+        <div className="feature-grid">
           {FEATURES.map(f => (
-            <div key={f.title} style={{
+            <div key={f.title} className="feature-block" style={{
               padding: "24px", background: T.surface,
-              border: `1px solid ${T.border}`, borderRadius: "6px",
+              border: `1px solid ${T.border}`, borderRadius: "8px",
             }}>
-              <div style={{ fontFamily: FONTS.mono, fontSize: "22px", color: T.termGreen, marginBottom: "12px", opacity: 0.7 }}>{f.glyph}</div>
-              <div style={{ fontFamily: FONTS.display, fontWeight: 600, fontSize: "14px", color: T.textPrimary, marginBottom: "8px" }}>{f.title}</div>
-              <div style={{ fontFamily: FONTS.display, fontSize: "13px", color: T.textSecondary, lineHeight: 1.6, fontWeight: 400 }}>{f.desc}</div>
+              <div className="feature-inner">
+                <div>
+                  <div style={{
+                    fontFamily: FONTS.mono, fontSize: "10px", color: T.termGreen,
+                    letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: "14px",
+                  }}>
+                    {f.eyebrow}
+                  </div>
+                  <h3 style={{
+                    fontFamily: FONTS.display, fontWeight: 700, fontSize: "28px",
+                    color: T.textPrimary, letterSpacing: "-0.03em", lineHeight: 1.08, marginBottom: "12px",
+                  }}>
+                    {f.title}
+                  </h3>
+                  <p style={{
+                    fontFamily: FONTS.display, fontSize: "14px", color: T.textSecondary,
+                    lineHeight: 1.65, fontWeight: 400, maxWidth: "360px",
+                  }}>
+                    {f.desc}
+                  </p>
+                </div>
+
+                <div style={{
+                  padding: "14px", background: T.elevated,
+                  border: `1px solid ${T.border}`, borderRadius: "6px", minWidth: 0, overflow: "hidden",
+                }}>
+                  <FeatureMockup type={f.mockup} T={T} />
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -289,12 +467,17 @@ export function HomePage({ onNavigate }) {
             </span>
           </h2>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+        <div className="pricing-grid">
           {TIERS.map(tier => (
             <Card key={tier.name} T={T} title={tier.name} accent={tier.highlight ? "green" : undefined} style={{ position: "relative" }}>
               {tier.highlight && (
                 <div style={{ position: "absolute", top: "-1px", right: "16px" }}>
                   <Badge T={T} variant="success">popular</Badge>
+                </div>
+              )}
+              {tier.soon && (
+                <div style={{ position: "absolute", top: "-1px", right: "16px" }}>
+                  <Badge T={T} variant="warning">soon</Badge>
                 </div>
               )}
               <div style={{ marginBottom: "20px" }}>
@@ -305,6 +488,9 @@ export function HomePage({ onNavigate }) {
                   {tier.sub}
                 </span>
               </div>
+              <p style={{ fontFamily: FONTS.display, fontSize: "13px", color: T.textSecondary, lineHeight: 1.55, marginBottom: "18px", minHeight: "40px" }}>
+                {tier.blurb}
+              </p>
               <ul style={{ listStyle: "none", marginBottom: "24px", display: "flex", flexDirection: "column", gap: "8px" }}>
                 {tier.features.map(f => (
                   <li key={f} style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
@@ -319,9 +505,9 @@ export function HomePage({ onNavigate }) {
         </div>
         <div style={{ marginTop: "24px", padding: "20px 24px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: "6px" }}>
           <div style={{ fontFamily: FONTS.mono, fontSize: "11px", color: T.textSecondary, textAlign: "center" }}>
-            All plans include <span style={{ color: T.textPrimary }}>AES-256-GCM encryption</span>,{" "}
-            <span style={{ color: T.textPrimary }}>99.9% uptime SLA</span>, and{" "}
-            <span style={{ color: T.textPrimary }}>SOC 2 Type I</span> compliance.
+            All active plans include <span style={{ color: T.textPrimary }}>AES-256-GCM encryption</span>,{" "}
+            <span style={{ color: T.textPrimary }}>CLI access</span>, and{" "}
+            <span style={{ color: T.textPrimary }}>scoped access keys</span>. SSO, SAML, and SOC 2 are coming with Enterprise.
           </div>
         </div>
       </section>
@@ -342,7 +528,7 @@ export function HomePage({ onNavigate }) {
             <a href={`${APP_URL}/signup`} style={{ textDecoration: "none" }}>
               <Btn T={T} variant="primary" size="lg">create free account →</Btn>
             </a>
-            <a href="#docs" style={{ textDecoration: "none" }}>
+            <a href={DOCS_URL} style={{ textDecoration: "none" }}>
               <Btn T={T} variant="secondary" size="lg">read the docs</Btn>
             </a>
           </div>
@@ -371,7 +557,7 @@ export function HomePage({ onNavigate }) {
         </div>
         <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>
           {[
-            { label: "docs",    href: "#docs" },
+            { label: "docs",    href: DOCS_URL },
             { label: "pricing", href: "#pricing" },
             { label: "privacy", href: "#" },
             { label: "status",  href: "#" },
