@@ -67,17 +67,23 @@ export default async function parameterRoutes(fastify, _options) {
       const chain = [...app.ancestors, app.id];
       const chainRank = new Map(chain.map((id, index) => [id, index]));
 
-      const parameters = await prisma.parameter.findMany({
-        where: { appId: { in: chain } },
-        select: {
-          id: true,
-          key: true,
-          description: true,
-          appId: true,
-          app: { select: { id: true, name: true, depth: true } },
-        },
-        orderBy: { key: 'asc' },
-      });
+      // parameters and chainApps only depend on `chain` — fetch concurrently instead of
+      // letting Prisma re-fetch app/parameter names per row via nested relation selects
+      // (each nested relation is a separate round trip; we already have everything we need
+      // to join these in memory once both queries land).
+      const [parameters, chainApps] = await Promise.all([
+        prisma.parameter.findMany({
+          where: { appId: { in: chain } },
+          select: { id: true, key: true, description: true, appId: true },
+          orderBy: { key: 'asc' },
+        }),
+        prisma.app.findMany({
+          where: { id: { in: chain } },
+          select: { id: true, name: true },
+        })
+      ]);
+      const appNameById = new Map(chainApps.map(a => [a.id, a.name]));
+      const parameterById = new Map(parameters.map(p => [p.id, p]));
 
       const byKey = new Map();
       for (const parameter of parameters) {
@@ -91,16 +97,6 @@ export default async function parameterRoutes(fastify, _options) {
               environmentId,
               parameterId: { in: parameters.map(parameter => parameter.id) }
             },
-            include: {
-              parameter: {
-                select: {
-                  id: true,
-                  appId: true,
-                  key: true,
-                  app: { select: { id: true, name: true } }
-                }
-              }
-            }
           })
         : [];
       const valueByParameterId = new Map(allValues.map(value => [value.parameterId, value]));
@@ -144,15 +140,16 @@ export default async function parameterRoutes(fastify, _options) {
             } else {
               const canReveal = canRevealConfig(request, { environment });
               const canWrite = canWriteConfig(request, { environment });
-              const sourceIsCurrentApp = valueWinner.parameter.appId === app.id;
+              const sourceAppId = parameterById.get(valueWinner.parameterId).appId;
+              const sourceIsCurrentApp = sourceAppId === app.id;
               value = {
                 state: canReveal ? sourceIsCurrentApp ? 'set' : 'inherited' : 'redacted',
                 valueId: valueWinner.id,
                 parameterId: valueWinner.parameterId,
                 environmentId: valueWinner.environmentId,
                 value: canReveal ? decryptParameterValue(valueWinner) : null,
-                sourceAppId: valueWinner.parameter.appId,
-                sourceAppName: valueWinner.parameter.app.name,
+                sourceAppId,
+                sourceAppName: appNameById.get(sourceAppId),
                 isSet: valueWinner.isSet,
                 canRead: canReveal,
                 canWrite,
@@ -166,14 +163,14 @@ export default async function parameterRoutes(fastify, _options) {
             parameter: {
               id: winner.id,
               appId: winner.appId,
-              appName: winner.app.name,
+              appName: appNameById.get(winner.appId),
               description: winner.description,
             },
             overridden: relationship === 'override' && ancestor
               ? {
                   parameterId: ancestor.id,
                   appId: ancestor.appId,
-                  appName: ancestor.app.name,
+                  appName: appNameById.get(ancestor.appId),
                 }
               : null,
             value,
