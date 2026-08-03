@@ -39,21 +39,25 @@ export default async function parameterRoutes(fastify, _options) {
     }
 
     try {
-      const app = await prisma.app.findUnique({
-        where: { id: appId },
-        select: { id: true, name: true, orgId: true, ancestors: true },
-      });
+      // app and environment lookups are independent — run concurrently instead of paying two sequential round trips
+      const [app, environment] = await Promise.all([
+        prisma.app.findUnique({
+          where: { id: appId },
+          select: { id: true, name: true, orgId: true, ancestors: true },
+        }),
+        environmentId
+          ? prisma.environment.findUnique({
+              where: { id: environmentId },
+              select: { id: true, name: true, orgId: true, tier: true, protected: true },
+            })
+          : Promise.resolve(null)
+      ]);
 
       if (!app) return reply.code(404).send({ error: 'Not Found', message: 'App not found', statusCode: 404 });
       if (app.orgId !== orgId) return reply.code(403).send({ error: 'Forbidden', message: 'App does not belong to this organization', statusCode: 403 });
       if (!await fastify.enforceAccessKeyResource(request, reply, { appId })) return;
 
-      let environment = null;
       if (environmentId) {
-        environment = await prisma.environment.findUnique({
-          where: { id: environmentId },
-          select: { id: true, name: true, orgId: true, tier: true, protected: true },
-        });
         if (!environment) return reply.code(404).send({ error: 'Not Found', message: 'Environment not found', statusCode: 404 });
         if (environment.orgId !== orgId) return reply.code(403).send({ error: 'Forbidden', message: 'Environment does not belong to this organization', statusCode: 403 });
         if (!await fastify.enforceAccessKeyResource(request, reply, { environmentId })) return;
