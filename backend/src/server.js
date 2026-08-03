@@ -50,7 +50,7 @@ export function buildApp(options = {}) {
         }
       })
     } : false,
-    disableRequestLogging: enableRequestLogging,
+    disableRequestLogging: !enableRequestLogging,
     routerOptions: {
       ignoreTrailingSlash: true
     }
