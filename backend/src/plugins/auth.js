@@ -360,10 +360,17 @@ fastify.decorate('authenticate', async function (request, reply) {
 
     if (request.auth?.credentialType !== 'SUPABASE_JWT') return;
 
+    // Cheap gate first: authPolicy/ssoConnections only matter for plans that support enterprise SSO,
+    // which is the rare case — skip those two extra round trips for everyone else.
+    const orgPlan = await fastify.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { plan: true }
+    });
+    if (!hasEnterpriseSso(orgPlan?.plan)) return;
+
     const org = await fastify.prisma.organization.findUnique({
       where: { id: orgId },
       select: {
-        plan: true,
         authPolicy: true,
         ssoConnections: {
           where: { status: 'ACTIVE' },
@@ -374,7 +381,7 @@ fastify.decorate('authenticate', async function (request, reply) {
     });
     const policy = org?.authPolicy;
     const connection = org?.ssoConnections?.[0] ?? null;
-    const enforcementActive = hasEnterpriseSso(org?.plan) && policy?.ssoMode === 'REQUIRED' && connection;
+    const enforcementActive = policy?.ssoMode === 'REQUIRED' && connection;
     if (!enforcementActive) return;
     if (isSsoSessionForConnection(request.auth, connection)) return;
     if (policy.allowPasswordFallbackForOwners && membership.roleKey === 'OWNER') return;
