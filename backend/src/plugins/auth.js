@@ -20,6 +20,7 @@ import { uuidv7 } from 'uuidv7';
 import { isUuidV7 } from '../schemas/common.js';
 import { hasScope, isAccessKeyToken, parseAccessKeyToken, verifyAccessKeyToken } from '../lib/accessKeys.js';
 import { hasEnterpriseSso, inferSupabaseAuthMetadata, isSsoSessionForConnection } from '../lib/sso.js';
+import { getCachedIdentity, setCachedIdentity } from '../lib/identityCache.js';
 import {
   environmentToContext,
   hasPermission,
@@ -290,7 +291,11 @@ fastify.decorate('authenticate', async function (request, reply) {
     }
 
     const authMetadata = inferSupabaseAuthMetadata(supabaseUser);
-    const raw = await findUserBySupabaseAccount(fastify, supabaseUser, authMetadata);
+    let raw = getCachedIdentity(supabaseUser.id);
+    if (!raw) {
+      raw = await findUserBySupabaseAccount(fastify, supabaseUser, authMetadata);
+      if (raw) setCachedIdentity(supabaseUser.id, raw);
+    }
 
     if (!raw) {
       return reply.code(401).send({

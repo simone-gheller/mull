@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { uuidV7Param } from '../schemas/common.js';
 import { isPaidPlan, SYSTEM_ROLE_KEYS, validatePermissions } from '../lib/rbac.js';
 import { hasEnterpriseSso, normalizeDomain } from '../lib/sso.js';
+import { invalidateUser } from '../lib/identityCache.js';
 
 function tokenFingerprint(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -492,6 +493,10 @@ export default async function orgRoutes(fastify, _options) {
         ...(permissions !== undefined ? { permissions } : {})
       }
     });
+    if (permissions !== undefined) {
+      const affected = await fastify.prisma.userOrganization.findMany({ where: { roleId }, select: { userId: true } });
+      affected.forEach(m => invalidateUser(m.userId));
+    }
     await fastify.audit.log({
       request,
       orgId,
@@ -590,6 +595,7 @@ export default async function orgRoutes(fastify, _options) {
       data: { roleId: nextRole.id },
       include: { role: { select: { id: true, key: true, name: true, kind: true } }, user: { select: { id: true, email: true, displayName: true } } }
     });
+    invalidateUser(userId);
     await fastify.audit.log({
       request,
       orgId,
@@ -625,6 +631,7 @@ export default async function orgRoutes(fastify, _options) {
       return reply.code(409).send({ error: 'Conflict', message: 'Cannot remove the last owner', statusCode: 409 });
     }
     await fastify.prisma.userOrganization.delete({ where: { userId_orgId: { userId, orgId } } });
+    invalidateUser(userId);
     await fastify.audit.log({
       request,
       orgId,

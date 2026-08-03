@@ -1,5 +1,6 @@
 import { uuidv7 } from 'uuidv7';
 import { domainFromEmail, hasEnterpriseSso, normalizeDomain } from '../lib/sso.js';
+import { invalidateUser } from '../lib/identityCache.js';
 
 /**
  * Authentication Routes
@@ -275,6 +276,7 @@ export default async function authRoutes(fastify, _options) {
       }, { tx });
       return createdOrg;
     });
+    invalidateUser(request.user.id);
     return reply.code(201).send({ id: org.id, name: org.name, role: 'OWNER' });
   });
 

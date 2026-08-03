@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { hasEnterpriseSso, isSsoSessionForConnection } from '../lib/sso.js';
+import { invalidateUser } from '../lib/identityCache.js';
 
 function tokenFingerprint(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -243,6 +244,7 @@ export default async function invitationRoutes(fastify) {
         data: { status: 'ACCEPTED', resolvedAt: now },
       }),
     ]);
+    invalidateUser(request.user.id);
 
     await fastify.audit.log({
       request,
