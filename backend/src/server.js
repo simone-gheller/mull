@@ -43,6 +43,14 @@ export function buildApp(options = {}) {
   const fastify = Fastify({
     logger: logger ? {
       level: process.env.LOG_LEVEL || 'info',
+      hooks: {
+        logMethod(args, method) {
+          if (typeof args[0]?.responseTime === 'number') {
+            args[0].responseTime = Math.round(args[0].responseTime);
+          }
+          return method.apply(this, args);
+        }
+      },
       ...(!isProd && {
         transport: {
           target: 'pino-pretty',
