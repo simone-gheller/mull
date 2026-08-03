@@ -9,8 +9,9 @@ SafeConfig (product name: **vextis**) is a secure configuration management syste
 ## Deployment Architecture
 
 ```
-vextis.io               → Marketing landing page (React + Vite — frontend/)
-app.vextis.io           → Dashboard SPA (React + Vite — frontend/)
+vextis.io               → Marketing landing page (React + Vite — frontend/landing/)
+app.vextis.io           → Dashboard SPA (React + Vite — frontend/app/)
+docs.vextis.io          → Documentation site (React + Vite — frontend/docs/)
 api.vextis.io           → REST API (Fastify — backend/)
 ```
 

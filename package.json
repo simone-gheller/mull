@@ -8,9 +8,11 @@
   "scripts": {
     "dev:app": "npm run dev --workspace=frontend/app",
     "dev:landing": "npm run dev --workspace=frontend/landing",
-    "dev": "npm run dev --workspace=frontend/app & npm run dev --workspace=frontend/landing",
+    "dev:docs": "npm run dev --workspace=frontend/docs",
+    "dev": "npm run dev --workspace=frontend/app & npm run dev --workspace=frontend/landing & npm run dev --workspace=frontend/docs",
     "build:app": "npm run build --workspace=frontend/app",
     "build:landing": "npm run build --workspace=frontend/landing",
+    "build:docs": "npm run build --workspace=frontend/docs",
     "build": "npm run build --workspaces"
   }
 }
