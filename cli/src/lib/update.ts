@@ -5,7 +5,7 @@ import { printUpdateHint } from './ui.ts';
 import { VERSION } from '../constants.ts';
 
 const STATE_PATH = join(homedir(), '.vextis', 'state.json');
-const REPO = 'simone-gheller/mull'; // TODO: update after repo rename to vextis
+const REPO = 'simone-gheller/vextis';
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 interface State {

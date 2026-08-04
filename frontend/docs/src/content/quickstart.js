@@ -1,7 +1,4 @@
-// NOTE: the GitHub repository is still hosted at simone-gheller/mull (see `git remote -v`) —
-// renaming the actual GitHub repo/org is outside this codebase and hasn't happened yet.
-// Update this URL once the repo itself is renamed to vextis; do not point it at an org that doesn't exist.
-export const INSTALL_COMMAND = 'curl -fsSL https://raw.githubusercontent.com/simone-gheller/mull/main/cli/scripts/install.sh | bash';
+export const INSTALL_COMMAND = 'curl -fsSL https://raw.githubusercontent.com/simone-gheller/vextis/main/cli/scripts/install.sh | bash';
 
 export const QUICKSTART_STEPS = [
   ['Install the CLI', INSTALL_COMMAND, 'vextis 0.1.x installed'],
