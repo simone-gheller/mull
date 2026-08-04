@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Btn, FONTS, Input } from '@vextis/ui';
 import apiService from '../../services/api';
-import { useToast } from '../../context/ToastContext';
+import { useToast } from '../../hooks/useToast';
 
 const SCOPE_GROUPS = [
   { key: 'config', label: 'Config values', scopes: ['config:read', 'config:reveal', 'config:write'] },
@@ -143,7 +143,7 @@ export default function AccessKeysPanel({ T, mode }) {
     environmentId: ''
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const [loadedKeys, loadedApps, loadedEnvs] = await Promise.all([
@@ -159,11 +159,11 @@ export default function AccessKeysPanel({ T, mode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isOrg, toast]);
 
   useEffect(() => {
     load();
-  }, [mode]);
+  }, [load]);
 
   const selectedScopes = useMemo(() => new Set(form.scopes), [form.scopes]);
 

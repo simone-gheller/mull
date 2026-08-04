@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme, Btn, Badge, FONTS } from '@vextis/ui';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
+import { useToast } from '../hooks/useToast';
 import apiService from '../services/api';
 
 const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');

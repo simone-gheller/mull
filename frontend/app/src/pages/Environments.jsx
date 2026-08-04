@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Shield } from 'lucide-react';
 import { useTheme, Btn, FONTS } from '@vextis/ui';
 import apiService from '../services/api';
-import { useToast } from '../context/ToastContext';
+import { useToast } from '../hooks/useToast';
 import Modal from '../components/ui/Modal';
 import FormInput from '../components/ui/FormInput';
 import TrashButton from '../components/ui/TrashButton';

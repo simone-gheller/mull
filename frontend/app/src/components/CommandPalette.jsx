@@ -4,8 +4,6 @@ import { FONTS } from '@vextis/ui';
 import { useAuth } from '../context/AuthContext';
 import apiService from '../services/api';
 
-const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-
 const NAV_ITEMS = [
   { id: 'nav-projects',     type: 'nav', label: 'projects',     path: '/dashboard/projects' },
   { id: 'nav-parameters',   type: 'nav', label: 'parameters',   path: '/dashboard/parameters' },

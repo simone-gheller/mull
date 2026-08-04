@@ -41,7 +41,6 @@ function OrgSwitcher({ T }) {
 
   const activeOrg = orgs.find(o => o.id === orgId);
   const orgName   = activeOrg?.name ?? '…';
-  const orgRole   = activeOrg?.role;
 
   useEffect(() => {
     if (!open) return;

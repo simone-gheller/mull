@@ -5,7 +5,7 @@ const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$
 import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@vextis/ui';
 import { Layers, ChevronsUpDown, Eye, EyeOff, Shield, CornerDownRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
+import { useToast } from '../hooks/useToast';
 import apiService from '../services/api';
 import Modal from '../components/ui/Modal';
 import FormInput from '../components/ui/FormInput';
@@ -115,9 +115,6 @@ export default function Parameters() {
   const orgSlug = slugify(orgs.find(o => o.id === orgId)?.name ?? orgId ?? '');
   const [searchParams] = useSearchParams();
   const selectedProjectId = searchParams.get('project');
-
-  const orgRole = orgs.find(o => o.id === orgId)?.role ?? 'DEVELOPER';
-  const isAdmin = ['ADMIN', 'OWNER'].includes(orgRole);
 
   const [apps, setApps] = useState([]);
   const [tree, setTree] = useState([]);
