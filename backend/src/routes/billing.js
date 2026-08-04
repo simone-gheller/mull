@@ -11,6 +11,7 @@ import {
   priceIdFor,
   verifyPaddleSignature
 } from '../lib/billing.js';
+import { invalidateOrg } from '../lib/orgSecurityCache.js';
 
 const orgIdParamsSchema = {
   type: 'object',
@@ -156,6 +157,8 @@ async function applyPaddleSubscriptionEvent(prisma, config, data) {
       data: { plan: storedPlan }
     })
   ]);
+
+  invalidateOrg(orgId);
 
   return { orgId, applied: true };
 }

@@ -2,6 +2,7 @@ import fp from 'fastify-plugin';
 import { isUuidV7 } from '../schemas/common.js';
 import { hasScope, isAccessKeyToken, parseAccessKeyToken, verifyAccessKeyToken } from '../lib/accessKeys.js';
 import { hasEnterpriseSso, isSsoSessionForConnection } from '../lib/sso.js';
+import { getOrgSecurityInfo } from '../lib/orgSecurityCache.js';
 import {
   environmentToContext,
   hasPermission,
@@ -172,21 +173,8 @@ async function testAuthPlugin(fastify) {
 
     if (request.auth?.credentialType !== 'SUPABASE_JWT') return;
 
-    const org = await fastify.prisma.organization.findUnique({
-      where: { id: orgId },
-      select: {
-        plan: true,
-        authPolicy: true,
-        ssoConnections: {
-          where: { status: 'ACTIVE' },
-          select: { supabaseSsoProviderId: true },
-          take: 1
-        }
-      }
-    });
-    const policy = org?.authPolicy;
-    const connection = org?.ssoConnections?.[0] ?? null;
-    const enforcementActive = hasEnterpriseSso(org?.plan) && policy?.ssoMode === 'REQUIRED' && connection;
+    const { plan, authPolicy: policy, connection } = await getOrgSecurityInfo(fastify.prisma, orgId);
+    const enforcementActive = hasEnterpriseSso(plan) && policy?.ssoMode === 'REQUIRED' && connection;
     if (!enforcementActive) return;
     if (isSsoSessionForConnection(request.auth, connection)) return;
     if (policy.allowPasswordFallbackForOwners && membership.roleKey === 'OWNER') return;

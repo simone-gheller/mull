@@ -21,6 +21,7 @@ import { isUuidV7 } from '../schemas/common.js';
 import { hasScope, isAccessKeyToken, parseAccessKeyToken, verifyAccessKeyToken } from '../lib/accessKeys.js';
 import { hasEnterpriseSso, inferSupabaseAuthMetadata, isSsoSessionForConnection } from '../lib/sso.js';
 import { getCachedIdentity, setCachedIdentity } from '../lib/identityCache.js';
+import { getOrgSecurityInfo } from '../lib/orgSecurityCache.js';
 import {
   environmentToContext,
   hasPermission,
@@ -360,27 +361,8 @@ fastify.decorate('authenticate', async function (request, reply) {
 
     if (request.auth?.credentialType !== 'SUPABASE_JWT') return;
 
-    // Cheap gate first: authPolicy/ssoConnections only matter for plans that support enterprise SSO,
-    // which is the rare case — skip those two extra round trips for everyone else.
-    const orgPlan = await fastify.prisma.organization.findUnique({
-      where: { id: orgId },
-      select: { plan: true }
-    });
-    if (!hasEnterpriseSso(orgPlan?.plan)) return;
-
-    const org = await fastify.prisma.organization.findUnique({
-      where: { id: orgId },
-      select: {
-        authPolicy: true,
-        ssoConnections: {
-          where: { status: 'ACTIVE' },
-          select: { supabaseSsoProviderId: true },
-          take: 1
-        }
-      }
-    });
-    const policy = org?.authPolicy;
-    const connection = org?.ssoConnections?.[0] ?? null;
+    const { plan, authPolicy: policy, connection } = await getOrgSecurityInfo(fastify.prisma, orgId);
+    if (!hasEnterpriseSso(plan)) return;
     const enforcementActive = policy?.ssoMode === 'REQUIRED' && connection;
     if (!enforcementActive) return;
     if (isSsoSessionForConnection(request.auth, connection)) return;

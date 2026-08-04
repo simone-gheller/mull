@@ -4,6 +4,7 @@ import { uuidV7Param } from '../schemas/common.js';
 import { isPaidPlan, SYSTEM_ROLE_KEYS, validatePermissions } from '../lib/rbac.js';
 import { hasEnterpriseSso, normalizeDomain } from '../lib/sso.js';
 import { invalidateUser } from '../lib/identityCache.js';
+import { invalidateOrg } from '../lib/orgSecurityCache.js';
 
 function tokenFingerprint(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -284,6 +285,8 @@ export default async function orgRoutes(fastify, _options) {
       }, { tx });
       return { policy, connection };
     });
+
+    invalidateOrg(orgId);
 
     return reply.send({
       eligible: true,
