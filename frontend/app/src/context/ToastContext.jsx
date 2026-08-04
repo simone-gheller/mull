@@ -1,12 +1,7 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Toast } from '@vextis/ui';
 import { useTheme } from '@vextis/ui';
-
-const ToastContext = createContext(null);
-
-export function useToast() {
-  return useContext(ToastContext);
-}
+import { ToastContext } from '../hooks/useToast';
 
 let _id = 0;
 
@@ -33,9 +28,10 @@ export function ToastProvider({ children }) {
   }, [closeToast]);
 
   useEffect(() => {
+    const activeTimers = timers.current;
     return () => {
-      timers.current.forEach(timer => clearTimeout(timer));
-      timers.current.clear();
+      activeTimers.forEach(timer => clearTimeout(timer));
+      activeTimers.clear();
     };
   }, []);
 

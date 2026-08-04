@@ -161,11 +161,3 @@ export default function InviteAcceptPage() {
   }
 
 }
-
-function relativeExpiry(dateStr) {
-  const diff = new Date(dateStr) - Date.now();
-  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-  if (days <= 0) return 'This invitation has expired.';
-  if (days === 1) return 'Expires tomorrow.';
-  return `Expires in ${days} days.`;
-}

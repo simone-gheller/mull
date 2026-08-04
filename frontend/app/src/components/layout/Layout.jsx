@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useTheme, FONTS } from '@vextis/ui';
 import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
+import { useToast } from '../../hooks/useToast';
 import { supabase } from '../../lib/supabase';
 import apiService from '../../services/api';
 import Sidebar from './Sidebar';
@@ -27,7 +27,9 @@ export default function Layout() {
       try {
         const { msg, variant, sub } = JSON.parse(pending);
         toast(msg, variant, sub);
-      } catch {}
+      } catch {
+        // malformed pending toast payload — ignore
+      }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

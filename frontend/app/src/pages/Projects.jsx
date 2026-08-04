@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme, Btn, FONTS, AppTreeA, buildAppTree } from '@vextis/ui';
 import { Download } from 'lucide-react';
-import { useToast } from '../context/ToastContext';
+import { useToast } from '../hooks/useToast';
 import apiService from '../services/api';
 import Modal from '../components/ui/Modal';
 import FormInput from '../components/ui/FormInput';
@@ -40,16 +40,36 @@ export default function Apps() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(null);
 
+  const loadAppDetail = useCallback(async (node) => {
+    setDetail(null);
+    setDetailLoading(true);
+    try {
+      const resolved = await apiService.getResolvedParameters(node.id);
+      setDetail({
+        ownCount: resolved.summary?.local ?? 0,
+        inheritedCount: resolved.summary?.inherited ?? 0,
+        overrideCount: resolved.summary?.overrides ?? 0,
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     apiService.getProjects()
       .then(data => {
         setApps(data);
         setTree(buildAppTree(data));
-        if (data.length > 0) handleSelectApp(data[0]);
+        if (data.length > 0) {
+          setSelectedApp(data[0]);
+          loadAppDetail(data[0]);
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [loadAppDetail]);
 
   useEffect(() => {
     const handler = () => { resetForm(); setShowModal(true); };
@@ -91,27 +111,14 @@ export default function Apps() {
     navigate(`/dashboard/parameters?project=${node.id}`);
   };
 
-  const handleSelectApp = async (node) => {
+  const handleSelectApp = (node) => {
     if (selectedApp?.id === node.id) {
       setSelectedApp(null);
       setDetail(null);
       return;
     }
     setSelectedApp(node);
-    setDetail(null);
-    setDetailLoading(true);
-    try {
-      const resolved = await apiService.getResolvedParameters(node.id);
-      setDetail({
-        ownCount: resolved.summary?.local ?? 0,
-        inheritedCount: resolved.summary?.inherited ?? 0,
-        overrideCount: resolved.summary?.overrides ?? 0,
-      });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setDetailLoading(false);
-    }
+    loadAppDetail(node);
   };
 
   const handleDelete = async () => {

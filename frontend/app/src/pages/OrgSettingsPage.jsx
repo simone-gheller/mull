@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { useTheme, FONTS, Btn, Badge, Input } from '@vextis/ui';
@@ -6,7 +6,7 @@ import { useOrg } from '../hooks/useOrg';
 import { useMembers } from '../hooks/useMembers';
 import { useInvites } from '../hooks/useInvites';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
+import { useToast } from '../hooks/useToast';
 import { Avatar } from '../components/settings/Avatar';
 import AccessKeysPanel from '../components/settings/AccessKeysPanel';
 import apiService from '../services/api';
@@ -324,7 +324,7 @@ function InviteBar({ onSendInvite, roles, T }) {
     setSending(true);
     setFeedback(null);
     try {
-      const result = await onSendInvite({ email: email.trim(), roleId });
+      await onSendInvite({ email: email.trim(), roleId });
       setEmail('');
       setFeedback({ type: 'success', msg: 'Invite sent' });
       setTimeout(() => setFeedback(null), 3500);
@@ -443,7 +443,7 @@ function InviteRow({ invite, onCancel, T }) {
   );
 }
 
-function MembersTab({ org, members, membersLoading, membersError, currentUserId, invites, invitesLoading, roles, onSendInvite, onCancelInvite, onUpdateMemberRole, onRemoveMember, T }) {
+function MembersTab({ members, membersLoading, membersError, currentUserId, invites, invitesLoading, roles, onSendInvite, onCancelInvite, onUpdateMemberRole, onRemoveMember, T }) {
   const [memberSearch, setMemberSearch] = useState('');
   const [memberPage, setMemberPage] = useState(1);
   const memberCountRef = useRef(null);
@@ -1026,7 +1026,7 @@ function BillingTab({ T }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       setBilling(await apiService.getBilling());
@@ -1035,9 +1035,9 @@ function BillingTab({ T }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const openCheckout = async (plan, interval = 'month') => {
     setBusy(`${plan}-${interval}`);
@@ -1198,7 +1198,7 @@ function AuditTab({ T }) {
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({ action: '', resourceType: '', outcome: '' });
 
-  const loadEvents = async ({ append = false, cursor: next = null } = {}) => {
+  const loadEvents = useCallback(async ({ append = false, cursor: next = null } = {}) => {
     setLoading(true);
     setError(null);
     try {
@@ -1217,11 +1217,11 @@ function AuditTab({ T }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters.action, filters.resourceType, filters.outcome]);
 
   useEffect(() => {
     loadEvents();
-  }, [filters.action, filters.resourceType, filters.outcome]);
+  }, [loadEvents]);
 
   const updateFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
 
@@ -1369,7 +1369,7 @@ function SettingsTab({ org, onUpdateOrg, T }) {
     if (org?.name != null) setName(org.name);
   }, [org?.name]);
 
-  const loadSso = async () => {
+  const loadSso = useCallback(async () => {
     setSsoLoading(true);
     try {
       const settings = await apiService.getOrgSsoSettings();
@@ -1387,9 +1387,9 @@ function SettingsTab({ org, onUpdateOrg, T }) {
     } finally {
       setSsoLoading(false);
     }
-  };
+  }, [toast]);
 
-  useEffect(() => { loadSso(); }, [org?.id]);
+  useEffect(() => { loadSso(); }, [org?.id, loadSso]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -1603,15 +1603,15 @@ export default function OrgSettingsPage() {
   const { invites, loading: invitesLoading, sendInvite: _sendInvite, revokeInvite } = useInvites();
   const [roles, setRoles] = useState([]);
 
-  const loadRoles = async () => {
+  const loadRoles = useCallback(async () => {
     try {
       setRoles(await apiService.getRoles());
     } catch (error) {
       toast('failed to load roles', 'error', error.response?.data?.message);
     }
-  };
+  }, [toast]);
 
-  useEffect(() => { loadRoles(); }, []);
+  useEffect(() => { loadRoles(); }, [loadRoles]);
 
   const sendInvite = async ({ email, roleId }) => {
     try {
@@ -1674,9 +1674,8 @@ export default function OrgSettingsPage() {
     }
   };
 
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const tab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'settings';
-  const setTab = (t) => setSearchParams({ tab: t });
 
   const orgName = org?.name ?? user?.organization?.name ?? 'organization';
 

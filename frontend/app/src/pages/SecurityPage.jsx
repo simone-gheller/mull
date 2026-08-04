@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTheme, FONTS, Btn, Badge } from '@vextis/ui';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import apiService from '../services/api';
-import { useToast } from '../context/ToastContext';
+import { useToast } from '../hooks/useToast';
 
 const AUTH_METHODS = [
   { key: 'email',  label: 'Email',   icon: null,     oauth: false },
@@ -120,11 +120,6 @@ function parseBrowserSession() {
   return { browser, os };
 }
 
-function formatDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString();
-}
-
 function formatRelative(iso) {
   if (!iso) return 'never';
   const diff = Date.now() - new Date(iso).getTime();
@@ -150,7 +145,7 @@ export default function SecurityPage() {
   const [linkingProvider, setLinkingProvider] = useState(null);
   const [confirmRevokeId, setConfirmRevokeId] = useState(null);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoadingSessions(true);
     try {
       const [{ data: { session } }, { data: { user: u } }, keys] = await Promise.all([
@@ -166,9 +161,9 @@ export default function SecurityPage() {
     } finally {
       setLoadingSessions(false);
     }
-  };
+  }, [toast]);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   const sendPasswordReset = async () => {
     if (!user?.email) return;
@@ -231,7 +226,6 @@ export default function SecurityPage() {
   };
 
   const linkedProviders = new Set(identities.map(i => i.provider));
-  const emailIdentity   = identities.find(i => i.provider === 'email');
 
   return (
     <div>
@@ -368,7 +362,7 @@ export default function SecurityPage() {
                   <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {browserSessionId(browserSession.access_token)}
                   </span>
-                  <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textSecondary }}>browser</span>
+                  <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textSecondary }}>{browser}</span>
                   <span style={{ fontFamily: FONTS.mono, fontSize: '11px', color: T.textSecondary }}>{os ?? '—'}</span>
                   <span style={{ fontFamily: FONTS.display, fontSize: '11px', color: T.textMuted }}>
                     {formatRelative(browserSession.user?.last_sign_in_at)}
