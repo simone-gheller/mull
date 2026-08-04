@@ -52,6 +52,10 @@ npm run db:backfill:is-set # one-off after encrypted-value migration
 # Frontend (from root)
 npm run dev:app        # http://localhost:5173
 npm run build:app
+npm run dev:landing    # http://localhost:5174
+npm run build:landing
+npm run dev:docs       # http://localhost:5175
+npm run build:docs
 
 # Supabase local
 npx supabase start     # starts auth + DB (port 54321/54322)

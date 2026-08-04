@@ -1,0 +1,37 @@
+# vextis docs
+
+> Secure app config for local development and CI — organizations, apps, environments, and encrypted parameters, managed from a CLI.
+
+## Start
+- [Overview](https://docs.vextis.io/): What vextis is and where to start.
+- [Quickstart](https://docs.vextis.io/quickstart): Get a local app running with managed config.
+- [Install CLI](https://docs.vextis.io/install-cli): Install and update the vextis CLI.
+- [CLI login](https://docs.vextis.io/cli-login): Authorize your terminal session.
+
+## Core concepts
+- [Organizations](https://docs.vextis.io/organizations): The root of every app, environment, and member.
+- [Apps](https://docs.vextis.io/apps): Deployable services and projects.
+- [Environments](https://docs.vextis.io/environments): Runtime targets like development and production.
+- [Parameters](https://docs.vextis.io/parameters): Encrypted config keys and values.
+- [Inheritance](https://docs.vextis.io/inheritance): Fallback behavior for unset values.
+
+## CLI
+- [CLI reference](https://docs.vextis.io/cli-reference): The full command surface.
+- [Config commands](https://docs.vextis.io/config-commands): Pull, get, and set resolved config.
+- [Linking a project](https://docs.vextis.io/linking-a-project): Bind a working tree to an app and environment.
+- [Troubleshooting](https://docs.vextis.io/troubleshooting): Common setup and permission issues.
+
+## Automate
+- [Run with env](https://docs.vextis.io/run-with-env): Inject config into a child process.
+- [CI/CD](https://docs.vextis.io/ci-cd): Use VEXTIS_TOKEN in automation.
+- [Access tokens](https://docs.vextis.io/access-tokens): Personal and organization automation tokens.
+
+## Security & governance
+- [Security model](https://docs.vextis.io/security-model): Encryption, authorization, and audit posture.
+- [Roles & permissions](https://docs.vextis.io/roles-permissions): System roles and the scope model behind them.
+- [Audit logs](https://docs.vextis.io/audit-logs): Events recorded for sensitive actions.
+
+## Reference
+- [API basics](https://docs.vextis.io/api-basics): Auth model and key endpoints for automation.
+- [SDKs](https://docs.vextis.io/sdks): SDKs planned after CLI and API stabilize. (not yet published)
+- [Changelog](https://docs.vextis.io/changelog): CLI release notes.

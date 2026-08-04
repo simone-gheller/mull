@@ -49,8 +49,10 @@ const PRICING_PHRASES = [
   "no surprises, ever.",
 ];
 
-const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
-const DOCS_URL = import.meta.env.VITE_DOCS_URL || 'https://docs.vextis.io';
+const APP_URL = import.meta.env.VITE_APP_URL
+  || (import.meta.env.DEV ? 'http://localhost:5173' : 'https://app.vextis.io');
+const DOCS_URL = import.meta.env.VITE_DOCS_URL
+  || (import.meta.env.DEV ? 'http://localhost:5175' : 'https://docs.vextis.io');
 
 const TIERS = [
   {

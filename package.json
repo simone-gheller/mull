@@ -1,5 +1,5 @@
 {
-  "name": "mull",
+  "name": "vextis",
   "private": true,
   "workspaces": [
     "frontend/*",
@@ -13,6 +13,6 @@
     "build:app": "npm run build --workspace=frontend/app",
     "build:landing": "npm run build --workspace=frontend/landing",
     "build:docs": "npm run build --workspace=frontend/docs",
-    "build": "npm run build --workspaces"
+    "build": "npm run build --workspaces --if-present"
   }
 }
