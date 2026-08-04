@@ -7,6 +7,7 @@ import {
 } from '../lib/accessKeys.js';
 import { hasEnterpriseSso, isSsoSessionForConnection } from '../lib/sso.js';
 import { findOrCreateUserIdentity } from '../lib/identities.js';
+import { getOrgSecurityInfo } from '../lib/orgSecurityCache.js';
 
 const ttlPresetSchema = { type: 'string', enum: ['30d', '90d', '365d', 'never'], default: '90d' };
 const scopeSchema = {
@@ -67,20 +68,8 @@ async function validateBinding(fastify, orgId, { appId, environmentId }) {
 }
 
 async function enforcePersonalTokenSso(fastify, request, reply, orgId) {
-  const org = await fastify.prisma.organization.findUnique({
-    where: { id: orgId },
-    select: {
-      plan: true,
-      authPolicy: true,
-      ssoConnections: {
-        where: { status: 'ACTIVE' },
-        select: { supabaseSsoProviderId: true },
-        take: 1
-      }
-    }
-  });
-  const connection = org?.ssoConnections?.[0] ?? null;
-  const requiresSso = hasEnterpriseSso(org?.plan) && org?.authPolicy?.ssoMode === 'REQUIRED' && connection;
+  const { plan, authPolicy, connection } = await getOrgSecurityInfo(fastify.prisma, orgId);
+  const requiresSso = hasEnterpriseSso(plan) && authPolicy?.ssoMode === 'REQUIRED' && connection;
   if (!requiresSso || isSsoSessionForConnection(request.auth, connection)) return true;
   reply.code(403).send({
     error: 'Forbidden',

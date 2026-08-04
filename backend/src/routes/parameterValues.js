@@ -15,6 +15,7 @@ import {
 } from '../crypto/envelope.js';
 import { getParameterValueVersionLimit } from '../lib/planLimits.js';
 import { canRevealConfig, canWriteConfig } from '../lib/rbac.js';
+import { getOrgSecurityInfo } from '../lib/orgSecurityCache.js';
 
 /**
  * @param {import('fastify').FastifyInstance} fastify
@@ -676,11 +677,8 @@ export default async function parameterValueRoutes(fastify) {
 
       const normalizedValue = value ?? '';
       const isSet = normalizedValue !== '';
-      const org = await prisma.organization.findUnique({
-        where: { id: orgId },
-        select: { plan: true }
-      });
-      const historyLimit = getParameterValueVersionLimit(org?.plan);
+      const { plan } = await getOrgSecurityInfo(prisma, orgId);
+      const historyLimit = getParameterValueVersionLimit(plan);
 
       // Snapshot the previous value, then update the current value atomically.
       const updatedValue = await prisma.$transaction(async tx => {
