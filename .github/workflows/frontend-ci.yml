@@ -1,0 +1,48 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'packages/ui/**'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'packages/ui/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  build:
+    name: Build all frontend workspaces
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+  lint-app:
+    name: Lint @vextis/app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      # non-blocking: frontend/app carries pre-existing lint debt (unrelated to this workflow)
+      # that hasn't been cleaned up yet. Flip this to blocking once that debt is paid down.
+      - run: npm run lint --workspace=frontend/app
+        continue-on-error: true

@@ -637,9 +637,8 @@ const Landing = () => {
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-gray-400">
                 <li><button onClick={() => scrollToSection('#solutions')} className="hover:text-white">Features</button></li>
-                <li><a href="https://docs.vextis.io/security" target="_blank" rel="noopener noreferrer" className="hover:text-white">Security</a></li>
-                <li><a href="https://docs.vextis.io/integrations" target="_blank" rel="noopener noreferrer" className="hover:text-white">Integrations</a></li>
-                <li><a href="https://docs.vextis.io/api" target="_blank" rel="noopener noreferrer" className="hover:text-white">API</a></li>
+                <li><a href="https://docs.vextis.io/security-model" target="_blank" rel="noopener noreferrer" className="hover:text-white">Security</a></li>
+                <li><a href="https://docs.vextis.io/api-basics" target="_blank" rel="noopener noreferrer" className="hover:text-white">API</a></li>
               </ul>
             </div>
             
