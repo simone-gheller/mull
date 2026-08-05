@@ -1,6 +1,7 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { DocsLayout } from './components/layout/DocsLayout.jsx';
-import { LEGACY_HASH_REDIRECTS } from './content/navigation.js';
+import { LEGACY_HASH_REDIRECTS, PATH_REDIRECTS } from './content/navigation.js';
 
 import OverviewPage from './pages/OverviewPage.jsx';
 import QuickstartPage from './pages/QuickstartPage.jsx';
@@ -19,10 +20,15 @@ import TokensPage from './pages/TokensPage.jsx';
 import SecurityPage from './pages/SecurityPage.jsx';
 import RolesPage from './pages/RolesPage.jsx';
 import AuditPage from './pages/AuditPage.jsx';
-import ApiBasicsPage from './pages/ApiBasicsPage.jsx';
-import SdksPage from './pages/SdksPage.jsx';
+import AuthenticationPage from './pages/AuthenticationPage.jsx';
+import SecretsVisibilityPage from './pages/SecretsVisibilityPage.jsx';
+import AboutVextisPage from './pages/AboutVextisPage.jsx';
 import ChangelogPage from './pages/ChangelogPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
+
+// Keeps the API reference's own dependencies out of every /docs/* page's bundle — only visitors
+// who actually open /api pay for it.
+const ApiReferencePage = lazy(() => import('./pages/ApiReferencePage.jsx'));
 
 // The pre-router site used #hash ids (e.g. #security-model). Anything landing here with a
 // matching hash — a bookmark, an external link that hasn't been updated yet — gets sent to
@@ -40,37 +46,63 @@ function AppRoutes() {
     <>
       <HashRedirect />
       <Routes>
+        {/* Old flat paths (pre /docs + /api restructure) — one redirect per PATH_REDIRECTS entry. */}
+        {Object.entries(PATH_REDIRECTS).map(([oldPath, newPath]) => (
+          <Route key={oldPath} path={oldPath} element={<Navigate to={newPath} replace />} />
+        ))}
+
         <Route element={<DocsLayout />}>
-          <Route path="/" element={<OverviewPage />} />
-          <Route path="/quickstart" element={<QuickstartPage />} />
-          <Route path="/install-cli" element={<InstallPage />} />
-          <Route path="/cli-login" element={<LoginPage />} />
+          <Route path="/docs" element={<OverviewPage />} />
+          <Route path="/docs/quickstart" element={<QuickstartPage />} />
+          <Route path="/docs/about" element={<AboutVextisPage />} />
 
-          <Route path="/organizations" element={<OrganizationsPage />} />
-          <Route path="/apps" element={<ConceptPage title="Apps" />} />
-          <Route path="/environments" element={<ConceptPage title="Environments" />} />
-          <Route path="/parameters" element={<ConceptPage title="Parameters" />} />
-          <Route path="/inheritance" element={<InheritancePage />} />
+          <Route path="/docs/organizations" element={<OrganizationsPage />} />
+          <Route path="/docs/apps" element={<ConceptPage title="Apps" screenshot={{
+            src: '/screenshots/dashboard-apps.png',
+            alt: 'The Apps page in the vextis dashboard, showing the app tree and hierarchy detail panel.',
+            caption: 'Apps in the dashboard — own, inherited, and override counts per app.',
+          }} />} />
+          <Route path="/docs/environments" element={<ConceptPage title="Environments" screenshot={{
+            src: '/screenshots/dashboard-environments.png',
+            alt: 'The Environments page in the vextis dashboard.',
+            caption: 'Environments in the dashboard.',
+          }} />} />
+          <Route path="/docs/parameters" element={<ConceptPage title="Parameters" screenshot={{
+            src: '/screenshots/dashboard-parameters.png',
+            alt: 'The Parameters page in the vextis dashboard.',
+            caption: 'Parameters in the dashboard, scoped to the selected app.',
+          }} />} />
+          <Route path="/docs/inheritance" element={<InheritancePage />} />
+          <Route path="/docs/authentication" element={<AuthenticationPage />} />
+          <Route path="/docs/access-tokens" element={<TokensPage />} />
+          <Route path="/docs/secrets-visibility" element={<SecretsVisibilityPage />} />
+          <Route path="/docs/roles-permissions" element={<RolesPage />} />
 
-          <Route path="/cli-reference" element={<CliReferencePage />} />
-          <Route path="/config-commands" element={<ConfigCommandsPage />} />
-          <Route path="/linking-a-project" element={<LinkingProjectPage />} />
-          <Route path="/troubleshooting" element={<TroubleshootingPage />} />
+          <Route path="/docs/install-cli" element={<InstallPage />} />
+          <Route path="/docs/cli-login" element={<LoginPage />} />
+          <Route path="/docs/cli-reference" element={<CliReferencePage />} />
+          <Route path="/docs/config-commands" element={<ConfigCommandsPage />} />
+          <Route path="/docs/linking-a-project" element={<LinkingProjectPage />} />
+          <Route path="/docs/troubleshooting" element={<TroubleshootingPage />} />
 
-          <Route path="/run-with-env" element={<RunPage />} />
-          <Route path="/ci-cd" element={<CicdPage />} />
-          <Route path="/access-tokens" element={<TokensPage />} />
+          <Route path="/docs/run-with-env" element={<RunPage />} />
+          <Route path="/docs/ci-cd" element={<CicdPage />} />
 
-          <Route path="/security-model" element={<SecurityPage />} />
-          <Route path="/roles-permissions" element={<RolesPage />} />
-          <Route path="/audit-logs" element={<AuditPage />} />
-
-          <Route path="/api-basics" element={<ApiBasicsPage />} />
-          <Route path="/sdks" element={<SdksPage />} />
-          <Route path="/changelog" element={<ChangelogPage />} />
+          <Route path="/docs/security-model" element={<SecurityPage />} />
+          <Route path="/docs/audit-logs" element={<AuditPage />} />
 
           <Route path="*" element={<NotFoundPage />} />
         </Route>
+
+        {/* API reference and changelog both own their own full-width layout — no DocsLayout
+            sidebar, since neither has anything to navigate between within the page itself. Both
+            reuse TopNav/GlobalStyles directly for consistent nav chrome. */}
+        <Route path="/api/*" element={
+          <Suspense fallback={null}>
+            <ApiReferencePage />
+          </Suspense>
+        } />
+        <Route path="/changelog" element={<ChangelogPage />} />
       </Routes>
     </>
   );

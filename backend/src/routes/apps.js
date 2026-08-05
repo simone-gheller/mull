@@ -66,7 +66,7 @@ export default async function appRoutes(fastify, _options) {
   // GET /apps/:appId - Get single app
   fastify.get('/apps/:appId', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('apps:read')],
-    schema: { params: appIdParamsSchema },
+    schema: { tags: ['apps'], summary: 'Get a single app', params: appIdParamsSchema },
   }, async (request, reply) => {
     const { orgId, appId } = request.params;
 
@@ -98,7 +98,7 @@ export default async function appRoutes(fastify, _options) {
   // PATCH /apps/:appId - Update app
   fastify.patch('/apps/:appId', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('apps:manage')],
-    schema: { params: appIdParamsSchema },
+    schema: { tags: ['apps'], summary: 'Rename an app', params: appIdParamsSchema },
   }, async (request, reply) => {
     const { orgId, appId } = request.params;
     const { name } = request.body ?? {};
@@ -157,7 +157,7 @@ export default async function appRoutes(fastify, _options) {
   // DELETE /apps/:appId - Delete app
   fastify.delete('/apps/:appId', {
     onRequest: [fastify.authenticate, fastify.validateOrgAccess, fastify.requireScope('apps:manage')],
-    schema: { params: appIdParamsSchema },
+    schema: { tags: ['apps'], summary: 'Delete an app', params: appIdParamsSchema },
   }, async (request, reply) => {
     const { orgId, appId } = request.params;
 

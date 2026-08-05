@@ -5,19 +5,19 @@ import { errorResponse } from './common.js';
  * GET /parameters/:appId/values - List all parameter values for an app
  */
 export const getParameterValuesSchema = {
-  description: 'Recupera tutti i parameter values per un app',
-  tags: ['ParameterValues'],
+  description: 'Get all parameter values for an app',
+  tags: ['parameter-values'],
   params: {
     type: 'object',
     required: ['orgId', 'appId'],
     properties: {
       orgId: uuidV7Param('Organization ID'),
-      appId: uuidV7Param('ID dell\'app'),
+      appId: uuidV7Param('App ID'),
     }
   },
   response: {
     200: {
-      description: 'Parameter values raggruppati per environment',
+      description: 'Parameter values grouped by environment',
       type: 'object',
       additionalProperties: {
         type: 'object',
@@ -25,20 +25,20 @@ export const getParameterValuesSchema = {
           environmentId: {
             type: 'string',
             format: 'uuid',
-            description: 'ID dell\'environment'
+            description: 'Environment ID'
           },
           values: {
             type: 'array',
             items: {
               type: 'object',
               properties: {
-                id: { type: 'string', format: 'uuid', description: 'ID del parameter value' },
-                parameterId: { type: 'string', format: 'uuid', description: 'ID del parametro' },
-                parameterKey: { type: 'string', description: 'Chiave del parametro' },
-                isSet: { type: 'boolean', description: 'True quando il valore locale e impostato' },
+                id: { type: 'string', format: 'uuid', description: 'Parameter value ID' },
+                parameterId: { type: 'string', format: 'uuid', description: 'Parameter ID' },
+                parameterKey: { type: 'string', description: 'Parameter key' },
+                isSet: { type: 'boolean', description: 'True when the local value is set' },
                 value: {
                   anyOf: [{ type: 'string' }, { type: 'null' }],
-                  description: 'Valore del parametro, null quando unset o redatto'
+                  description: 'Parameter value, null when unset or redacted'
                 }
               }
             }
@@ -56,19 +56,19 @@ export const getParameterValuesSchema = {
  * GET /parameters/values/:id - Get a single parameter value by ID
  */
 export const getParameterValueByIdSchema = {
-  description: 'Recupera un parameter value specifico per ID',
-  tags: ['ParameterValues'],
+  description: 'Get a single parameter value by ID',
+  tags: ['parameter-values'],
   params: {
     type: 'object',
     required: ['orgId', 'id'],
     properties: {
       orgId: uuidV7Param('Organization ID'),
-      id: uuidV7Param('ID del parameter value'),
+      id: uuidV7Param('Parameter value ID'),
     }
   },
   response: {
     200: {
-      description: 'Parameter value trovato',
+      description: 'Parameter value found',
       type: 'object',
       properties: {
         id: { type: 'string', format: 'uuid' },
@@ -103,14 +103,14 @@ export const getParameterValueByIdSchema = {
  * PUT /parameters/values/:id - Update a parameter value
  */
 export const updateParameterValueSchema = {
-  description: 'Aggiorna il valore di un parameter value',
-  tags: ['ParameterValues'],
+  description: 'Update a parameter value',
+  tags: ['parameter-values'],
   params: {
     type: 'object',
     required: ['orgId', 'id'],
     properties: {
       orgId: uuidV7Param('Organization ID'),
-      id: uuidV7Param('ID del parameter value'),
+      id: uuidV7Param('Parameter value ID'),
     }
   },
   body: {
@@ -119,13 +119,13 @@ export const updateParameterValueSchema = {
     properties: {
       value: {
         type: 'string',
-        description: 'Nuovo valore del parametro'
+        description: 'New value for the parameter'
       }
     }
   },
   response: {
     200: {
-      description: 'Parameter value aggiornato',
+      description: 'Parameter value updated',
       type: 'object',
       properties: {
         id: { type: 'string', format: 'uuid' },
@@ -142,14 +142,14 @@ export const updateParameterValueSchema = {
 };
 
 export const getParameterValueHistorySchema = {
-  description: 'Recupera la history cifrata di un parameter value senza plaintext',
-  tags: ['ParameterValues'],
+  description: 'Get the encrypted history of a parameter value, without plaintext',
+  tags: ['parameter-values'],
   params: {
     type: 'object',
     required: ['orgId', 'id'],
     properties: {
       orgId: uuidV7Param('Organization ID'),
-      id: uuidV7Param('ID del parameter value'),
+      id: uuidV7Param('Parameter value ID'),
     }
   },
   response: {
@@ -203,15 +203,15 @@ export const getParameterValueHistorySchema = {
 };
 
 export const revealParameterValueVersionSchema = {
-  description: 'Rivela una versione storica di un parameter value',
-  tags: ['ParameterValues'],
+  description: 'Reveal a historical version of a parameter value',
+  tags: ['parameter-values'],
   params: {
     type: 'object',
     required: ['orgId', 'id', 'versionId'],
     properties: {
       orgId: uuidV7Param('Organization ID'),
-      id: uuidV7Param('ID del parameter value'),
-      versionId: uuidV7Param('ID della versione storica'),
+      id: uuidV7Param('Parameter value ID'),
+      versionId: uuidV7Param('Historical version ID'),
     }
   },
   response: {
@@ -231,21 +231,21 @@ export const revealParameterValueVersionSchema = {
 };
 
 export const rollbackParameterValueSchema = {
-  description: 'Ripristina un parameter value da una versione storica',
-  tags: ['ParameterValues'],
+  description: 'Roll back a parameter value to a historical version',
+  tags: ['parameter-values'],
   params: {
     type: 'object',
     required: ['orgId', 'id'],
     properties: {
       orgId: uuidV7Param('Organization ID'),
-      id: uuidV7Param('ID del parameter value'),
+      id: uuidV7Param('Parameter value ID'),
     }
   },
   body: {
     type: 'object',
     required: ['versionId'],
     properties: {
-      versionId: uuidV7Param('ID della versione storica')
+      versionId: uuidV7Param('Historical version ID')
     }
   },
   response: {

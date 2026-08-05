@@ -21,3 +21,7 @@ supabase/snippets/
 
 # Build output
 dist/
+
+# Generated at dev/build time (frontend/docs/scripts/fetch-openapi-spec.js) — fully derived from
+# the backend's live OpenAPI spec, not source of truth. Large and changes on every schema tweak.
+frontend/docs/src/content/openapi.json

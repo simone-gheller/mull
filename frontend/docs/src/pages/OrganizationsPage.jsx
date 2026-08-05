@@ -4,6 +4,7 @@ import { SmallHeading } from '../components/content/SmallHeading.jsx';
 import { CommandBlock } from '../components/content/CommandBlock.jsx';
 import { OutputBlock } from '../components/content/OutputBlock.jsx';
 import { Callout } from '../components/content/Callout.jsx';
+import { Screenshot } from '../components/content/Screenshot.jsx';
 
 export default function OrganizationsPage() {
   const { T } = useOutletContext();
@@ -13,6 +14,13 @@ export default function OrganizationsPage() {
       <PageTitle T={T} label="core concept" title="Organizations">
         An organization is the root of the resource hierarchy — every app, environment, member, role, and access key belongs to exactly one organization.
       </PageTitle>
+
+      <Screenshot
+        T={T}
+        src="/screenshots/dashboard-overview.png"
+        alt="The vextis dashboard overview, with the active organization shown in the top-left switcher."
+        caption="The active organization is always visible in the dashboard's sidebar switcher."
+      />
 
       <SmallHeading T={T}>Switching organizations from the CLI</SmallHeading>
       <CommandBlock T={T} title="List orgs" command="vextis org list" />

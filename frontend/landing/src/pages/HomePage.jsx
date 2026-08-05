@@ -53,6 +53,8 @@ const APP_URL = import.meta.env.VITE_APP_URL
   || (import.meta.env.DEV ? 'http://localhost:5173' : 'https://app.vextis.io');
 const DOCS_URL = import.meta.env.VITE_DOCS_URL
   || (import.meta.env.DEV ? 'http://localhost:5175' : 'https://docs.vextis.io');
+// No default (dev or prod) — stays unset until a real OpenStatus page exists, see status/README.md.
+const STATUS_URL = import.meta.env.VITE_STATUS_URL || null;
 
 const TIERS = [
   {
@@ -562,8 +564,9 @@ export function HomePage({ onNavigate }) {
             { label: "docs",    href: DOCS_URL },
             { label: "pricing", href: "#pricing" },
             { label: "privacy", href: "#" },
-            { label: "status",  href: "#" },
-          ].map(({ label, href }) => (
+            // Hidden until a real OpenStatus page exists — see status/README.md
+            STATUS_URL && { label: "status", href: STATUS_URL },
+          ].filter(Boolean).map(({ label, href }) => (
             <a
               key={label}
               href={href}
