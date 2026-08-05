@@ -1,6 +1,8 @@
 export { ThemeProvider, ThemeContext } from './src/ThemeContext.jsx';
 export { useTheme } from './src/hooks/useTheme.js';
+export { useScrollActiveIntoView } from './src/hooks/useScrollActiveIntoView.js';
 export { THEMES, FONTS } from './src/tokens.js';
+export { scrollFadeCss } from './src/styles/scrollFade.js';
 
 export { Btn } from './src/components/Btn.jsx';
 export { Badge } from './src/components/Badge.jsx';

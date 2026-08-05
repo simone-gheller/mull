@@ -184,6 +184,10 @@ export default async function v1ConfigRoutes(fastify) {
   fastify.get('/config', {
     onRequest: [fastify.authenticate, fastify.requireScope('config:read')],
     config: { rateLimit: { max: 300, timeWindow: '1 minute' } },
+    // Not yet in the public API reference — SDKs (docs "SDKs" page) haven't shipped, and this
+    // protocol doesn't have request/response schemas defined yet. Give it real `tags`/`schema`
+    // and drop `hide` once it's ready to document for real.
+    schema: { hide: true },
   }, async (request, reply) => {
     const { project, env, org, sinceVersion } = request.query;
 
@@ -268,6 +272,7 @@ export default async function v1ConfigRoutes(fastify) {
   fastify.get('/config/events', {
     onRequest: [fastify.authenticate, fastify.requireScope('config:read')],
     config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    schema: { hide: true },
   }, async (request, reply) => {
     const { project, env, org, lastVersion } = request.query;
 
@@ -357,6 +362,7 @@ export default async function v1ConfigRoutes(fastify) {
    */
   fastify.patch('/config/:key', {
     onRequest: [fastify.authenticate, fastify.requireScope('config:write')],
+    schema: { hide: true },
   }, async (request, reply) => {
     const { key } = request.params;
     const { project, env, org } = request.query;

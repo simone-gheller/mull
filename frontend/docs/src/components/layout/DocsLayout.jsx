@@ -43,14 +43,18 @@ export function DocsLayout() {
 
       <TopNav T={T} onSearchOpen={() => setSearchOpen(true)} onMenuOpen={() => setMobileOpen(true)} />
       <SearchDialog T={T} open={searchOpen} onClose={() => setSearchOpen(false)} />
-      <MobileMenu T={T} open={mobileOpen} onClose={() => setMobileOpen(false)} />
+      <MobileMenu T={T} open={mobileOpen} onClose={() => setMobileOpen(false)}>
+        <Sidebar T={T} onSelect={() => setMobileOpen(false)} />
+      </MobileMenu>
 
       <div className={hasToc ? 'docs-shell has-toc' : 'docs-shell'}>
         <Sidebar T={T} />
-        <main className="docs-page">
-          <Outlet context={{ T }} />
-        </main>
-        <TableOfContents T={T} onHeadingsChange={onHeadingsChange} />
+        <div className="docs-content-area">
+          <main className="docs-page">
+            <Outlet context={{ T }} />
+          </main>
+          <TableOfContents T={T} onHeadingsChange={onHeadingsChange} />
+        </div>
       </div>
     </div>
   );

@@ -4,10 +4,11 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "npm run generate:llms && vite",
-    "build": "npm run generate:llms && vite build",
+    "dev": "npm run generate:llms && OPENAPI_SPEC_URL=http://localhost:3000/docs/json npm run fetch:openapi && vite",
+    "build": "npm run generate:llms && npm run fetch:openapi && vite build",
     "preview": "vite preview",
-    "generate:llms": "node scripts/generate-llms-txt.js"
+    "generate:llms": "node scripts/generate-llms-txt.js",
+    "fetch:openapi": "node scripts/fetch-openapi-spec.js"
   },
   "dependencies": {
     "@vextis/ui": "*",

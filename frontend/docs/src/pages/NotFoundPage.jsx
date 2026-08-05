@@ -10,7 +10,7 @@ export default function NotFoundPage() {
       <PageTitle T={T} label="404" title="Page not found">
         There's no docs page at this address.
       </PageTitle>
-      <Link to="/" style={{ textDecoration: 'none' }}>
+      <Link to="/docs" style={{ textDecoration: 'none' }}>
         <Btn T={T} variant="secondary" size="sm">Back to overview</Btn>
       </Link>
     </>

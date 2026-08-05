@@ -19,10 +19,10 @@ export default function OverviewPage() {
           New to vextis? Create your app, environment, and first parameter in the dashboard. Then use the CLI to link this repository and run your app.
         </Callout>
         <div className="card-grid">
-          <DocCard T={T} title="Quickstart" body="The shortest path from empty repo to injected config." onClick={() => navigate('/quickstart')} />
-          <DocCard T={T} title="Core concepts" body="Organizations, apps, environments, parameters, and inheritance in one page." onClick={() => navigate('/apps')} />
-          <DocCard T={T} title="CI/CD" body="Use an organization token as VEXTIS_TOKEN in automation." onClick={() => navigate('/ci-cd')} />
-          <DocCard T={T} title="Security model" body="Encryption, scoped access, and audit trail basics." onClick={() => navigate('/security-model')} />
+          <DocCard T={T} title="Quickstart" body="The shortest path from empty repo to injected config." onClick={() => navigate('/docs/quickstart')} />
+          <DocCard T={T} title="Core concepts" body="Organizations, apps, environments, parameters, and inheritance in one page." onClick={() => navigate('/docs/apps')} />
+          <DocCard T={T} title="CI/CD" body="Use an organization token as VEXTIS_TOKEN in automation." onClick={() => navigate('/docs/ci-cd')} />
+          <DocCard T={T} title="Security model" body="Encryption, scoped access, and audit trail basics." onClick={() => navigate('/docs/security-model')} />
         </div>
       </div>
     </>

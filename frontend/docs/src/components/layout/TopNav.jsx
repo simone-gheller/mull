@@ -1,9 +1,20 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Btn, FONTS } from '@vextis/ui';
-import { APP_URL, LANDING_URL } from '../../constants.js';
+import { APP_URL, LANDING_URL, STATUS_URL } from '../../constants.js';
 import { SearchButton } from '../search/SearchButton.jsx';
 
+export function navLinkStyle(T, active) {
+  return active
+    ? { color: T.termGreen, background: T.termGreenBg, borderRadius: '5px' }
+    : undefined;
+}
+
 export function TopNav({ T, onSearchOpen, onMenuOpen }) {
+  const { pathname } = useLocation();
+  const onDocs = pathname.startsWith('/docs');
+  const onApi = pathname.startsWith('/api');
+  const onChangelog = pathname === '/changelog';
+
   return (
     <nav className="docs-top-nav" style={{ background: T.surface, borderBottom: `1px solid ${T.border}` }}>
       <div className="docs-nav-inner">
@@ -31,12 +42,13 @@ export function TopNav({ T, onSearchOpen, onMenuOpen }) {
           <SearchButton T={T} onOpen={onSearchOpen} />
         </div>
         <div className="docs-top-links">
-          <Link to="/">Docs</Link>
-          <Link to="/api-basics">API</Link>
-          <Link to="/changelog">Changelog</Link>
+          <Link to="/docs" style={navLinkStyle(T, onDocs)}>Docs</Link>
+          <Link to="/api" style={navLinkStyle(T, onApi)}>API</Link>
+          <Link to="/changelog" style={navLinkStyle(T, onChangelog)}>Changelog</Link>
+          {/* Placeholder "#" until a real OpenStatus page exists — see status/README.md */}
+          <a href={STATUS_URL || '#'} target={STATUS_URL ? '_blank' : undefined} rel={STATUS_URL ? 'noreferrer' : undefined}>Status</a>
         </div>
         <div className="docs-actions">
-          <a href={`${APP_URL}/login`} style={{ textDecoration: 'none' }}><Btn T={T} variant="secondary" size="sm">Sign in</Btn></a>
           <a href={`${APP_URL}/signup`} style={{ textDecoration: 'none' }}><Btn T={T} variant="primary" size="sm">Get started</Btn></a>
         </div>
         <button
